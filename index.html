@@ -1334,6 +1334,100 @@
             background: var(--red-bg);
         }
 
+        /* ── SIP Calculator ─────────────────────────── */
+        .sip-card {
+            background: var(--bg-card);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid var(--border-glass);
+            border-radius: var(--radius-lg);
+            padding: 24px;
+            margin-top: 24px;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 24px;
+        }
+
+        .sip-title {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 16px;
+            grid-column: 1 / -1;
+        }
+
+        .sip-inputs {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .sip-input-group label {
+            display: block;
+            font-size: 12px;
+            color: var(--text-muted);
+            margin-bottom: 8px;
+            font-weight: 500;
+        }
+
+        .sip-input-group input {
+            width: 100%;
+            padding: 12px;
+            background: rgba(0, 0, 0, 0.2);
+            border: 1px solid var(--border-glass);
+            border-radius: var(--radius-sm);
+            color: var(--text-primary);
+            font-family: inherit;
+            outline: none;
+            transition: border-color var(--transition-fast);
+        }
+
+        .sip-input-group input:focus {
+            border-color: var(--accent);
+        }
+
+        .sip-results {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            gap: 20px;
+            padding-left: 24px;
+            border-left: 1px solid var(--border-glass);
+        }
+
+        .sip-res-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+        }
+
+        .sip-res-label {
+            font-size: 13px;
+            color: var(--text-secondary);
+        }
+
+        .sip-res-value {
+            font-size: 20px;
+            font-weight: 700;
+        }
+
+        .sip-res-xirr {
+            font-size: 24px;
+            color: var(--accent);
+        }
+
+        @media (max-width: 768px) {
+            .sip-card {
+                grid-template-columns: 1fr;
+            }
+
+            .sip-results {
+                padding-left: 0;
+                border-left: none;
+                border-top: 1px solid var(--border-glass);
+                padding-top: 24px;
+            }
+        }
+
         #app {
             display: none;
         }
@@ -1506,6 +1600,35 @@
                     </div>
                     <div class="chart-canvas-wrapper">
                         <canvas id="navChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- SIP Calculator -->
+                <div class="sip-card">
+                    <h2 class="sip-title">SIP Calculator (Historical)</h2>
+                    <div class="sip-inputs">
+                        <div class="sip-input-group">
+                            <label>Monthly Investment (₹)</label>
+                            <input type="number" id="sipAmount" value="5000" step="500" min="500">
+                        </div>
+                        <div class="sip-input-group">
+                            <label>Duration (Years)</label>
+                            <input type="number" id="sipDuration" value="5" step="1" min="1" max="25">
+                        </div>
+                    </div>
+                    <div class="sip-results">
+                        <div class="sip-res-item">
+                            <span class="sip-res-label">Total Invested:</span>
+                            <span class="sip-res-value" id="sipInvested">—</span>
+                        </div>
+                        <div class="sip-res-item">
+                            <span class="sip-res-label">Final Value:</span>
+                            <span class="sip-res-value" id="sipFinal">—</span>
+                        </div>
+                        <div class="sip-res-item">
+                            <span class="sip-res-label">Historical XIRR:</span>
+                            <span class="sip-res-value sip-res-xirr" id="sipXirr">—</span>
+                        </div>
                     </div>
                 </div>
             </section>
@@ -1746,6 +1869,86 @@
             return annualStd;
         }
 
+        /**
+         * XIRR Calculation using Newton-Raphson method
+         * Cashflows: [{ amount: -5000, date: Date }, { amount: 15000, date: Date }]
+         * Negative for investments, positive for withdrawals/current value.
+         */
+        function calcXIRR(cashflows) {
+            if (!cashflows || cashflows.length < 2) return null;
+
+            const xnpv = (rate, cfs) => {
+                let pv = 0;
+                const d0 = cfs[0].date.getTime();
+                for (let i = 0; i < cfs.length; i++) {
+                    const t = (cfs[i].date.getTime() - d0) / (1000 * 3600 * 24 * 365);
+                    pv += cfs[i].amount / Math.pow(1 + rate, t);
+                }
+                return pv;
+            };
+
+            const xnpvPrime = (rate, cfs) => {
+                let pvPrime = 0;
+                const d0 = cfs[0].date.getTime();
+                for (let i = 0; i < cfs.length; i++) {
+                    const t = (cfs[i].date.getTime() - d0) / (1000 * 3600 * 24 * 365);
+                    pvPrime -= (t * cfs[i].amount) / Math.pow(1 + rate, t + 1);
+                }
+                return pvPrime;
+            };
+
+            let rate = 0.1; // initial guess 10%
+            let iteration = 0;
+            let err = 1e+100;
+
+            while (err > 0.00001 && iteration < 100) {
+                const f = xnpv(rate, cashflows);
+                const df = xnpvPrime(rate, cashflows);
+                const nextRate = rate - f / df;
+                err = Math.abs(nextRate - rate);
+                rate = nextRate;
+                iteration++;
+            }
+
+            return (iteration >= 100 || isNaN(rate)) ? null : rate;
+        }
+
+        /**
+         * Calculate Rolling Returns (Avg, Min, Max for a specific period)
+         * Used for advanced risk/return metrics
+         */
+        function calcRollingReturns(data, years) {
+            if (!data || data.length < 252 * years) return null;
+
+            const returns = [];
+            for (let i = 0; i < data.length; i++) {
+                const startDate = new Date(data[i].date);
+                const targetDate = new Date(startDate);
+                targetDate.setFullYear(startDate.getFullYear() + years);
+
+                // Find matching end date
+                let endIdx = -1;
+                for (let j = i + 200 * years; j < data.length; j++) {
+                    if (data[j] && data[j].date >= targetDate) {
+                        endIdx = j;
+                        break;
+                    }
+                }
+
+                if (endIdx !== -1) {
+                    const ret = calcCAGR(data[i].nav, data[endIdx].nav, data[i].date, data[endIdx].date);
+                    if (ret !== null) returns.push(ret);
+                }
+            }
+
+            if (returns.length === 0) return null;
+            return {
+                avg: returns.reduce((a, b) => a + b, 0) / returns.length,
+                min: Math.min(...returns),
+                max: Math.max(...returns)
+            };
+        }
+
         /* ═══════════════════════════════════════════════════════════════════
            4 ─ CHART.JS VISUALIZATION
            ═══════════════════════════════════════════════════════════════════ */
@@ -1941,8 +2144,94 @@
             updateWatchlistBtn();
             renderWatchlist();
 
+            // Calculate SIP
+            updateSIPCalculator();
+
+            // Add listeners for SIP if not added
+            if (!window.sipListenersAdded) {
+                document.getElementById('sipAmount').addEventListener('input', updateSIPCalculator);
+                document.getElementById('sipDuration').addEventListener('input', updateSIPCalculator);
+                window.sipListenersAdded = true;
+            }
+
             showState('dashboard');
         }
+
+        function updateSIPCalculator() {
+            if (!fullNavData || fullNavData.length === 0) return;
+
+            const amount = parseFloat(document.getElementById('sipAmount').value);
+            const years = parseInt(document.getElementById('sipDuration').value);
+
+            if (isNaN(amount) || isNaN(years) || amount <= 0 || years <= 0) return;
+
+            const latestData = fullNavData[fullNavData.length - 1];
+            const cutoffDate = new Date(latestData.date);
+            cutoffDate.setFullYear(cutoffDate.getFullYear() - years);
+
+            // Limit duration if fund doesn't have enough history
+            const firstDataDate = fullNavData[0].date;
+            let actualCutoff = cutoffDate;
+            if (cutoffDate < firstDataDate) {
+                actualCutoff = new Date(firstDataDate);
+            }
+
+            // Generate SIP dates (1st of every month starting from cutoff)
+            let currentDate = new Date(actualCutoff);
+            currentDate.setDate(1); // 1st of month
+            if (currentDate < actualCutoff) currentDate.setMonth(currentDate.getMonth() + 1);
+
+            const cashflows = [];
+            let totalUnits = 0;
+            let totalInvested = 0;
+
+            while (currentDate <= latestData.date) {
+                // Find nearest NAV on or after currentDate
+                let navForMonth = null;
+                for (let i = 0; i < fullNavData.length; i++) {
+                    if (fullNavData[i].date >= currentDate) {
+                        navForMonth = fullNavData[i].nav;
+                        break;
+                    }
+                }
+
+                if (navForMonth) {
+                    const unitsBought = amount / navForMonth;
+                    totalUnits += unitsBought;
+                    totalInvested += amount;
+                    cashflows.push({ amount: -amount, date: new Date(currentDate) });
+                }
+
+                // Next month
+                currentDate.setMonth(currentDate.getMonth() + 1);
+            }
+
+            if (cashflows.length === 0) {
+                document.getElementById('sipInvested').textContent = '—';
+                document.getElementById('sipFinal').textContent = '—';
+                document.getElementById('sipXirr').textContent = '—';
+                return;
+            }
+
+            const finalValue = totalUnits * latestData.nav;
+
+            // Final flow is the corpus withdrawal (positive)
+            cashflows.push({ amount: finalValue, date: latestData.date });
+
+            const xirr = calcXIRR(cashflows);
+
+            document.getElementById('sipInvested').textContent = '₹' + totalInvested.toLocaleString('en-IN');
+            document.getElementById('sipFinal').textContent = '₹' + Math.round(finalValue).toLocaleString('en-IN');
+
+            if (xirr !== null && !isNaN(xirr) && xirr > -0.99 && xirr < 10) {
+                document.getElementById('sipXirr').textContent = (xirr * 100).toFixed(2) + '%';
+                document.getElementById('sipXirr').className = 'sip-res-value sip-res-xirr ' + (xirr >= 0 ? 'stat-positive' : 'stat-negative');
+            } else {
+                document.getElementById('sipXirr').textContent = 'N/A';
+                document.getElementById('sipXirr').className = 'sip-res-value sip-res-xirr';
+            }
+        }
+
 
         function filterDataByRange(range) {
             if (range === 'MAX') return fullNavData;
