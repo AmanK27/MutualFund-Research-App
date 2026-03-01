@@ -1,0 +1,31 @@
+name: Sync to Public Live Repository
+
+on:
+  push:
+    branches:
+      - main
+      - master
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Private Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Push to Public Repository
+        uses: cpina/github-action-push-to-another-repository@main
+        env:
+          # This requires a PAT saved in your Private Repo's Settings -> Secrets
+          API_TOKEN_GITHUB: ${{ secrets.PUBLIC_REPO_ACCESS_TOKEN }}
+        with:
+          # Assuming you want to deploy the entire root directory
+          source-directory: '.'
+          
+          # 🚨 IMPORTANT: Change these values to match your target public repo 🚨
+          destination-github-username: 'AmanK27'
+          destination-repository-name: 'MutualFund-Research-Live'
+          user-email: 'github-actions[bot]@users.noreply.github.com'
+          target-branch: 'main'
