@@ -330,6 +330,92 @@
             background: linear-gradient(135deg, rgba(99, 102, 241, 0.3), rgba(168, 85, 247, 0.4));
         }
 
+        /* ── COMPARE VIEW & FORMS ───────────────────────────────── */
+        .compare-inputs-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 24px;
+            margin-bottom: 32px;
+        }
+
+        .compare-input-group {
+            background: rgba(0, 0, 0, 0.2);
+            border: 1px solid var(--border-glass);
+            padding: 20px;
+            border-radius: var(--radius-md);
+        }
+
+        .compare-input-group label {
+            display: block;
+            font-size: 13px;
+            color: var(--text-muted);
+            margin-bottom: 8px;
+            font-weight: 600;
+        }
+
+        .compare-input-group input {
+            width: 100%;
+            background: rgba(0, 0, 0, 0.4);
+            border: 1px solid var(--border-glass);
+            color: white;
+            padding: 12px;
+            border-radius: var(--radius-sm);
+            font-family: inherit;
+        }
+
+        .compare-stats-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 24px;
+            margin-top: 24px;
+        }
+
+        .compare-stat-box {
+            background: var(--bg-card);
+            border: 1px solid var(--border-glass);
+            border-radius: var(--radius-lg);
+            padding: 24px;
+        }
+
+        .compare-stat-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 12px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .compare-stat-row:last-child {
+            border-bottom: none;
+        }
+
+        .compare-stat-label {
+            color: var(--text-muted);
+            font-size: 13px;
+        }
+
+        .compare-stat-value {
+            font-weight: 600;
+            font-size: 14px;
+            color: var(--text-primary);
+        }
+
+        .compare-fund-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--accent);
+            margin-bottom: 16px;
+            border-bottom: 1px solid var(--border-glass);
+            padding-bottom: 12px;
+        }
+
+        @media (max-width: 768px) {
+
+            .compare-inputs-grid,
+            .compare-stats-container {
+                grid-template-columns: 1fr;
+            }
+        }
+
         /* ── MAIN CONTENT ────────────────────────────────────────── */
         #main {
             flex: 1;
@@ -1621,6 +1707,12 @@
                 <span>My Portfolio</span>
             </div>
 
+            <div id="compareNavBtn" class="portfolio-nav-item" onclick="loadCompareView()"
+                style="background: linear-gradient(135deg, rgba(236, 72, 153, 0.15), rgba(244, 63, 94, 0.15)); border-color: rgba(244, 63, 94, 0.3);">
+                <span>⚖️</span>
+                <span>Compare Funds</span>
+            </div>
+
             <nav class="category-nav" id="categoryNav"></nav>
 
             <div class="watchlist-title">
@@ -1877,6 +1969,96 @@
                 <div id="portfolioEmptyState"
                     style="text-align: center; margin-top: 64px; color: var(--text-secondary);">
                     Loading your portfolio data...
+                </div>
+            </section>
+
+            <!-- Compare View -->
+            <section id="compareView" style="display: none;">
+                <div class="welcome-icon">⚖️</div>
+                <h2 class="welcome-title">Compare Funds</h2>
+                <p class="welcome-subtitle">
+                    Evaluate two mutual funds side-by-side. Compare percentage growth and core fundamentals.
+                </p>
+
+                <div class="compare-inputs-grid">
+                    <div class="compare-input-group">
+                        <label>Fund A (Baseline)</label>
+                        <input type="text" id="compareInputA" placeholder="Scheme Code (e.g. 119062)"
+                            autocomplete="off">
+                    </div>
+                    <div class="compare-input-group">
+                        <label>Fund B (Challenger)</label>
+                        <input type="text" id="compareInputB" placeholder="Scheme Code (e.g. 120503)"
+                            autocomplete="off">
+                    </div>
+                </div>
+
+                <div style="text-align: center; margin-bottom: 32px;">
+                    <button id="runCompareBtn"
+                        style="background: var(--accent); color: var(--bg-primary); padding: 12px 32px; font-weight: 600; border-radius: var(--radius-md); border: none; cursor: pointer; font-size: 15px;">Run
+                        Comparison</button>
+                </div>
+
+                <div id="compareResults" style="display: none;">
+                    <div class="chart-section" style="margin-bottom: 24px;">
+                        <div class="chart-header">
+                            <h2 class="chart-title">Growth Comparison (Base 100)</h2>
+                            <div class="chart-range-btns" id="compareRangeBtns">
+                                <button class="range-btn" data-range="1Y">1Y</button>
+                                <button class="range-btn" data-range="3Y">3Y</button>
+                                <button class="range-btn" data-range="5Y">5Y</button>
+                                <button class="range-btn active" data-range="MAX">Max</button>
+                            </div>
+                        </div>
+                        <div class="chart-canvas-wrapper">
+                            <canvas id="compareChart"></canvas>
+                        </div>
+                    </div>
+
+                    <div class="compare-stats-container">
+                        <!-- Fund A Stats -->
+                        <div class="compare-stat-box" id="compareBoxA">
+                            <div class="compare-fund-title" id="compNameA">—</div>
+                            <div class="compare-stat-row"><span class="compare-stat-label">Latest NAV</span><span
+                                    class="compare-stat-value" id="compNavA">—</span></div>
+                            <div class="compare-stat-row"><span class="compare-stat-label">1Y Return</span><span
+                                    class="compare-stat-value" id="comp1yA">—</span></div>
+                            <div class="compare-stat-row"><span class="compare-stat-label">3Y Return</span><span
+                                    class="compare-stat-value" id="comp3yA">—</span></div>
+                            <div class="compare-stat-row"><span class="compare-stat-label">5Y Return</span><span
+                                    class="compare-stat-value" id="comp5yA">—</span></div>
+                            <div class="compare-stat-row"><span class="compare-stat-label">Volatility</span><span
+                                    class="compare-stat-value" id="compVolA">—</span></div>
+                            <div class="compare-stat-row"><span class="compare-stat-label">Expense Ratio</span><span
+                                    class="compare-stat-value" id="compExpA">—</span></div>
+                            <div class="compare-stat-row"><span class="compare-stat-label">Fund Size (AUM)</span><span
+                                    class="compare-stat-value" id="compAumA">—</span></div>
+                        </div>
+
+                        <!-- Fund B Stats -->
+                        <div class="compare-stat-box" id="compareBoxB">
+                            <div class="compare-fund-title" id="compNameB" style="color: #ec4899;">—</div>
+                            <div class="compare-stat-row"><span class="compare-stat-label">Latest NAV</span><span
+                                    class="compare-stat-value" id="compNavB">—</span></div>
+                            <div class="compare-stat-row"><span class="compare-stat-label">1Y Return</span><span
+                                    class="compare-stat-value" id="comp1yB">—</span></div>
+                            <div class="compare-stat-row"><span class="compare-stat-label">3Y Return</span><span
+                                    class="compare-stat-value" id="comp3yB">—</span></div>
+                            <div class="compare-stat-row"><span class="compare-stat-label">5Y Return</span><span
+                                    class="compare-stat-value" id="comp5yB">—</span></div>
+                            <div class="compare-stat-row"><span class="compare-stat-label">Volatility</span><span
+                                    class="compare-stat-value" id="compVolB">—</span></div>
+                            <div class="compare-stat-row"><span class="compare-stat-label">Expense Ratio</span><span
+                                    class="compare-stat-value" id="compExpB">—</span></div>
+                            <div class="compare-stat-row"><span class="compare-stat-label">Fund Size (AUM)</span><span
+                                    class="compare-stat-value" id="compAumB">—</span></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="compareLoadingState" style="text-align: center; margin-top: 48px; display: none;">
+                    <div class="spinner"></div>
+                    <div style="margin-top: 16px; color: var(--text-secondary);">Fetching data for both funds...</div>
                 </div>
             </section>
         </main>
@@ -2340,15 +2522,23 @@
             document.getElementById('fundDashboard').style.display = state === 'dashboard' ? 'block' : 'none';
             document.getElementById('tableView').style.display = state === 'table' ? 'block' : 'none';
             document.getElementById('portfolioView').style.display = state === 'portfolio' ? 'block' : 'none';
+            document.getElementById('compareView').style.display = state === 'compare' ? 'block' : 'none';
 
-            // Manage active state of portfolio nav button
+            // Manage active state of special nav buttons
             const pfBtn = document.getElementById('portfolioNavBtn');
+            const compBtn = document.getElementById('compareNavBtn');
+
             if (state === 'portfolio') {
                 pfBtn.classList.add('active');
-                // clear category nav highlights
+                compBtn.classList.remove('active');
+                document.querySelectorAll('.category-item').forEach(el => el.classList.remove('active'));
+            } else if (state === 'compare') {
+                compBtn.classList.add('active');
+                pfBtn.classList.remove('active');
                 document.querySelectorAll('.category-item').forEach(el => el.classList.remove('active'));
             } else {
                 pfBtn.classList.remove('active');
+                compBtn.classList.remove('active');
             }
         }
 
@@ -3323,6 +3513,251 @@
                 console.error("Portfolio Load Error:", e);
                 document.getElementById('portfolioEmptyState').textContent = 'Failed to load portfolio: ' + e.message;
             }
+        }
+        /* ── Compare Funds Logic ───────────────────────────────────────── */
+        let compareDataA = [];
+        let compareDataB = [];
+        let compareChartInstance = null;
+        let currentCompareRange = 'MAX';
+
+        function loadCompareView() {
+            showState('compare');
+        }
+
+        document.getElementById('runCompareBtn').addEventListener('click', async () => {
+            const codeA = document.getElementById('compareInputA').value.trim();
+            const codeB = document.getElementById('compareInputB').value.trim();
+
+            if (!codeA || !codeB) {
+                showToast("Please enter both Scheme Codes to compare.", "error");
+                return;
+            }
+
+            document.getElementById('compareResults').style.display = 'none';
+            document.getElementById('compareLoadingState').style.display = 'block';
+
+            try {
+                // Fetch standard NAV data in parallel
+                const [resA, resB] = await Promise.all([
+                    fetch(`https://api.mfapi.in/mf/${codeA}`).then(res => res.json()),
+                    fetch(`https://api.mfapi.in/mf/${codeB}`).then(res => res.json())
+                ]);
+
+                if (!resA.data || !resB.data) throw new Error("Invalid Scheme Codes or missing data");
+
+                // Prepare standard Data
+                compareDataA = prepareNavData(resA.data);
+                compareDataB = prepareNavData(resB.data);
+                const metaA = resA.meta;
+                const metaB = resB.meta;
+
+                // Process Advanced Stats
+                let statsA = { expense_ratio: '-', aum: '-' };
+                let statsB = { expense_ratio: '-', aum: '-' };
+
+                // Fetch Advanced for A
+                try {
+                    const searchUrlA = 'https://corsproxy.io/?url=' + encodeURIComponent('https://groww.in/v1/api/search/v3/query/global/st_p_query?page=0&query=' + encodeURIComponent(metaA.scheme_name));
+                    const searchResA = await fetch(searchUrlA).then(r => r.json());
+                    if (searchResA && searchResA.data && searchResA.data.content && searchResA.data.content.length > 0) {
+                        const searchIdA = searchResA.data.content[0].search_id;
+                        const detailUrlA = 'https://corsproxy.io/?url=' + encodeURIComponent('https://groww.in/v1/api/data/mf/web/v2/scheme/search/' + searchIdA);
+                        const schemeObjA = await fetch(detailUrlA).then(r => r.json());
+                        if (schemeObjA && schemeObjA.scheme_details) {
+                            statsA.expense_ratio = schemeObjA.scheme_details.expense_ratio !== null ? schemeObjA.scheme_details.expense_ratio + '%' : '-';
+                            statsA.aum = schemeObjA.scheme_details.aum ? '₹' + schemeObjA.scheme_details.aum + ' Cr' : '-';
+                        }
+                    }
+                } catch (e) {
+                    console.warn("Could not fetch advanced stats for Fund A");
+                }
+
+                // Fetch Advanced for B
+                try {
+                    const searchUrlB = 'https://corsproxy.io/?url=' + encodeURIComponent('https://groww.in/v1/api/search/v3/query/global/st_p_query?page=0&query=' + encodeURIComponent(metaB.scheme_name));
+                    const searchResB = await fetch(searchUrlB).then(r => r.json());
+                    if (searchResB && searchResB.data && searchResB.data.content && searchResB.data.content.length > 0) {
+                        const searchIdB = searchResB.data.content[0].search_id;
+                        const detailUrlB = 'https://corsproxy.io/?url=' + encodeURIComponent('https://groww.in/v1/api/data/mf/web/v2/scheme/search/' + searchIdB);
+                        const schemeObjB = await fetch(detailUrlB).then(r => r.json());
+                        if (schemeObjB && schemeObjB.scheme_details) {
+                            statsB.expense_ratio = schemeObjB.scheme_details.expense_ratio !== null ? schemeObjB.scheme_details.expense_ratio + '%' : '-';
+                            statsB.aum = schemeObjB.scheme_details.aum ? '₹' + schemeObjB.scheme_details.aum + ' Cr' : '-';
+                        }
+                    }
+                } catch (e) {
+                    console.warn("Could not fetch advanced stats for Fund B");
+                }
+
+                populateCompareStats(metaA, compareDataA, statsA, 'A');
+                populateCompareStats(metaB, compareDataB, statsB, 'B');
+
+                renderCompareChart();
+
+                document.getElementById('compareLoadingState').style.display = 'none';
+                document.getElementById('compareResults').style.display = 'block';
+
+            } catch (e) {
+                console.error("Compare fetch error:", e);
+                showToast("Error loading comparison data. Check scheme codes.", "error");
+                document.getElementById('compareLoadingState').style.display = 'none';
+            }
+        });
+
+        function getCagrForYears(data, years) {
+            if (data.length < 252 * years) return null;
+            const latestDate = data[data.length - 1].date;
+
+            const targetDate = new Date(latestDate);
+            targetDate.setFullYear(latestDate.getFullYear() - years);
+
+            let pastData = data[0];
+            for (let i = data.length - 1; i >= 0; i--) {
+                if (data[i].date <= targetDate) {
+                    pastData = data[i];
+                    break;
+                }
+            }
+
+            return calcCAGR(pastData.nav, data[data.length - 1].nav, pastData.date, data[data.length - 1].date);
+        }
+
+        function populateCompareStats(meta, data, advStats, prefix) {
+            if (data.length === 0) return;
+            const latest = data[data.length - 1];
+
+            document.getElementById(`compName${prefix}`).textContent = meta.scheme_name || 'Unknown Scheme';
+            document.getElementById(`compNav${prefix}`).textContent = '₹' + latest.nav.toFixed(4);
+
+            const cagr1 = getCagrForYears(data, 1);
+            const cagr3 = getCagrForYears(data, 3);
+            const cagr5 = getCagrForYears(data, 5);
+            const vol = calcVolatility(data);
+
+            const dec1 = document.getElementById(`comp1y${prefix}`);
+            const dec3 = document.getElementById(`comp3y${prefix}`);
+            const dec5 = document.getElementById(`comp5y${prefix}`);
+
+            dec1.textContent = formatPercent(cagr1); dec1.className = 'compare-stat-value ' + getPercentClass(cagr1);
+            dec3.textContent = formatPercent(cagr3); dec3.className = 'compare-stat-value ' + getPercentClass(cagr3);
+            dec5.textContent = formatPercent(cagr5); dec5.className = 'compare-stat-value ' + getPercentClass(cagr5);
+
+            document.getElementById(`compVol${prefix}`).textContent = vol !== null ? (vol * 100).toFixed(2) + '%' : '—';
+            document.getElementById(`compExp${prefix}`).textContent = advStats.expense_ratio;
+            document.getElementById(`compAum${prefix}`).textContent = advStats.aum;
+        }
+
+        // Compare Range Selector
+        document.querySelectorAll('#compareRangeBtns .range-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                document.querySelectorAll('#compareRangeBtns .range-btn').forEach(b => b.classList.remove('active'));
+                e.target.classList.add('active');
+                currentCompareRange = e.target.dataset.range;
+                renderCompareChart();
+            });
+        });
+
+        function renderCompareChart() {
+            if (compareDataA.length === 0 || compareDataB.length === 0) return;
+
+            // Determine Common Start Date based on range
+            const now = new Date();
+            let limitDate = new Date("1970-01-01");
+
+            if (currentCompareRange === '1Y') { limitDate = new Date(now.setFullYear(now.getFullYear() - 1)); }
+            else if (currentCompareRange === '3Y') { limitDate = new Date(now.setFullYear(now.getFullYear() - 3)); }
+            else if (currentCompareRange === '5Y') { limitDate = new Date(now.setFullYear(now.getFullYear() - 5)); }
+
+            // Filter data
+            const filtA = compareDataA.filter(d => d.date >= limitDate);
+            const filtB = compareDataB.filter(d => d.date >= limitDate);
+
+            if (filtA.length === 0 || filtB.length === 0) {
+                showToast("Not enough data for the selected range to compare", "error");
+                return;
+            }
+
+            // Normalize starting NAV to 100
+            const baseNavA = filtA[0].nav;
+            const baseNavB = filtB[0].nav;
+
+            const normA = filtA.map(d => ({ x: d.date.getTime(), y: (d.nav / baseNavA) * 100 }));
+            const normB = filtB.map(d => ({ x: d.date.getTime(), y: (d.nav / baseNavB) * 100 }));
+
+            const ctx = document.getElementById('compareChart').getContext('2d');
+            if (compareChartInstance) {
+                compareChartInstance.destroy();
+            }
+
+            compareChartInstance = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    datasets: [
+                        {
+                            label: document.getElementById('compNameA').textContent,
+                            data: normA,
+                            borderColor: '#38bdf8',
+                            backgroundColor: 'rgba(56, 189, 248, 0.1)',
+                            borderWidth: 2,
+                            fill: true,
+                            tension: 0.1,
+                            pointRadius: 0,
+                            pointHoverRadius: 6
+                        },
+                        {
+                            label: document.getElementById('compNameB').textContent,
+                            data: normB,
+                            borderColor: '#ec4899', // Pink
+                            backgroundColor: 'rgba(236, 72, 153, 0.1)',
+                            borderWidth: 2,
+                            fill: true,
+                            tension: 0.1,
+                            pointRadius: 0,
+                            pointHoverRadius: 6
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: {
+                        mode: 'index',
+                        intersect: false,
+                    },
+                    plugins: {
+                        legend: {
+                            display: true,
+                            position: 'bottom',
+                            labels: { color: '#94a3b8' }
+                        },
+                        tooltip: {
+                            backgroundColor: 'rgba(15, 23, 42, 0.9)',
+                            titleColor: '#f1f5f9',
+                            bodyColor: '#cbd5e1',
+                            borderColor: 'rgba(255,255,255,0.1)',
+                            borderWidth: 1,
+                            padding: 12,
+                            callbacks: {
+                                label: function (context) {
+                                    return context.dataset.label.substring(0, 20) + '... : ' + context.parsed.y.toFixed(2) + ' (Base 100)';
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            type: 'time',
+                            time: { tooltipFormat: 'dd MMM yyyy' },
+                            grid: { color: 'rgba(255, 255, 255, 0.05)' },
+                            ticks: { color: '#64748b' }
+                        },
+                        y: {
+                            grid: { color: 'rgba(255, 255, 255, 0.05)' },
+                            ticks: { color: '#64748b' }
+                        }
+                    }
+                }
+            });
         }
 
         /* ── Boot ───────────────────────────────────────────────────────── */
