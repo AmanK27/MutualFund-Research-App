@@ -301,6 +301,35 @@
             color: var(--red);
         }
 
+        /* ── PORTFOLIO NAV ITEM ─────────────────────────────────── */
+        .portfolio-nav-item {
+            margin: 8px 12px;
+            padding: 12px 16px;
+            border-radius: var(--radius-md);
+            background: linear-gradient(135deg, rgba(99, 102, 241, 0.2), rgba(168, 85, 247, 0.2));
+            border: 1px solid rgba(139, 92, 246, 0.3);
+            color: #e2e8f0;
+            cursor: pointer;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            transition: all var(--transition-normal);
+            box-shadow: 0 4px 12px rgba(99, 102, 241, 0.1);
+        }
+
+        .portfolio-nav-item:hover {
+            transform: translateY(-1px);
+            background: linear-gradient(135deg, rgba(99, 102, 241, 0.3), rgba(168, 85, 247, 0.3));
+            box-shadow: 0 6px 16px rgba(99, 102, 241, 0.2);
+        }
+
+        .portfolio-nav-item.active {
+            border-color: #a855f7;
+            box-shadow: 0 0 20px rgba(168, 85, 247, 0.3);
+            background: linear-gradient(135deg, rgba(99, 102, 241, 0.3), rgba(168, 85, 247, 0.4));
+        }
+
         /* ── MAIN CONTENT ────────────────────────────────────────── */
         #main {
             flex: 1;
@@ -1586,6 +1615,12 @@
             <div class="sidebar-section-title">
                 <h3>Categories</h3>
             </div>
+
+            <div id="portfolioNavBtn" class="portfolio-nav-item" onclick="loadPortfolioView()">
+                <span>💼</span>
+                <span>My Portfolio</span>
+            </div>
+
             <nav class="category-nav" id="categoryNav"></nav>
 
             <div class="watchlist-title">
@@ -1651,10 +1686,17 @@
                             <span class="meta-tag" id="fundType">—</span>
                         </div>
                     </div>
-                    <button id="addWatchlistBtn" onclick="toggleWatchlist()">
-                        <span id="watchlistBtnIcon">＋</span>
-                        <span id="watchlistBtnText">Add to Watchlist</span>
-                    </button>
+                    <div class="fund-actions" style="display: flex; gap: 8px;">
+                        <button id="addWatchlistBtn" onclick="toggleWatchlist()">
+                            <span id="watchlistBtnIcon">＋</span>
+                            <span id="watchlistBtnText">Add to Watchlist</span>
+                        </button>
+                        <button id="addPortfolioBtn" onclick="openPortfolioModal()"
+                            style="display: none; background: rgba(99, 102, 241, 0.15); border: 1px solid rgba(99, 102, 241, 0.5); color: #818cf8;">
+                            <span>＋</span>
+                            <span>Add to Portfolio</span>
+                        </button>
+                    </div>
                 </div>
 
                 <div class="stats-grid">
@@ -1783,7 +1825,102 @@
                     </table>
                 </div>
             </section>
+
+            <!-- Portfolio View -->
+            <section id="portfolioView" style="display: none;">
+                <div class="welcome-icon">💼</div>
+                <h2 class="welcome-title">My Portfolio</h2>
+                <p class="welcome-subtitle">
+                    Track your mutual fund holdings, aggregated value, and absolute returns.
+                </p>
+
+                <div class="stats-grid" id="portfolioStatsGrid" style="margin-top: 32px; display: none;">
+                    <div class="stat-card">
+                        <div class="stat-label">Total Invested</div>
+                        <div class="stat-value" id="pfTotalInvested">—</div>
+                        <div class="stat-sub">Sum of all principal</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Current Value</div>
+                        <div class="stat-value" id="pfCurrentValue" style="color: var(--accent);">—</div>
+                        <div class="stat-sub">Based on latest NAV</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Absolute Return</div>
+                        <div class="stat-value" id="pfAbsoluteReturn">—</div>
+                        <div class="stat-sub">Overall profit/loss</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Overall XIRR</div>
+                        <div class="stat-value" id="pfXirr">—</div>
+                        <div class="stat-sub">Annualised Return</div>
+                    </div>
+                </div>
+
+                <div class="table-card" id="portfolioTableCard" style="margin-top: 24px; display: none;">
+                    <table class="fund-table">
+                        <thead>
+                            <tr>
+                                <th>Fund Name</th>
+                                <th>Units Held</th>
+                                <th>Avg. Buy NAV</th>
+                                <th>Current NAV</th>
+                                <th>Invested Value</th>
+                                <th>Current Value</th>
+                                <th style="text-align: right;">Return (%)</th>
+                            </tr>
+                        </thead>
+                        <tbody id="portfolioTableBody"></tbody>
+                    </table>
+                </div>
+
+                <div id="portfolioEmptyState"
+                    style="text-align: center; margin-top: 64px; color: var(--text-secondary);">
+                    Loading your portfolio data...
+                </div>
+            </section>
         </main>
+    </div>
+
+    <!-- Portfolio Transaction Modal -->
+    <div class="modal" id="portfolioModal"
+        style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); backdrop-filter: blur(8px); z-index: 1000; align-items: center; justify-content: center;">
+        <div class="modal-content"
+            style="background: var(--bg-card); border: 1px solid var(--border-glass); border-radius: var(--radius-lg); padding: 32px; width: 90%; max-width: 400px; box-shadow: 0 24px 48px rgba(0,0,0,0.4);">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
+                <h3 style="margin: 0; font-size: 18px;">Add Transaction</h3>
+                <button onclick="closePortfolioModal()"
+                    style="background: none; border: none; color: var(--text-muted); font-size: 20px; cursor: pointer;">✕</button>
+            </div>
+
+            <div style="margin-bottom: 16px;">
+                <label
+                    style="display: block; font-size: 12px; color: var(--text-muted); margin-bottom: 8px;">Transaction
+                    Date</label>
+                <input type="date" id="txnDate"
+                    style="width: 100%; box-sizing: border-box; background: rgba(0,0,0,0.2); border: 1px solid var(--border-glass); color: white; padding: 12px; border-radius: var(--radius-md); font-family: inherit;">
+            </div>
+
+            <div style="margin-bottom: 16px;">
+                <label style="display: block; font-size: 12px; color: var(--text-muted); margin-bottom: 8px;">Investment
+                    Amount (₹)</label>
+                <input type="number" id="txnAmount" placeholder="e.g. 5000"
+                    style="width: 100%; box-sizing: border-box; background: rgba(0,0,0,0.2); border: 1px solid var(--border-glass); color: white; padding: 12px; border-radius: var(--radius-md); font-family: inherit;">
+            </div>
+
+            <div style="margin-bottom: 24px;">
+                <label style="display: block; font-size: 12px; color: var(--text-muted); margin-bottom: 8px;">Units
+                    Allotted (Auto-calculated)</label>
+                <input type="number" id="txnUnits" step="0.001" placeholder="e.g. 145.672"
+                    style="width: 100%; box-sizing: border-box; background: rgba(0,0,0,0.2); border: 1px solid var(--border-glass); color: white; padding: 12px; border-radius: var(--radius-md); font-family: inherit;">
+                <div id="navHelperText" style="font-size: 11px; margin-top: 6px; color: var(--text-secondary);">Select a
+                    date above to fetch historical NAV.</div>
+            </div>
+
+            <button id="saveTxnBtn" onclick="saveTransaction()"
+                style="width: 100%; background: var(--accent); color: var(--bg-surface); padding: 14px; font-weight: 600; font-size: 15px; border-radius: var(--radius-md); border: none; cursor: pointer; transition: opacity 0.2s;">Save
+                Transaction</button>
+        </div>
     </div>
 
     <button class="mobile-toggle" id="mobileToggle" onclick="toggleSidebar()">☰</button>
@@ -2202,6 +2339,17 @@
             document.getElementById('loadingState').style.display = state === 'loading' ? 'block' : 'none';
             document.getElementById('fundDashboard').style.display = state === 'dashboard' ? 'block' : 'none';
             document.getElementById('tableView').style.display = state === 'table' ? 'block' : 'none';
+            document.getElementById('portfolioView').style.display = state === 'portfolio' ? 'block' : 'none';
+
+            // Manage active state of portfolio nav button
+            const pfBtn = document.getElementById('portfolioNavBtn');
+            if (state === 'portfolio') {
+                pfBtn.classList.add('active');
+                // clear category nav highlights
+                document.querySelectorAll('.category-item').forEach(el => el.classList.remove('active'));
+            } else {
+                pfBtn.classList.remove('active');
+            }
         }
 
         function formatPercent(value) {
@@ -2500,6 +2648,78 @@
                 tbody.appendChild(tr);
             });
         }
+
+        /* ── Portfolio Actions (Add Transaction) ───────────────────────── */
+        function openPortfolioModal() {
+            if (!currentUser) {
+                showToast("Please sign in to add to your portfolio.", "error");
+                return;
+            }
+            if (!currentFund || !currentCode) return;
+
+            document.getElementById('portfolioModal').style.display = 'flex';
+
+            // Set default date to today, padded properly
+            const today = new Date();
+            const yyyy = today.getFullYear();
+            const mm = String(today.getMonth() + 1).padStart(2, '0');
+            const dd = String(today.getDate()).padStart(2, '0');
+            document.getElementById('txnDate').value = `${yyyy}-${mm}-${dd}`;
+
+            document.getElementById('txnAmount').value = '';
+            document.getElementById('txnUnits').value = '';
+            document.getElementById('navHelperText').textContent = 'Select a date above to fetch historical NAV.';
+        }
+
+        function closePortfolioModal() {
+            document.getElementById('portfolioModal').style.display = 'none';
+        }
+
+        function calculateUnitsForTxn() {
+            if (!fullNavData || fullNavData.length === 0) return;
+
+            const dateStr = document.getElementById('txnDate').value; // YYYY-MM-DD
+            const amount = parseFloat(document.getElementById('txnAmount').value);
+            const unitsInput = document.getElementById('txnUnits');
+            const helper = document.getElementById('navHelperText');
+
+            if (!dateStr || isNaN(amount) || amount <= 0) {
+                unitsInput.value = '';
+                helper.textContent = 'Enter date and amount to auto-calculate units.';
+                return;
+            }
+
+            const targetDate = new Date(dateStr);
+
+            // Find the closest NAV on or after the target date
+            let foundNav = null;
+            let foundDate = null;
+
+            // fullNavData is sorted oldest -> newest
+            for (let i = 0; i < fullNavData.length; i++) {
+                if (fullNavData[i].date >= targetDate) {
+                    foundNav = fullNavData[i].nav;
+                    foundDate = fullNavData[i].date;
+                    break;
+                }
+            }
+
+            if (foundNav !== null) {
+                const units = amount / foundNav;
+                unitsInput.value = units.toFixed(4);
+
+                const formattedDate = foundDate.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+                helper.innerHTML = `Calculated using NAV of <strong>₹${foundNav.toFixed(4)}</strong> on <strong>${formattedDate}</strong>.`;
+                helper.style.color = 'var(--text-secondary)';
+            } else {
+                unitsInput.value = '';
+                helper.textContent = 'No NAV data available for this date.';
+                helper.style.color = '#f87171'; // red
+            }
+        }
+
+        document.getElementById('txnDate').addEventListener('change', calculateUnitsForTxn);
+        document.getElementById('txnAmount').addEventListener('input', calculateUnitsForTxn);
 
         /* ── Event Listeners ───────────────────────────────────────────── */
         document.getElementById('searchBtn').addEventListener('click', () => {
@@ -2940,6 +3160,169 @@
             if (!currentUser) return Promise.reject(new Error('Not authenticated'));
             return db.collection('users').doc(currentUser.uid)
                 .collection('transactions').doc(txnId).delete();
+        }
+
+        /* ── Portfolio Aggregation & UI ────────────────────────────────── */
+        async function saveTransaction() {
+            if (!currentUser) return;
+
+            const btn = document.getElementById('saveTxnBtn');
+            const dateStr = document.getElementById('txnDate').value;
+            const amount = parseFloat(document.getElementById('txnAmount').value);
+            const units = parseFloat(document.getElementById('txnUnits').value);
+
+            if (!dateStr || isNaN(amount) || isNaN(units)) {
+                showToast("Please fill all fields correctly to calculate units.", "error");
+                return;
+            }
+
+            btn.textContent = 'Saving...';
+            btn.disabled = true;
+
+            const txn = {
+                type: 'buy',
+                schemeCode: currentCode,
+                schemeName: document.getElementById('fundName').textContent,
+                amount: amount,
+                units: units,
+                navAtDate: amount / units,
+                date: dateStr // YYYY-MM-DD
+            };
+
+            try {
+                await addTransaction(txn);
+                showToast("Added to portfolio successfully!", "success");
+                closePortfolioModal();
+                // Refresh portfolio if that view is active
+                if (document.getElementById('portfolioView').style.display === 'block') {
+                    loadPortfolioView();
+                }
+            } catch (err) {
+                console.error("Save Txn:", err);
+                showToast("Failed to save transaction.", "error");
+            } finally {
+                btn.textContent = 'Save Transaction';
+                btn.disabled = false;
+            }
+        }
+
+        async function loadPortfolioView() {
+            showState('portfolio');
+
+            if (!currentUser) {
+                document.getElementById('portfolioEmptyState').textContent = 'Please sign in to view your portfolio.';
+                document.getElementById('portfolioEmptyState').style.display = 'block';
+                document.getElementById('portfolioStatsGrid').style.display = 'none';
+                document.getElementById('portfolioTableCard').style.display = 'none';
+                return;
+            }
+
+            document.getElementById('portfolioEmptyState').textContent = 'Loading your portfolio data...';
+            document.getElementById('portfolioEmptyState').style.display = 'block';
+            document.getElementById('portfolioStatsGrid').style.display = 'none';
+            document.getElementById('portfolioTableCard').style.display = 'none';
+
+            try {
+                // 1. Fetch Transactions
+                const txns = await getTransactions();
+                if (txns.length === 0) {
+                    document.getElementById('portfolioEmptyState').textContent = 'Your portfolio is empty. Add transactions from the fund dashboard.';
+                    return;
+                }
+
+                // 2. Group by Scheme
+                const holdings = {}; // code -> { name, totalUnits, totalInvested, txns: [] }
+                let globalInvested = 0;
+
+                txns.forEach(t => {
+                    const code = t.schemeCode;
+                    if (!holdings[code]) {
+                        holdings[code] = {
+                            name: t.schemeName,
+                            code: t.schemeCode,
+                            totalUnits: 0,
+                            totalInvested: 0,
+                            txns: []
+                        };
+                    }
+                    if (t.type === 'buy') {
+                        holdings[code].totalUnits += t.units;
+                        holdings[code].totalInvested += t.amount;
+                        globalInvested += t.amount;
+                        holdings[code].txns.push(t);
+                    }
+                });
+
+                // 3. Fetch latest NAV for each holding in parallel
+                const fetchPromises = Object.keys(holdings).map(async code => {
+                    try {
+                        const res = await fetch(`https://api.mfapi.in/mf/${code}`);
+                        if (!res.ok) throw new Error('API failed');
+                        const data = await res.json();
+                        if (data && data.data && data.data.length > 0) {
+                            holdings[code].currentNav = parseFloat(data.data[0].nav);
+                            holdings[code].currentValue = holdings[code].currentNav * holdings[code].totalUnits;
+                        } else {
+                            holdings[code].currentNav = 0;
+                            holdings[code].currentValue = 0;
+                        }
+                    } catch (e) {
+                        console.warn("Failed to fetch NAV for", code);
+                        holdings[code].currentNav = 0;
+                        holdings[code].currentValue = 0;
+                    }
+                });
+
+                await Promise.all(fetchPromises);
+
+                // 4. Calculate Aggregate Metrics
+                let globalCurrentValue = 0;
+                const tbody = document.getElementById('portfolioTableBody');
+                tbody.innerHTML = '';
+
+                Object.values(holdings).forEach(h => {
+                    globalCurrentValue += h.currentValue;
+
+                    const avgNav = h.totalInvested / h.totalUnits;
+                    const absReturnPct = ((h.currentValue - h.totalInvested) / h.totalInvested) * 100;
+
+                    const tr = document.createElement('tr');
+                    tr.style.cursor = 'pointer';
+                    tr.onclick = () => loadFund(h.code);
+
+                    tr.innerHTML = `
+                        <td style="font-weight: 500;">${escapeHtml(h.name)}</td>
+                        <td>${h.totalUnits.toFixed(3)}</td>
+                        <td>₹${avgNav.toFixed(2)}</td>
+                        <td>₹${h.currentNav.toFixed(2)}</td>
+                        <td>₹${h.totalInvested.toLocaleString('en-IN')}</td>
+                        <td>₹${h.currentValue.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</td>
+                        <td style="text-align: right;" class="${getPercentClass(absReturnPct / 100)}">${(absReturnPct >= 0 ? '+' : '')}${absReturnPct.toFixed(2)}%</td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+
+                // 5. Update UI
+                const totalAbsReturn = ((globalCurrentValue - globalInvested) / globalInvested) * 100;
+
+                document.getElementById('pfTotalInvested').textContent = '₹' + globalInvested.toLocaleString('en-IN');
+                document.getElementById('pfCurrentValue').textContent = '₹' + globalCurrentValue.toLocaleString('en-IN', { maximumFractionDigits: 0 });
+
+                const returnEl = document.getElementById('pfAbsoluteReturn');
+                returnEl.textContent = (totalAbsReturn >= 0 ? '+' : '') + totalAbsReturn.toFixed(2) + '%';
+                returnEl.className = 'stat-value ' + getPercentClass(totalAbsReturn / 100);
+
+                // Global XIRR placeholder (complex to do purely client side rapidly across multiple funds without stalling thread)
+                document.getElementById('pfXirr').textContent = '—';
+
+                document.getElementById('portfolioEmptyState').style.display = 'none';
+                document.getElementById('portfolioStatsGrid').style.display = 'grid';
+                document.getElementById('portfolioTableCard').style.display = 'block';
+
+            } catch (e) {
+                console.error("Portfolio Load Error:", e);
+                document.getElementById('portfolioEmptyState').textContent = 'Failed to load portfolio: ' + e.message;
+            }
         }
 
         /* ── Boot ───────────────────────────────────────────────────────── */
