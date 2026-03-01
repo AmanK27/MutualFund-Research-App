@@ -12,6 +12,10 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
     <script
         src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+    <!-- Firebase v9 Compat SDK -->
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
     <style>
         /* ═══════════════════════════════════════════════════════════
            DESIGN TOKENS & RESET
@@ -1148,10 +1152,219 @@
                 overflow-x: auto;
             }
         }
+
+        /* ═══════════════════════════════════════════════════════════
+           LOGIN SCREEN
+           ═══════════════════════════════════════════════════════════ */
+        #loginScreen {
+            position: fixed;
+            inset: 0;
+            z-index: 1000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: var(--bg-primary);
+            overflow: hidden;
+        }
+
+        #loginScreen::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background:
+                radial-gradient(ellipse at 25% 25%, rgba(56, 189, 248, 0.08) 0%, transparent 50%),
+                radial-gradient(ellipse at 75% 75%, rgba(34, 211, 238, 0.06) 0%, transparent 50%),
+                radial-gradient(ellipse at 50% 50%, rgba(139, 92, 246, 0.04) 0%, transparent 60%);
+            animation: loginGlow 8s ease-in-out infinite alternate;
+            pointer-events: none;
+        }
+
+        @keyframes loginGlow {
+            0% {
+                transform: translate(0, 0) scale(1);
+            }
+
+            100% {
+                transform: translate(2%, -2%) scale(1.05);
+            }
+        }
+
+        .login-card {
+            position: relative;
+            max-width: 420px;
+            width: 90%;
+            padding: 48px 40px;
+            background: var(--bg-card);
+            backdrop-filter: blur(24px) saturate(1.4);
+            -webkit-backdrop-filter: blur(24px) saturate(1.4);
+            border: 1px solid var(--border-glass);
+            border-radius: var(--radius-xl);
+            text-align: center;
+            box-shadow: var(--shadow-lg), 0 0 80px rgba(56, 189, 248, 0.05);
+            animation: fadeInUp 0.6s ease;
+        }
+
+        .login-logo {
+            width: 64px;
+            height: 64px;
+            background: var(--accent-gradient);
+            border-radius: var(--radius-md);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 28px;
+            margin: 0 auto 20px;
+            box-shadow: 0 0 30px var(--accent-glow);
+        }
+
+        .login-title {
+            font-size: 24px;
+            font-weight: 700;
+            margin-bottom: 6px;
+            background: var(--accent-gradient);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .login-subtitle {
+            font-size: 14px;
+            color: var(--text-secondary);
+            margin-bottom: 32px;
+            line-height: 1.6;
+        }
+
+        .google-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 12px;
+            padding: 14px 32px;
+            background: #fff;
+            border: none;
+            border-radius: var(--radius-md);
+            color: #1f2937;
+            font-size: 15px;
+            font-weight: 600;
+            font-family: inherit;
+            cursor: pointer;
+            transition: all var(--transition-normal);
+            box-shadow: 0 2px 12px rgba(0, 0, 0, 0.15);
+        }
+
+        .google-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+        }
+
+        .google-btn:active {
+            transform: translateY(0);
+        }
+
+        .google-btn svg {
+            width: 20px;
+            height: 20px;
+            flex-shrink: 0;
+        }
+
+        .login-footer {
+            margin-top: 24px;
+            font-size: 11px;
+            color: var(--text-muted);
+        }
+
+        /* ── User Profile in Sidebar ─────────────────────────── */
+        .user-profile {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 12px 20px;
+            border-top: 1px solid var(--border-glass);
+            margin-top: auto;
+        }
+
+        .user-avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            object-fit: cover;
+            border: 2px solid var(--border-glow);
+        }
+
+        .user-info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .user-name {
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--text-primary);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .user-email {
+            font-size: 10px;
+            color: var(--text-muted);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .sign-out-btn {
+            padding: 6px 12px;
+            background: transparent;
+            border: 1px solid var(--border-glass);
+            border-radius: 6px;
+            color: var(--text-muted);
+            font-size: 11px;
+            font-family: inherit;
+            cursor: pointer;
+            transition: all var(--transition-fast);
+            flex-shrink: 0;
+        }
+
+        .sign-out-btn:hover {
+            border-color: var(--red);
+            color: var(--red);
+            background: var(--red-bg);
+        }
+
+        #app {
+            display: none;
+        }
     </style>
 </head>
 
 <body>
+
+    <!-- ── LOGIN SCREEN ──────────────────────────────────────── -->
+    <div id="loginScreen">
+        <div class="login-card">
+            <div class="login-logo">📈</div>
+            <h1 class="login-title">MF Insight</h1>
+            <p class="login-subtitle">Your personal mutual fund research dashboard.<br>Sign in to access your portfolio
+                and watchlist.</p>
+            <button class="google-btn" id="googleSignInBtn" onclick="handleGoogleSignIn()">
+                <svg viewBox="0 0 24 24">
+                    <path fill="#4285F4"
+                        d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.27-4.74 3.27-8.1z" />
+                    <path fill="#34A853"
+                        d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+                    <path fill="#FBBC05"
+                        d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
+                    <path fill="#EA4335"
+                        d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
+                </svg>
+                Sign in with Google
+            </button>
+            <p class="login-footer">🔒 Your data stays private — stored in your own Firebase project.</p>
+        </div>
+    </div>
 
     <div id="app">
         <!-- ── SIDEBAR ──────────────────────────────────────────── -->
@@ -1162,6 +1375,16 @@
                     <span class="logo-text">MF Insight</span>
                 </div>
                 <div class="logo-subtitle">Research Dashboard</div>
+            </div>
+
+            <!-- User profile (populated by auth) -->
+            <div class="user-profile" id="userProfile" style="display:none;">
+                <img class="user-avatar" id="userAvatar" src="" alt="">
+                <div class="user-info">
+                    <div class="user-name" id="userName"></div>
+                    <div class="user-email" id="userEmail"></div>
+                </div>
+                <button class="sign-out-btn" onclick="handleSignOut()">Sign Out</button>
             </div>
 
             <div class="sidebar-section-title">
@@ -2082,6 +2305,140 @@
         /* ── Load Fund from Table Row ─────────────────────────────────── */
         function loadFundFromTable(code, name) {
             loadFund(code);
+        }
+
+        /* ═══════════════════════════════════════════════════════════════════
+           7 ─ FIREBASE AUTH & FIRESTORE
+           ═══════════════════════════════════════════════════════════════════ */
+
+        /* ──────────────────────────────────────────────────────────────────
+           🔧 PASTE YOUR FIREBASE CONFIG BELOW
+           Go to Firebase Console → Project Settings → Web App → Config
+           ────────────────────────────────────────────────────────────────── */
+        const firebaseConfig = {
+            apiKey: "AIzaSyCsQAAdqM99GCWUkoOY73aVSnpZdgFCg1s",
+            authDomain: "mutualfund-research-app.firebaseapp.com",
+            projectId: "mutualfund-research-app",
+            storageBucket: "mutualfund-research-app.firebasestorage.app",
+            messagingSenderId: "587243977915",
+            appId: "1:587243977915:web:d9c49156f5e194f85cfd9e"
+        };
+
+        // Initialize Firebase
+        const firebaseApp = firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+        const db = firebase.firestore();
+
+        let currentUser = null;
+
+        /* ── Google Sign-In ────────────────────────────────────────────── */
+        function handleGoogleSignIn() {
+            const btn = document.getElementById('googleSignInBtn');
+            btn.disabled = true;
+            btn.textContent = 'Signing in…';
+
+            const provider = new firebase.auth.GoogleAuthProvider();
+            auth.signInWithPopup(provider).catch(function (error) {
+                console.error('Sign-in error:', error);
+                showToast('Sign-in failed: ' + error.message, 'error');
+                btn.disabled = false;
+                btn.innerHTML = '<svg viewBox="0 0 24 24" style="width:20px;height:20px"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.27-4.74 3.27-8.1z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg> Sign in with Google';
+            });
+        }
+
+        /* ── Sign Out ──────────────────────────────────────────────────── */
+        function handleSignOut() {
+            auth.signOut().then(function () {
+                showToast('Signed out successfully', 'success');
+            }).catch(function (error) {
+                showToast('Sign-out failed: ' + error.message, 'error');
+            });
+        }
+
+        /* ── Auth State Observer ───────────────────────────────────────── */
+        auth.onAuthStateChanged(function (user) {
+            const loginScreen = document.getElementById('loginScreen');
+            const appShell = document.getElementById('app');
+            const userProfile = document.getElementById('userProfile');
+
+            if (user) {
+                // User signed in
+                currentUser = user;
+                loginScreen.style.display = 'none';
+                appShell.style.display = 'flex';
+
+                // Update sidebar profile
+                document.getElementById('userAvatar').src = user.photoURL || '';
+                document.getElementById('userName').textContent = user.displayName || 'User';
+                document.getElementById('userEmail').textContent = user.email || '';
+                userProfile.style.display = 'flex';
+
+                // Ensure user doc exists in Firestore
+                db.collection('users').doc(user.uid).set({
+                    displayName: user.displayName,
+                    email: user.email,
+                    photoURL: user.photoURL,
+                    lastLogin: firebase.firestore.FieldValue.serverTimestamp()
+                }, { merge: true }).catch(function (e) {
+                    console.warn('Firestore user doc update failed:', e);
+                });
+
+                console.log('Auth: Signed in as', user.displayName, user.uid);
+            } else {
+                // User signed out
+                currentUser = null;
+                loginScreen.style.display = 'flex';
+                appShell.style.display = 'none';
+                userProfile.style.display = 'none';
+                console.log('Auth: Signed out');
+            }
+        });
+
+        /* ── Firestore Transaction Helpers ─────────────────────────────── */
+        /**
+         * Add a portfolio transaction
+         * @param {Object} txn - { type, schemeCode, schemeName, amount, units, navAtDate, date }
+         */
+        function addTransaction(txn) {
+            if (!currentUser) return Promise.reject(new Error('Not authenticated'));
+            return db.collection('users').doc(currentUser.uid)
+                .collection('transactions').add({
+                    type: txn.type,              // 'buy' | 'sell' | 'sip'
+                    schemeCode: txn.schemeCode,
+                    schemeName: txn.schemeName || '',
+                    amount: Number(txn.amount),
+                    units: Number(txn.units),
+                    navAtDate: Number(txn.navAtDate) || 0,
+                    date: firebase.firestore.Timestamp.fromDate(new Date(txn.date)),
+                    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                });
+        }
+
+        /**
+         * Get all transactions for the current user
+         * @returns {Promise<Array>}
+         */
+        function getTransactions() {
+            if (!currentUser) return Promise.reject(new Error('Not authenticated'));
+            return db.collection('users').doc(currentUser.uid)
+                .collection('transactions')
+                .orderBy('date', 'desc')
+                .get()
+                .then(function (snapshot) {
+                    return snapshot.docs.map(function (doc) {
+                        return Object.assign({ id: doc.id }, doc.data());
+                    });
+                });
+        }
+
+        /**
+         * Delete a transaction
+         * @param {string} txnId
+         */
+        function deleteTransaction(txnId) {
+            if (!currentUser) return Promise.reject(new Error('Not authenticated'));
+            return db.collection('users').doc(currentUser.uid)
+                .collection('transactions').doc(txnId).delete();
         }
 
         /* ── Boot ───────────────────────────────────────────────────────── */
