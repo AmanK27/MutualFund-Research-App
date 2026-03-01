@@ -1428,6 +1428,108 @@
             }
         }
 
+        /* ── Deep Analysis ─────────────────────────── */
+        .analysis-card {
+            background: var(--bg-card);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid var(--border-glass);
+            border-radius: var(--radius-lg);
+            padding: 24px;
+            margin-top: 24px;
+            animation: fadeInUp 0.4s ease;
+        }
+
+        .analysis-title {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 20px;
+            color: var(--text-primary);
+        }
+
+        .analysis-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+
+        .analysis-stat {
+            background: rgba(0, 0, 0, 0.2);
+            padding: 16px;
+            border-radius: var(--radius-md);
+            border: 1px solid var(--border-glass);
+        }
+
+        .analysis-label {
+            display: block;
+            font-size: 11px;
+            color: var(--text-muted);
+            margin-bottom: 6px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .analysis-value {
+            font-size: 18px;
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+
+        .analysis-text-sm {
+            font-size: 12px;
+            font-weight: 500;
+            line-height: 1.4;
+            display: block;
+        }
+
+        .analysis-subtitle {
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 12px;
+            color: var(--text-secondary);
+        }
+
+        .holdings-table-wrapper {
+            overflow-x: auto;
+            border: 1px solid var(--border-glass);
+            border-radius: var(--radius-md);
+        }
+
+        .holdings-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+
+        .holdings-table th,
+        .holdings-table td {
+            padding: 12px 16px;
+            text-align: left;
+            border-bottom: 1px solid var(--border-glass);
+        }
+
+        .holdings-table th {
+            font-weight: 600;
+            color: var(--text-muted);
+            background: rgba(0, 0, 0, 0.3);
+            text-transform: uppercase;
+            font-size: 10px;
+            letter-spacing: 0.5px;
+        }
+
+        .holdings-table td {
+            color: var(--text-primary);
+        }
+
+        .holdings-table tbody tr:last-child td {
+            border-bottom: none;
+        }
+
+        .holdings-table tbody tr:hover {
+            background: rgba(255, 255, 255, 0.02);
+        }
+
         #app {
             display: none;
         }
@@ -1629,6 +1731,40 @@
                             <span class="sip-res-label">Historical XIRR:</span>
                             <span class="sip-res-value sip-res-xirr" id="sipXirr">—</span>
                         </div>
+                    </div>
+                </div>
+
+                <!-- Deep Fund Analysis -->
+                <div class="analysis-card" id="analysisCard" style="display: none;">
+                    <h2 class="analysis-title">Fund Fundamentals</h2>
+                    <div class="analysis-grid">
+                        <div class="analysis-stat">
+                            <span class="analysis-label">AUM (Size)</span>
+                            <span class="analysis-value" id="fundAUM">—</span>
+                        </div>
+                        <div class="analysis-stat">
+                            <span class="analysis-label">Expense Ratio</span>
+                            <span class="analysis-value" id="fundExpense">—</span>
+                        </div>
+                        <div class="analysis-stat" style="grid-column: 1 / -1; max-width: none;">
+                            <span class="analysis-label">Exit Load</span>
+                            <span class="analysis-value analysis-text-sm" id="fundExit"
+                                style="white-space: pre-wrap;">—</span>
+                        </div>
+                    </div>
+
+                    <h3 class="analysis-subtitle">Top 10 Holdings</h3>
+                    <div class="holdings-table-wrapper">
+                        <table class="holdings-table">
+                            <thead>
+                                <tr>
+                                    <th>Asset</th>
+                                    <th>Sector</th>
+                                    <th style="text-align: right;">Allocation</th>
+                                </tr>
+                            </thead>
+                            <tbody id="holdingsBody"></tbody>
+                        </table>
                     </div>
                 </div>
             </section>
@@ -2279,6 +2415,11 @@
                 const data = await fetchFundData(code);
                 currentFund = data;
                 displayFundData();
+
+                // Fetch advanced data in background
+                document.getElementById('analysisCard').style.display = 'none';
+                fetchAdvancedFundData(data.meta.scheme_name).then(renderAdvancedData);
+
             } catch (err) {
                 showState('welcome');
                 showToast(err.message || 'Failed to fetch fund data.', 'error');
@@ -2287,6 +2428,77 @@
                 searchBtn.disabled = false;
                 searchBtn.textContent = 'Search Fund';
             }
+        }
+
+        /* ── Deep Analysis Proxy Fetch ─────────────────────────────────── */
+        async function fetchAdvancedFundData(schemeName) {
+            try {
+                // 1. Search Groww for the fund via corsproxy
+                const searchUrl = 'https://groww.in/v1/api/search/v3/query/global/st_p_query?page=0&query=' + encodeURIComponent(schemeName);
+                const proxySearchUrl = 'https://corsproxy.io/?' + encodeURIComponent(searchUrl);
+
+                const res = await fetch(proxySearchUrl);
+                if (!res.ok) return null;
+
+                const json = await res.json();
+
+                const contentArr = json.data && json.data.content ? json.data.content : [];
+                if (contentArr.length === 0) return null;
+
+                // Extract search ID from first hit
+                const searchId = contentArr[0].search_id;
+                if (!searchId) return null;
+
+                // 2. Fetch Scheme Details via proxy
+                const detailUrl = 'https://groww.in/v1/api/data/mf/web/v2/scheme/search/' + searchId;
+                const proxyDetailUrl = 'https://corsproxy.io/?' + encodeURIComponent(detailUrl);
+
+                const detailRes = await fetch(proxyDetailUrl);
+                if (!detailRes.ok) return null;
+
+                const detailJson = await detailRes.json();
+
+                return {
+                    aum: detailJson.aum,
+                    expenseRatio: detailJson.expense_ratio,
+                    exitLoad: detailJson.exit_load,
+                    holdings: detailJson.holdings || []
+                };
+            } catch (err) {
+                console.warn('Advanced fetch failed:', err);
+                return null;
+            }
+        }
+
+        function renderAdvancedData(data) {
+            const card = document.getElementById('analysisCard');
+            if (!data) return;
+
+            card.style.display = 'block';
+
+            document.getElementById('fundAUM').textContent = data.aum ? '₹' + data.aum.toLocaleString('en-IN') + ' Cr' : '—';
+            document.getElementById('fundExpense').textContent = data.expenseRatio ? data.expenseRatio + '%' : '—';
+            document.getElementById('fundExit').textContent = data.exitLoad || '—';
+
+            const tbody = document.getElementById('holdingsBody');
+            tbody.innerHTML = '';
+
+            // Limit to Top 10
+            const top10 = data.holdings.slice(0, 10);
+            if (top10.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="3" style="text-align:center; color: var(--text-muted); padding: 24px;">No holdings data available.</td></tr>';
+                return;
+            }
+
+            top10.forEach(h => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${h.company_name || '—'}</td>
+                    <td>${h.sector_name || '—'}</td>
+                    <td style="text-align: right; color: var(--accent); font-weight: 500;">${h.corpus_per ? h.corpus_per.toFixed(2) + '%' : '—'}</td>
+                `;
+                tbody.appendChild(tr);
+            });
         }
 
         /* ── Event Listeners ───────────────────────────────────────────── */
