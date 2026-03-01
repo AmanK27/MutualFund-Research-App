@@ -1737,8 +1737,9 @@
                 <div class="search-wrapper">
                     <div class="search-input-group">
                         <span class="search-icon">🔍</span>
-                        <input type="text" id="searchInput" placeholder="Enter Scheme Code (e.g. 119062)"
+                        <input type="text" id="searchInput" placeholder="Search by Fund Name or Code (e.g. HDFC Flexi)"
                             autocomplete="off">
+                        <ul class="autocomplete-list" id="searchResults"></ul>
                     </div>
                     <button id="searchBtn">Search Fund</button>
                 </div>
@@ -2911,16 +2912,88 @@
         document.getElementById('txnDate').addEventListener('change', calculateUnitsForTxn);
         document.getElementById('txnAmount').addEventListener('input', calculateUnitsForTxn);
 
-        /* ── Event Listeners ───────────────────────────────────────────── */
-        document.getElementById('searchBtn').addEventListener('click', () => {
-            const code = document.getElementById('searchInput').value.trim();
-            loadFund(code);
+        /* ── Global Search Cache & Autocomplete ────────────────────────── */
+        window.allMfFunds = []; // [ { schemeCode, schemeName } ]
+
+        async function fetchGlobalFundList() {
+            try {
+                // Fetch all 45k+ funds once in the background
+                const res = await fetch('https://api.mfapi.in/mf');
+                const data = await res.json();
+                if (data && Array.isArray(data)) {
+                    window.allMfFunds = data;
+                }
+            } catch (err) {
+                console.error("Failed to load global fund list for autocomplete", err);
+            }
+        }
+
+        const searchInput = document.getElementById('searchInput');
+        const searchResults = document.getElementById('searchResults');
+        let searchTimeout;
+
+        searchInput.addEventListener('input', (e) => {
+            const query = e.target.value.toLowerCase().trim();
+            clearTimeout(searchTimeout);
+
+            if (query.length < 3) {
+                searchResults.style.display = 'none';
+                return;
+            }
+
+            // Debounce matching logic to keep UI responsive
+            searchTimeout = setTimeout(() => {
+                if (window.allMfFunds.length === 0) return; // Not loaded yet
+
+                // Fuzzy match natively with includes, capped at 50 results to prevent DOM freeze
+                const matches = window.allMfFunds.filter(f =>
+                    f.schemeName.toLowerCase().includes(query) ||
+                    String(f.schemeCode).includes(query)
+                ).slice(0, 50);
+
+                if (matches.length > 0) {
+                    searchResults.innerHTML = matches.map(f => `
+                        <li class="autocomplete-item" onclick="selectAutocomplete('${f.schemeCode}', '${f.schemeName.replace(/'/g, "\\'")}')">
+                            <span class="ac-name">${f.schemeName}</span>
+                            <span class="ac-code">${f.schemeCode}</span>
+                        </li>
+                    `).join('');
+                    searchResults.style.display = 'block';
+                } else {
+                    searchResults.innerHTML = '<li style="padding: 12px 16px; color: var(--text-muted); text-align: center;">No funds found</li>';
+                    searchResults.style.display = 'block';
+                }
+            }, 250);
         });
 
-        document.getElementById('searchInput').addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') {
-                const code = e.target.value.trim();
+        // Hide autocomplete when clicking outside
+        document.addEventListener('click', (e) => {
+            if (!searchInput.contains(e.target) && !searchResults.contains(e.target)) {
+                searchResults.style.display = 'none';
+            }
+        });
+
+        function selectAutocomplete(code, name) {
+            searchInput.value = name;
+            searchResults.style.display = 'none';
+            loadFund(code);
+        }
+
+        document.getElementById('searchBtn').addEventListener('click', () => {
+            const code = document.getElementById('searchInput').value.trim();
+            // Fallback for direct code entry
+            if (/^\\d+$/.test(code)) {
                 loadFund(code);
+                searchResults.style.display = 'none';
+            } else if (searchResults.style.display === 'block' && searchResults.firstElementChild && searchResults.firstElementChild.classList.contains('autocomplete-item')) {
+                // Trigger first search result if clicking search button without selecting
+                searchResults.firstElementChild.click();
+            }
+        });
+
+        searchInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                document.getElementById('searchBtn').click();
             }
         });
 
@@ -2983,99 +3056,98 @@
             }
         ];
 
-        /* ── Mock Fund Data ───────────────────────────────────────────── */
-        const MOCK_FUNDS = {
-            'Conservative Hybrid': [
-                { name: 'HDFC Hybrid Debt Fund - Direct', code: '119065', nav: 62.31, cagr1: 8.12, cagr3: 7.89, vol: 4.21, sharpe: 1.42, aum: 3200 },
-                { name: 'ICICI Pru Regular Savings Fund - Direct', code: '120281', nav: 58.94, cagr1: 7.65, cagr3: 7.34, vol: 3.98, sharpe: 1.35, aum: 4100 },
-                { name: 'SBI Conservative Hybrid Fund - Direct', code: '119707', nav: 55.82, cagr1: 7.22, cagr3: 6.95, vol: 3.67, sharpe: 1.28, aum: 2800 },
-                { name: 'Kotak Debt Hybrid Fund - Direct', code: '118285', nav: 48.67, cagr1: 7.98, cagr3: 7.15, vol: 4.05, sharpe: 1.38, aum: 1900 },
-            ],
-            'Balanced Advantage': [
-                { name: 'HDFC Balanced Advantage Fund - Direct', code: '145088', nav: 395.12, cagr1: 15.44, cagr3: 14.81, vol: 10.23, sharpe: 1.18, aum: 67500 },
-                { name: 'ICICI Pru Balanced Advantage Fund - Direct', code: '120242', nav: 62.45, cagr1: 12.88, cagr3: 11.56, vol: 8.95, sharpe: 1.05, aum: 54200 },
-                { name: 'Edelweiss Balanced Advantage Fund - Direct', code: '120574', nav: 43.78, cagr1: 14.21, cagr3: 13.44, vol: 9.67, sharpe: 1.12, aum: 10800 },
-                { name: 'Tata Balanced Advantage Fund - Direct', code: '145547', nav: 18.92, cagr1: 11.56, cagr3: 10.88, vol: 9.12, sharpe: 0.98, aum: 7600 },
-            ],
-            'Aggressive Hybrid': [
-                { name: 'HDFC Hybrid Equity Fund - Direct', code: '119062', nav: 128.45, cagr1: 10.49, cagr3: 12.59, vol: 14.88, sharpe: 0.72, aum: 22100 },
-                { name: 'Canara Robeco Equity Hybrid Fund - Direct', code: '118612', nav: 295.67, cagr1: 13.95, cagr3: 14.22, vol: 12.45, sharpe: 0.95, aum: 9800 },
-                { name: 'SBI Equity Hybrid Fund - Direct', code: '119707', nav: 242.33, cagr1: 11.78, cagr3: 13.12, vol: 13.67, sharpe: 0.82, aum: 62000 },
-                { name: 'Mirae Asset Hybrid Equity Fund - Direct', code: '145087', nav: 28.56, cagr1: 14.33, cagr3: 15.08, vol: 13.11, sharpe: 0.99, aum: 7200 },
-                { name: 'DSP Equity & Bond Fund - Direct', code: '119021', nav: 268.91, cagr1: 12.05, cagr3: 13.78, vol: 12.89, sharpe: 0.88, aum: 8500 },
-            ],
-            'Arbitrage': [
-                { name: 'HDFC Arbitrage Fund - Direct', code: '119064', nav: 27.45, cagr1: 7.12, cagr3: 5.89, vol: 1.23, sharpe: 2.85, aum: 12000 },
-                { name: 'Kotak Equity Arbitrage Fund - Direct', code: '118280', nav: 33.12, cagr1: 7.34, cagr3: 6.12, vol: 1.15, sharpe: 3.02, aum: 35000 },
-                { name: 'Nippon India Arbitrage Fund - Direct', code: '118778', nav: 24.88, cagr1: 7.05, cagr3: 5.78, vol: 1.08, sharpe: 2.92, aum: 14500 },
-                { name: 'Tata Arbitrage Fund - Direct', code: '145521', nav: 13.67, cagr1: 7.22, cagr3: 5.95, vol: 1.18, sharpe: 2.88, aum: 11200 },
-            ],
-            'Large Cap': [
-                { name: 'Mirae Asset Large Cap Fund - Direct', code: '118834', nav: 98.45, cagr1: 14.78, cagr3: 15.23, vol: 14.56, sharpe: 0.89, aum: 37500 },
-                { name: 'Canara Robeco Bluechip Equity Fund - Direct', code: '118621', nav: 52.33, cagr1: 15.12, cagr3: 16.05, vol: 13.89, sharpe: 0.96, aum: 9200 },
-                { name: 'ICICI Pru Bluechip Fund - Direct', code: '120586', nav: 88.67, cagr1: 13.45, cagr3: 14.11, vol: 14.78, sharpe: 0.82, aum: 42000 },
-                { name: 'Axis Bluechip Fund - Direct', code: '120465', nav: 52.11, cagr1: 11.89, cagr3: 12.56, vol: 14.23, sharpe: 0.74, aum: 31500 },
-                { name: 'SBI Blue Chip Fund - Direct', code: '119706', nav: 72.44, cagr1: 12.67, cagr3: 13.22, vol: 14.45, sharpe: 0.78, aum: 38000 },
-            ],
-            'Mid Cap': [
-                { name: 'HDFC Mid-Cap Opportunities Fund - Direct', code: '119041', nav: 132.78, cagr1: 18.45, cagr3: 22.67, vol: 17.89, sharpe: 1.02, aum: 42500 },
-                { name: 'Kotak Emerging Equity Fund - Direct', code: '118304', nav: 95.34, cagr1: 20.12, cagr3: 24.56, vol: 18.45, sharpe: 1.12, aum: 30000 },
-                { name: 'Axis Midcap Fund - Direct', code: '120503', nav: 88.22, cagr1: 16.78, cagr3: 19.89, vol: 16.34, sharpe: 0.95, aum: 22000 },
-                { name: 'DSP Midcap Fund - Direct', code: '119018', nav: 115.67, cagr1: 19.34, cagr3: 23.45, vol: 18.12, sharpe: 1.08, aum: 15500 },
-            ],
-            'Small Cap': [
-                { name: 'Nippon India Small Cap Fund - Direct', code: '118778', nav: 145.23, cagr1: 22.45, cagr3: 30.12, vol: 22.67, sharpe: 1.08, aum: 34000 },
-                { name: 'SBI Small Cap Fund - Direct', code: '125497', nav: 148.56, cagr1: 20.89, cagr3: 27.45, vol: 21.34, sharpe: 0.98, aum: 22000 },
-                { name: 'HDFC Small Cap Fund - Direct', code: '130501', nav: 98.34, cagr1: 24.56, cagr3: 28.89, vol: 23.45, sharpe: 1.02, aum: 18500 },
-                { name: 'Axis Small Cap Fund - Direct', code: '125354', nav: 82.11, cagr1: 19.78, cagr3: 25.67, vol: 20.89, sharpe: 0.92, aum: 15000 },
-            ],
-            'Flexi Cap': [
-                { name: 'Parag Parikh Flexi Cap Fund - Direct', code: '122639', nav: 68.45, cagr1: 16.78, cagr3: 19.56, vol: 13.45, sharpe: 1.12, aum: 48000 },
-                { name: 'HDFC Flexi Cap Fund - Direct', code: '118989', nav: 1620.34, cagr1: 14.23, cagr3: 16.89, vol: 15.67, sharpe: 0.88, aum: 38500 },
-                { name: 'UTI Flexi Cap Fund - Direct', code: '120716', nav: 285.67, cagr1: 13.45, cagr3: 15.78, vol: 14.89, sharpe: 0.82, aum: 25000 },
-                { name: 'Kotak Flexicap Fund - Direct', code: '120200', nav: 62.89, cagr1: 15.12, cagr3: 17.34, vol: 14.23, sharpe: 0.95, aum: 35000 },
-            ],
-            'ELSS': [
-                { name: 'Mirae Asset Tax Saver Fund - Direct', code: '128087', nav: 38.56, cagr1: 15.67, cagr3: 18.34, vol: 15.12, sharpe: 0.98, aum: 17500 },
-                { name: 'Canara Robeco ELSS Tax Saver - Direct', code: '118630', nav: 128.90, cagr1: 14.89, cagr3: 17.56, vol: 14.45, sharpe: 0.95, aum: 6200 },
-                { name: 'Axis Long Term Equity Fund - Direct', code: '120468', nav: 78.34, cagr1: 11.23, cagr3: 13.89, vol: 15.56, sharpe: 0.72, aum: 34000 },
-                { name: 'DSP Tax Saver Fund - Direct', code: '119019', nav: 95.67, cagr1: 16.45, cagr3: 19.12, vol: 16.78, sharpe: 0.92, aum: 10500 },
-            ],
-            'Liquid': [
-                { name: 'HDFC Liquid Fund - Direct', code: '119052', nav: 4652.12, cagr1: 6.78, cagr3: 5.45, vol: 0.35, sharpe: 4.82, aum: 52000 },
-                { name: 'ICICI Pru Liquid Fund - Direct', code: '120255', nav: 342.89, cagr1: 6.82, cagr3: 5.52, vol: 0.32, sharpe: 5.01, aum: 45000 },
-                { name: 'SBI Liquid Fund - Direct', code: '119723', nav: 3512.45, cagr1: 6.75, cagr3: 5.41, vol: 0.38, sharpe: 4.65, aum: 62000 },
-                { name: 'Axis Liquid Fund - Direct', code: '120456', nav: 2567.78, cagr1: 6.80, cagr3: 5.48, vol: 0.33, sharpe: 4.92, aum: 28000 },
-            ],
-            'Money Market': [
-                { name: 'HDFC Money Market Fund - Direct', code: '119054', nav: 4872.34, cagr1: 7.12, cagr3: 5.78, vol: 0.52, sharpe: 3.95, aum: 18000 },
-                { name: 'Tata Money Market Fund - Direct', code: '118927', nav: 4123.56, cagr1: 7.05, cagr3: 5.72, vol: 0.55, sharpe: 3.78, aum: 14500 },
-                { name: 'Aditya Birla SL Money Manager Fund - Direct', code: '119523', nav: 312.67, cagr1: 7.18, cagr3: 5.85, vol: 0.48, sharpe: 4.12, aum: 22000 },
-            ],
-            'Corporate Bond': [
-                { name: 'HDFC Corporate Bond Fund - Direct', code: '119057', nav: 28.45, cagr1: 7.45, cagr3: 6.34, vol: 2.12, sharpe: 1.95, aum: 27000 },
-                { name: 'ICICI Pru Corporate Bond Fund - Direct', code: '120267', nav: 25.67, cagr1: 7.56, cagr3: 6.45, vol: 1.98, sharpe: 2.05, aum: 22000 },
-                { name: 'Kotak Corporate Bond Fund - Direct', code: '118291', nav: 3345.89, cagr1: 7.38, cagr3: 6.28, vol: 2.08, sharpe: 1.92, aum: 12500 },
-                { name: 'Aditya Birla SL Corp Bond Fund - Direct', code: '119530', nav: 98.12, cagr1: 7.62, cagr3: 6.52, vol: 2.15, sharpe: 1.98, aum: 18000 },
-            ],
-            'Gilt': [
-                { name: 'SBI Magnum Gilt Fund - Direct', code: '119731', nav: 58.34, cagr1: 8.12, cagr3: 5.89, vol: 5.67, sharpe: 0.85, aum: 8500 },
-                { name: 'ICICI Pru Gilt Fund - Direct', code: '120271', nav: 85.67, cagr1: 7.89, cagr3: 5.78, vol: 5.45, sharpe: 0.82, aum: 4200 },
-                { name: 'HDFC Gilt Fund - Direct', code: '119956', nav: 47.23, cagr1: 8.34, cagr3: 6.05, vol: 5.89, sharpe: 0.88, aum: 3200 },
-            ],
-            'Index Funds': [
-                { name: 'UTI Nifty 50 Index Fund - Direct', code: '120716', nav: 138.45, cagr1: 13.56, cagr3: 14.89, vol: 14.23, sharpe: 0.82, aum: 12500 },
-                { name: 'HDFC Index Fund Nifty 50 Plan - Direct', code: '119039', nav: 188.67, cagr1: 13.45, cagr3: 14.78, vol: 14.18, sharpe: 0.81, aum: 9800 },
-                { name: 'ICICI Pru Nifty Next 50 Index - Direct', code: '140230', nav: 42.34, cagr1: 16.78, cagr3: 12.45, vol: 17.56, sharpe: 0.72, aum: 5200 },
-                { name: 'Motilal Oswal S&P 500 Index Fund - Direct', code: '145223', nav: 22.89, cagr1: 18.45, cagr3: 16.23, vol: 15.12, sharpe: 0.98, aum: 6800 },
-            ],
-            'ETFs': [
-                { name: 'Nippon India ETF Nifty 50 BeES', code: '118778', nav: 245.67, cagr1: 13.34, cagr3: 14.67, vol: 14.20, sharpe: 0.80, aum: 18000 },
-                { name: 'SBI ETF Nifty 50', code: '143089', nav: 225.45, cagr1: 13.28, cagr3: 14.59, vol: 14.15, sharpe: 0.79, aum: 145000 },
-                { name: 'ICICI Pru Nifty ETF', code: '120243', nav: 218.90, cagr1: 13.42, cagr3: 14.72, vol: 14.22, sharpe: 0.81, aum: 8500 },
-                { name: 'Kotak Nifty ETF', code: '140234', nav: 210.34, cagr1: 13.38, cagr3: 14.65, vol: 14.19, sharpe: 0.80, aum: 5200 },
-            ],
-        };
+        /* ── Live AMFI Category Parser ────────────────────────────────── */
+        window.LIVE_FUNDS = {};
+
+        async function fetchLiveAmfiCategories() {
+            try {
+                const proxyUrl = 'https://corsproxy.io/?url=' + encodeURIComponent('https://www.amfiindia.com/spages/NAVAll.txt');
+                const res = await fetch(proxyUrl);
+                if (!res.ok) throw new Error("AMFI fetch failed");
+                const text = await res.text();
+
+                const lines = text.split('\\n');
+                let currentCategory = null;
+
+                // We map AMFI official category names to our UI subcategories
+                const categoryMapping = {
+                    'Conservative Hybrid Fund': 'Conservative Hybrid',
+                    'Balanced Advantage Fund': 'Balanced Advantage',
+                    'Aggressive Hybrid Fund': 'Aggressive Hybrid',
+                    'Arbitrage Fund': 'Arbitrage',
+                    'Large Cap Fund': 'Large Cap',
+                    'Mid Cap Fund': 'Mid Cap',
+                    'Small Cap Fund': 'Small Cap',
+                    'Flexi Cap Fund': 'Flexi Cap',
+                    'ELSS': 'ELSS',
+                    'Liquid Fund': 'Liquid',
+                    'Money Market Fund': 'Money Market',
+                    'Corporate Bond Fund': 'Corporate Bond',
+                    'Gilt Fund': 'Gilt',
+                    'Index Funds': 'Index Funds',
+                    'Exchange Traded Fund': 'ETFs' // General bucket for ETFs
+                };
+
+                const categoryRegex = /^Open Ended Schemes \\(.*-\\s*([^)]+)\\)/i;
+
+                // Initialize the LIVE_FUNDS object keys
+                Object.values(categoryMapping).forEach(uiName => {
+                    window.LIVE_FUNDS[uiName] = [];
+                });
+
+                for (let i = 0; i < lines.length; i++) {
+                    const line = lines[i].trim();
+                    if (!line) continue;
+
+                    // Header row (doesn't have semicolons)
+                    if (!line.includes(';')) {
+                        const match = line.match(categoryRegex);
+                        if (match && match[1]) {
+                            let rawCat = match[1].trim();
+                            // Handle ELSS special case
+                            if (rawCat.includes("ELSS")) rawCat = "ELSS";
+                            // Handle ETF special cases
+                            if (rawCat.includes("Other Scheme -  ETF")) rawCat = "Exchange Traded Fund";
+
+                            currentCategory = categoryMapping[rawCat] || null;
+                        }
+                    }
+                    // Data row
+                    else if (currentCategory && line.includes(';')) {
+                        const parts = line.split(';');
+                        if (parts.length >= 5) {
+                            const code = parts[0];
+                            const name = parts[3];
+                            const navStr = parts[4];
+
+                            // We heavily bias towards 'Direct Plan' & 'Growth' to avoid duplicate spam in the table
+                            if (name.includes('Direct') && name.includes('Growth')) {
+                                window.LIVE_FUNDS[currentCategory].push({
+                                    code: code,
+                                    name: name,
+                                    nav: parseFloat(navStr) || 0,
+                                    cagr1: null, // Will fetch dynamically if needed or show N/A
+                                    cagr3: null,
+                                    vol: null,
+                                    sharpe: null,
+                                    aum: null
+                                });
+                            }
+                        }
+                    }
+                }
+                console.log("AMFI Live Categories Built Successfully:", window.LIVE_FUNDS);
+
+                // Re-render table if currently viewing one to reflect live data
+                if (currentSubcategory) {
+                    selectSubcategory(currentSubcategory, currentCategoryName);
+                }
+
+            } catch (err) {
+                console.error("Failed to parse AMFI live categories:", err);
+            }
+        }
+
 
         /* ── Table Columns Config ─────────────────────────────────────── */
         const TABLE_COLUMNS = [
@@ -3128,8 +3200,8 @@
             const active = document.querySelector(`.cat-sub-item[data-sub="${sub}"]`);
             if (active) active.classList.add('active');
 
-            // Get data
-            currentTableData = (MOCK_FUNDS[sub] || []).map(f => ({ ...f }));
+            // Get live data
+            currentTableData = (window.LIVE_FUNDS[sub] || []).map(f => ({ ...f }));
 
             renderTable();
             showState('table');
@@ -3145,8 +3217,10 @@
             document.getElementById('tableBreadcrumb').innerHTML =
                 `<span>${currentCategoryName}</span> <span>›</span> <span class="bc-active">${currentSubcategory}</span>`;
             document.getElementById('tableTitle').textContent = currentSubcategory;
+
+            // Adjust subtitle to clarify that these are live parsed funds but advanced stats are not calculated in bulk to save RAM.
             document.getElementById('tableSubtitle').textContent =
-                `${currentTableData.length} fund${currentTableData.length !== 1 ? 's' : ''} • Mock data for prototype`;
+                `${currentTableData.length} fund${currentTableData.length !== 1 ? 's' : ''} • Live data parsed from AMFI India`;
 
             // Thead
             const thead = document.getElementById('fundTableHead');
@@ -3176,8 +3250,14 @@
                         if (col.color && typeof val === 'number') cls = val >= 0 ? 'td-positive' : 'td-negative';
                         if (col.colorInverse && typeof val === 'number') cls = val > 20 ? 'td-negative' : val > 12 ? 'td-neutral' : 'td-positive';
                         if (col.colorSharpe && typeof val === 'number') cls = val >= 1.5 ? 'td-positive' : val >= 0.8 ? 'td-neutral' : 'td-negative';
-                        const display = col.fmt ? col.fmt(val) : escapeHtml(String(val));
-                        return `<td class="${cls}">${display}</td>`;
+
+                        let displayValue = val !== null && val !== undefined ? (col.fmt ? col.fmt(val) : escapeHtml(String(val))) : '<span style="color:var(--text-muted); font-size: 11px;">Fetch to view</span>';
+                        if (col.key === 'nav') {
+                            displayValue = val ? (col.fmt ? col.fmt(val) : escapeHtml(String(val))) : '—';
+                            cls += ' fw-500';
+                        }
+
+                        return `<td class="${cls}">${displayValue}</td>`;
                     }).join('') +
                     '</tr>';
             }).join('');
@@ -3761,9 +3841,20 @@
         }
 
         /* ── Boot ───────────────────────────────────────────────────────── */
-        renderCategoryNav();
-        renderWatchlist();
-        showState('welcome');
+        (async function bootApp() {
+            renderCategoryNav();
+            renderWatchlist();
+
+            // Background pre-fetches
+            fetchGlobalFundList();
+
+            // Blocking fetch for categories so the UI doesn't render empty
+            const catLoadLabel = document.getElementById('tableSubtitle');
+            if (catLoadLabel) catLoadLabel.textContent = "Loading live categories from AMFI...";
+            await fetchLiveAmfiCategories();
+
+            showState('welcome');
+        })();
     </script>
 </body>
 

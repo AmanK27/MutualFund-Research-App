@@ -1,0 +1,10 @@
+{
+  "name": "mutualfund-research-app",
+  "version": "1.5.0",
+  "description": "Mutual Fund Research Dashboard",
+  "scripts": {
+    "start": "npx serve -l 3000"
+  },
+  "author": "",
+  "license": "MIT"
+}
