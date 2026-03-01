@@ -1,0 +1,2094 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MutualFund Insight — Research Dashboard</title>
+    <meta name="description"
+        content="A zero-backend mutual fund research dashboard with CAGR, volatility analysis, and interactive NAV charts.">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap"
+        rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <script
+        src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+    <style>
+        /* ═══════════════════════════════════════════════════════════
+           DESIGN TOKENS & RESET
+           ═══════════════════════════════════════════════════════════ */
+        :root {
+            --bg-primary: #0a0e1a;
+            --bg-secondary: #111827;
+            --bg-card: rgba(17, 24, 39, 0.65);
+            --bg-card-hover: rgba(23, 32, 52, 0.8);
+            --border-glass: rgba(255, 255, 255, 0.06);
+            --border-glow: rgba(56, 189, 248, 0.2);
+
+            --text-primary: #f1f5f9;
+            --text-secondary: #94a3b8;
+            --text-muted: #64748b;
+
+            --accent: #38bdf8;
+            --accent-secondary: #22d3ee;
+            --accent-gradient: linear-gradient(135deg, #38bdf8, #22d3ee);
+            --accent-glow: rgba(56, 189, 248, 0.25);
+
+            --green: #34d399;
+            --green-bg: rgba(52, 211, 153, 0.12);
+            --red: #f87171;
+            --red-bg: rgba(248, 113, 113, 0.12);
+            --amber: #fbbf24;
+            --amber-bg: rgba(251, 191, 36, 0.12);
+
+            --radius-sm: 8px;
+            --radius-md: 12px;
+            --radius-lg: 16px;
+            --radius-xl: 20px;
+
+            --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.3);
+            --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.4);
+            --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.5);
+            --shadow-glow: 0 0 30px rgba(56, 189, 248, 0.1);
+
+            --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
+            --transition-normal: 250ms cubic-bezier(0.4, 0, 0.2, 1);
+            --transition-slow: 400ms cubic-bezier(0.4, 0, 0.2, 1);
+
+            --sidebar-width: 320px;
+        }
+
+        *,
+        *::before,
+        *::after {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+            overflow-x: hidden;
+            line-height: 1.6;
+        }
+
+        /* Ambient background glow */
+        body::before {
+            content: '';
+            position: fixed;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(ellipse at 30% 20%, rgba(56, 189, 248, 0.04) 0%, transparent 50%),
+                radial-gradient(ellipse at 70% 80%, rgba(34, 211, 238, 0.03) 0%, transparent 50%);
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        /* ═══════════════════════════════════════════════════════════
+           APP SHELL
+           ═══════════════════════════════════════════════════════════ */
+        #app {
+            display: flex;
+            min-height: 100vh;
+            position: relative;
+            z-index: 1;
+        }
+
+        /* ── SIDEBAR ─────────────────────────────────────────────── */
+        #sidebar {
+            width: var(--sidebar-width);
+            min-width: var(--sidebar-width);
+            background: var(--bg-card);
+            backdrop-filter: blur(24px) saturate(1.4);
+            -webkit-backdrop-filter: blur(24px) saturate(1.4);
+            border-right: 1px solid var(--border-glass);
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            position: sticky;
+            top: 0;
+            transition: transform var(--transition-slow);
+            z-index: 10;
+        }
+
+        .sidebar-header {
+            padding: 24px 20px 16px;
+            border-bottom: 1px solid var(--border-glass);
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 4px;
+        }
+
+        .logo-icon {
+            width: 36px;
+            height: 36px;
+            background: var(--accent-gradient);
+            border-radius: var(--radius-sm);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            box-shadow: 0 0 20px var(--accent-glow);
+        }
+
+        .logo-text {
+            font-size: 18px;
+            font-weight: 700;
+            background: var(--accent-gradient);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .logo-subtitle {
+            font-size: 11px;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            font-weight: 500;
+            margin-left: 46px;
+        }
+
+        .watchlist-title {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 16px 20px 8px;
+        }
+
+        .watchlist-title h3 {
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            color: var(--text-muted);
+            font-weight: 600;
+        }
+
+        .watchlist-count {
+            font-size: 11px;
+            background: rgba(56, 189, 248, 0.15);
+            color: var(--accent);
+            padding: 2px 8px;
+            border-radius: 99px;
+            font-weight: 600;
+        }
+
+        .watchlist-container {
+            flex: 1;
+            overflow-y: auto;
+            padding: 8px 12px;
+            scrollbar-width: thin;
+            scrollbar-color: rgba(255, 255, 255, 0.08) transparent;
+        }
+
+        .watchlist-container::-webkit-scrollbar {
+            width: 4px;
+        }
+
+        .watchlist-container::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        .watchlist-container::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.08);
+            border-radius: 99px;
+        }
+
+        .watchlist-empty {
+            text-align: center;
+            padding: 40px 16px;
+            color: var(--text-muted);
+        }
+
+        .watchlist-empty-icon {
+            font-size: 40px;
+            margin-bottom: 12px;
+            opacity: 0.4;
+        }
+
+        .watchlist-empty p {
+            font-size: 13px;
+            line-height: 1.6;
+        }
+
+        .watchlist-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px;
+            border-radius: var(--radius-md);
+            cursor: pointer;
+            transition: all var(--transition-fast);
+            border: 1px solid transparent;
+            margin-bottom: 4px;
+            position: relative;
+        }
+
+        .watchlist-item:hover {
+            background: var(--bg-card-hover);
+            border-color: var(--border-glass);
+        }
+
+        .watchlist-item.active {
+            background: rgba(56, 189, 248, 0.08);
+            border-color: var(--border-glow);
+        }
+
+        .watchlist-item-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--accent-gradient);
+            flex-shrink: 0;
+            box-shadow: 0 0 8px var(--accent-glow);
+        }
+
+        .watchlist-item-info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .watchlist-item-name {
+            font-size: 13px;
+            font-weight: 500;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            color: var(--text-primary);
+        }
+
+        .watchlist-item-code {
+            font-size: 11px;
+            color: var(--text-muted);
+            font-family: 'SF Mono', 'Fira Code', monospace;
+        }
+
+        .watchlist-item-remove {
+            width: 28px;
+            height: 28px;
+            border-radius: 6px;
+            background: transparent;
+            border: none;
+            color: var(--text-muted);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            transition: all var(--transition-fast);
+            opacity: 0;
+            flex-shrink: 0;
+        }
+
+        .watchlist-item:hover .watchlist-item-remove {
+            opacity: 1;
+        }
+
+        .watchlist-item-remove:hover {
+            background: var(--red-bg);
+            color: var(--red);
+        }
+
+        /* ── MAIN CONTENT ────────────────────────────────────────── */
+        #main {
+            flex: 1;
+            padding: 32px;
+            max-width: 1100px;
+            margin: 0 auto;
+            width: 100%;
+        }
+
+        /* ── SEARCH BAR ──────────────────────────────────────────── */
+        .search-section {
+            margin-bottom: 32px;
+        }
+
+        .search-wrapper {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+
+        .search-input-group {
+            flex: 1;
+            position: relative;
+        }
+
+        .search-icon {
+            position: absolute;
+            left: 16px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--text-muted);
+            font-size: 18px;
+            pointer-events: none;
+        }
+
+        #searchInput {
+            width: 100%;
+            padding: 14px 16px 14px 48px;
+            background: var(--bg-card);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid var(--border-glass);
+            border-radius: var(--radius-md);
+            color: var(--text-primary);
+            font-size: 15px;
+            font-family: inherit;
+            outline: none;
+            transition: all var(--transition-normal);
+        }
+
+        #searchInput::placeholder {
+            color: var(--text-muted);
+        }
+
+        #searchInput:focus {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px var(--accent-glow), var(--shadow-glow);
+        }
+
+        #searchBtn {
+            padding: 14px 28px;
+            background: var(--accent-gradient);
+            border: none;
+            border-radius: var(--radius-md);
+            color: #0a0e1a;
+            font-size: 14px;
+            font-weight: 600;
+            font-family: inherit;
+            cursor: pointer;
+            transition: all var(--transition-normal);
+            white-space: nowrap;
+            box-shadow: 0 0 20px var(--accent-glow);
+        }
+
+        #searchBtn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 0 30px rgba(56, 189, 248, 0.35);
+        }
+
+        #searchBtn:active {
+            transform: translateY(0);
+        }
+
+        #searchBtn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        /* ── WELCOME STATE ───────────────────────────────────────── */
+        #welcomeState {
+            text-align: center;
+            padding: 80px 24px;
+        }
+
+        .welcome-icon {
+            font-size: 64px;
+            margin-bottom: 24px;
+            animation: float 3s ease-in-out infinite;
+        }
+
+        @keyframes float {
+
+            0%,
+            100% {
+                transform: translateY(0);
+            }
+
+            50% {
+                transform: translateY(-10px);
+            }
+        }
+
+        .welcome-title {
+            font-size: 28px;
+            font-weight: 700;
+            margin-bottom: 12px;
+            background: var(--accent-gradient);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .welcome-subtitle {
+            font-size: 15px;
+            color: var(--text-secondary);
+            max-width: 480px;
+            margin: 0 auto 32px;
+            line-height: 1.7;
+        }
+
+        .welcome-codes {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .welcome-code-chip {
+            padding: 8px 16px;
+            background: var(--bg-card);
+            border: 1px solid var(--border-glass);
+            border-radius: var(--radius-sm);
+            font-size: 13px;
+            color: var(--accent);
+            cursor: pointer;
+            transition: all var(--transition-fast);
+            font-family: 'SF Mono', 'Fira Code', monospace;
+        }
+
+        .welcome-code-chip:hover {
+            background: rgba(56, 189, 248, 0.1);
+            border-color: var(--border-glow);
+            transform: translateY(-2px);
+        }
+
+        /* ── LOADING STATE ───────────────────────────────────────── */
+        #loadingState {
+            display: none;
+            text-align: center;
+            padding: 80px 24px;
+        }
+
+        .spinner {
+            width: 48px;
+            height: 48px;
+            border: 3px solid var(--border-glass);
+            border-top-color: var(--accent);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin: 0 auto 20px;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        .loading-text {
+            color: var(--text-secondary);
+            font-size: 14px;
+        }
+
+        /* ── FUND DASHBOARD ──────────────────────────────────────── */
+        #fundDashboard {
+            display: none;
+            animation: fadeInUp 0.5s ease;
+        }
+
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(16px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* ── FUND HEADER ─────────────────────────────────────────── */
+        .fund-header {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            margin-bottom: 28px;
+            gap: 16px;
+            flex-wrap: wrap;
+        }
+
+        .fund-name {
+            font-size: 22px;
+            font-weight: 700;
+            line-height: 1.3;
+            max-width: 700px;
+        }
+
+        .fund-meta-tags {
+            display: flex;
+            gap: 8px;
+            margin-top: 10px;
+            flex-wrap: wrap;
+        }
+
+        .meta-tag {
+            padding: 4px 12px;
+            background: var(--bg-card);
+            border: 1px solid var(--border-glass);
+            border-radius: 99px;
+            font-size: 12px;
+            color: var(--text-secondary);
+            white-space: nowrap;
+        }
+
+        #addWatchlistBtn {
+            padding: 10px 20px;
+            background: transparent;
+            border: 1px solid var(--border-glow);
+            border-radius: var(--radius-sm);
+            color: var(--accent);
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all var(--transition-fast);
+            font-family: inherit;
+            white-space: nowrap;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            flex-shrink: 0;
+        }
+
+        #addWatchlistBtn:hover {
+            background: rgba(56, 189, 248, 0.1);
+        }
+
+        #addWatchlistBtn.added {
+            background: var(--green-bg);
+            border-color: rgba(52, 211, 153, 0.3);
+            color: var(--green);
+            cursor: default;
+        }
+
+        /* ── STATS GRID ──────────────────────────────────────────── */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+            margin-bottom: 28px;
+        }
+
+        .stat-card {
+            background: var(--bg-card);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid var(--border-glass);
+            border-radius: var(--radius-lg);
+            padding: 20px;
+            transition: all var(--transition-normal);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .stat-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: var(--accent-gradient);
+            opacity: 0;
+            transition: opacity var(--transition-normal);
+        }
+
+        .stat-card:hover {
+            border-color: var(--border-glow);
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-glow);
+        }
+
+        .stat-card:hover::before {
+            opacity: 1;
+        }
+
+        .stat-label {
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 1.2px;
+            color: var(--text-muted);
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+
+        .stat-value {
+            font-size: 26px;
+            font-weight: 700;
+        }
+
+        .stat-sub {
+            font-size: 12px;
+            color: var(--text-muted);
+            margin-top: 4px;
+        }
+
+        .stat-positive {
+            color: var(--green);
+        }
+
+        .stat-negative {
+            color: var(--red);
+        }
+
+        .stat-neutral {
+            color: var(--amber);
+        }
+
+        /* ── CHART SECTION ───────────────────────────────────────── */
+        .chart-section {
+            background: var(--bg-card);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid var(--border-glass);
+            border-radius: var(--radius-lg);
+            padding: 24px;
+        }
+
+        .chart-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+
+        .chart-title {
+            font-size: 16px;
+            font-weight: 600;
+        }
+
+        .chart-range-btns {
+            display: flex;
+            gap: 6px;
+        }
+
+        .range-btn {
+            padding: 6px 14px;
+            background: transparent;
+            border: 1px solid var(--border-glass);
+            border-radius: 6px;
+            color: var(--text-secondary);
+            font-size: 12px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all var(--transition-fast);
+            font-family: inherit;
+        }
+
+        .range-btn:hover {
+            border-color: var(--border-glow);
+            color: var(--accent);
+        }
+
+        .range-btn.active {
+            background: var(--accent-gradient);
+            border-color: transparent;
+            color: #0a0e1a;
+            font-weight: 600;
+        }
+
+        .chart-canvas-wrapper {
+            position: relative;
+            height: 380px;
+        }
+
+        #navChart {
+            width: 100% !important;
+            height: 100% !important;
+        }
+
+        /* ── TOAST ───────────────────────────────────────────────── */
+        .toast-container {
+            position: fixed;
+            top: 24px;
+            right: 24px;
+            z-index: 999;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .toast {
+            padding: 14px 20px;
+            border-radius: var(--radius-md);
+            font-size: 13px;
+            font-weight: 500;
+            animation: toastIn 0.35s ease, toastOut 0.35s ease 3.5s forwards;
+            max-width: 380px;
+            box-shadow: var(--shadow-lg);
+        }
+
+        .toast-error {
+            background: var(--red-bg);
+            border: 1px solid rgba(248, 113, 113, 0.25);
+            color: var(--red);
+        }
+
+        .toast-success {
+            background: var(--green-bg);
+            border: 1px solid rgba(52, 211, 153, 0.25);
+            color: var(--green);
+        }
+
+        @keyframes toastIn {
+            from {
+                opacity: 0;
+                transform: translateX(40px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        @keyframes toastOut {
+            from {
+                opacity: 1;
+                transform: translateX(0);
+            }
+
+            to {
+                opacity: 0;
+                transform: translateX(40px);
+            }
+        }
+
+        /* ── MOBILE SIDEBAR TOGGLE ───────────────────────────────── */
+        .mobile-toggle {
+            display: none;
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            width: 52px;
+            height: 52px;
+            border-radius: 50%;
+            background: var(--accent-gradient);
+            border: none;
+            color: #0a0e1a;
+            font-size: 22px;
+            cursor: pointer;
+            z-index: 20;
+            box-shadow: 0 0 24px var(--accent-glow);
+            transition: transform var(--transition-fast);
+        }
+
+        .mobile-toggle:active {
+            transform: scale(0.92);
+        }
+
+        .sidebar-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 9;
+        }
+
+        /* ── RESPONSIVE ──────────────────────────────────────────── */
+        @media (max-width: 768px) {
+            #sidebar {
+                position: fixed;
+                left: 0;
+                top: 0;
+                bottom: 0;
+                transform: translateX(-100%);
+                z-index: 10;
+            }
+
+            #sidebar.open {
+                transform: translateX(0);
+            }
+
+            .mobile-toggle {
+                display: flex;
+                align-items: center;
+                justify-content: center;
+            }
+
+            .sidebar-overlay.active {
+                display: block;
+            }
+
+            #main {
+                padding: 20px 16px;
+            }
+
+            .stats-grid {
+                grid-template-columns: 1fr 1fr;
+            }
+
+            .chart-canvas-wrapper {
+                height: 280px;
+            }
+
+            .fund-header {
+                flex-direction: column;
+            }
+
+            .fund-name {
+                font-size: 18px;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .stats-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .search-wrapper {
+                flex-direction: column;
+            }
+
+            #searchBtn {
+                width: 100%;
+                justify-content: center;
+            }
+        }
+
+        /* ═══════════════════════════════════════════════════════════
+           CATEGORY NAVIGATION
+           ═══════════════════════════════════════════════════════════ */
+        .sidebar-section-title {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 16px 20px 8px;
+        }
+
+        .sidebar-section-title h3 {
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            color: var(--text-muted);
+            font-weight: 600;
+        }
+
+        .category-nav {
+            padding: 4px 12px 8px;
+            border-bottom: 1px solid var(--border-glass);
+            max-height: 45vh;
+            overflow-y: auto;
+            scrollbar-width: thin;
+            scrollbar-color: rgba(255, 255, 255, 0.08) transparent;
+        }
+
+        .category-nav::-webkit-scrollbar {
+            width: 4px;
+        }
+
+        .category-nav::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        .category-nav::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.08);
+            border-radius: 99px;
+        }
+
+        .cat-group {
+            margin-bottom: 4px;
+        }
+
+        .cat-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 9px 12px;
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            transition: all var(--transition-fast);
+            border: 1px solid transparent;
+            user-select: none;
+        }
+
+        .cat-header:hover {
+            background: var(--bg-card-hover);
+            border-color: var(--border-glass);
+        }
+
+        .cat-header-icon {
+            font-size: 16px;
+            width: 24px;
+            text-align: center;
+            flex-shrink: 0;
+        }
+
+        .cat-header-label {
+            flex: 1;
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--text-primary);
+        }
+
+        .cat-header-arrow {
+            font-size: 10px;
+            color: var(--text-muted);
+            transition: transform var(--transition-fast);
+        }
+
+        .cat-group.open .cat-header-arrow {
+            transform: rotate(90deg);
+        }
+
+        .cat-group.open .cat-header {
+            background: rgba(56, 189, 248, 0.05);
+        }
+
+        .cat-subs {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height var(--transition-normal);
+        }
+
+        .cat-group.open .cat-subs {
+            max-height: 500px;
+        }
+
+        .cat-sub-item {
+            display: block;
+            width: 100%;
+            text-align: left;
+            padding: 7px 12px 7px 46px;
+            border: none;
+            background: transparent;
+            color: var(--text-secondary);
+            font-size: 12.5px;
+            font-family: inherit;
+            cursor: pointer;
+            border-radius: 6px;
+            transition: all var(--transition-fast);
+        }
+
+        .cat-sub-item:hover {
+            background: var(--bg-card-hover);
+            color: var(--text-primary);
+        }
+
+        .cat-sub-item.active {
+            background: rgba(56, 189, 248, 0.1);
+            color: var(--accent);
+            font-weight: 500;
+        }
+
+        /* ═══════════════════════════════════════════════════════════
+           DATA TABLE VIEW
+           ═══════════════════════════════════════════════════════════ */
+        #tableView {
+            display: none;
+            animation: fadeInUp 0.4s ease;
+        }
+
+        .table-header {
+            margin-bottom: 24px;
+        }
+
+        .table-breadcrumb {
+            font-size: 12px;
+            color: var(--text-muted);
+            margin-bottom: 6px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .table-breadcrumb span {
+            color: var(--text-muted);
+        }
+
+        .table-breadcrumb .bc-active {
+            color: var(--accent);
+            font-weight: 500;
+        }
+
+        .table-view-title {
+            font-size: 22px;
+            font-weight: 700;
+        }
+
+        .table-view-subtitle {
+            font-size: 13px;
+            color: var(--text-secondary);
+            margin-top: 4px;
+        }
+
+        .table-card {
+            background: var(--bg-card);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid var(--border-glass);
+            border-radius: var(--radius-lg);
+            overflow: hidden;
+        }
+
+        .fund-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+
+        .fund-table thead th {
+            padding: 14px 16px;
+            text-align: left;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--text-muted);
+            border-bottom: 1px solid var(--border-glass);
+            cursor: pointer;
+            user-select: none;
+            transition: color var(--transition-fast);
+            white-space: nowrap;
+            position: relative;
+        }
+
+        .fund-table thead th:hover {
+            color: var(--accent);
+        }
+
+        .fund-table thead th.sorted {
+            color: var(--accent);
+        }
+
+        .sort-arrow {
+            font-size: 10px;
+            margin-left: 4px;
+            opacity: 0.4;
+        }
+
+        .fund-table thead th.sorted .sort-arrow {
+            opacity: 1;
+        }
+
+        .fund-table tbody tr {
+            border-bottom: 1px solid var(--border-glass);
+            cursor: pointer;
+            transition: background var(--transition-fast);
+        }
+
+        .fund-table tbody tr:last-child {
+            border-bottom: none;
+        }
+
+        .fund-table tbody tr:hover {
+            background: var(--bg-card-hover);
+        }
+
+        .fund-table td {
+            padding: 14px 16px;
+            color: var(--text-primary);
+            white-space: nowrap;
+        }
+
+        .fund-table td:first-child {
+            max-width: 280px;
+            white-space: normal;
+            font-weight: 500;
+        }
+
+        .fund-table .td-positive {
+            color: var(--green);
+            font-weight: 600;
+        }
+
+        .fund-table .td-negative {
+            color: var(--red);
+            font-weight: 600;
+        }
+
+        .fund-table .td-neutral {
+            color: var(--amber);
+            font-weight: 600;
+        }
+
+        .table-empty {
+            text-align: center;
+            padding: 60px 24px;
+            color: var(--text-muted);
+        }
+
+        .table-empty-icon {
+            font-size: 40px;
+            margin-bottom: 12px;
+            opacity: 0.4;
+        }
+
+        .table-empty p {
+            font-size: 13px;
+        }
+
+        .back-to-table-btn {
+            display: none;
+            align-items: center;
+            gap: 6px;
+            padding: 8px 16px;
+            background: transparent;
+            border: 1px solid var(--border-glass);
+            border-radius: var(--radius-sm);
+            color: var(--text-secondary);
+            font-size: 12px;
+            font-family: inherit;
+            cursor: pointer;
+            transition: all var(--transition-fast);
+            margin-bottom: 16px;
+        }
+
+        .back-to-table-btn:hover {
+            border-color: var(--border-glow);
+            color: var(--accent);
+        }
+
+        /* Responsive table */
+        @media (max-width: 900px) {
+            .table-card {
+                overflow-x: auto;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <div id="app">
+        <!-- ── SIDEBAR ──────────────────────────────────────────── -->
+        <aside id="sidebar">
+            <div class="sidebar-header">
+                <div class="logo">
+                    <div class="logo-icon">📈</div>
+                    <span class="logo-text">MF Insight</span>
+                </div>
+                <div class="logo-subtitle">Research Dashboard</div>
+            </div>
+
+            <div class="sidebar-section-title">
+                <h3>Categories</h3>
+            </div>
+            <nav class="category-nav" id="categoryNav"></nav>
+
+            <div class="watchlist-title">
+                <h3>Watchlist</h3>
+                <span class="watchlist-count" id="watchlistCount">0</span>
+            </div>
+
+            <div class="watchlist-container" id="watchlistContainer">
+                <div class="watchlist-empty" id="watchlistEmpty">
+                    <div class="watchlist-empty-icon">🔖</div>
+                    <p>Your watchlist is empty.<br>Search for a fund and add it here.</p>
+                </div>
+            </div>
+        </aside>
+
+        <div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+        <!-- ── MAIN CONTENT ─────────────────────────────────────── -->
+        <main id="main">
+            <!-- Search -->
+            <section class="search-section">
+                <div class="search-wrapper">
+                    <div class="search-input-group">
+                        <span class="search-icon">🔍</span>
+                        <input type="text" id="searchInput" placeholder="Enter Scheme Code (e.g. 119062)"
+                            autocomplete="off">
+                    </div>
+                    <button id="searchBtn">Search Fund</button>
+                </div>
+            </section>
+
+            <!-- Welcome State -->
+            <section id="welcomeState">
+                <div class="welcome-icon">🚀</div>
+                <h2 class="welcome-title">Explore Mutual Funds</h2>
+                <p class="welcome-subtitle">
+                    Enter a Scheme Code above to view detailed NAV history, calculate CAGR returns,
+                    and measure volatility — all running locally in your browser.
+                </p>
+                <div class="welcome-codes">
+                    <button class="welcome-code-chip" onclick="loadFund('119062')">119062</button>
+                    <button class="welcome-code-chip" onclick="loadFund('120503')">120503</button>
+                    <button class="welcome-code-chip" onclick="loadFund('100119')">100119</button>
+                    <button class="welcome-code-chip" onclick="loadFund('118989')">118989</button>
+                    <button class="welcome-code-chip" onclick="loadFund('120716')">120716</button>
+                </div>
+            </section>
+
+            <!-- Loading State -->
+            <section id="loadingState">
+                <div class="spinner"></div>
+                <div class="loading-text">Fetching fund data…</div>
+            </section>
+
+            <!-- Fund Dashboard -->
+            <section id="fundDashboard">
+                <div class="fund-header">
+                    <div>
+                        <h1 class="fund-name" id="fundName">—</h1>
+                        <div class="fund-meta-tags">
+                            <span class="meta-tag" id="fundHouse">—</span>
+                            <span class="meta-tag" id="fundCategory">—</span>
+                            <span class="meta-tag" id="fundType">—</span>
+                        </div>
+                    </div>
+                    <button id="addWatchlistBtn" onclick="toggleWatchlist()">
+                        <span id="watchlistBtnIcon">＋</span>
+                        <span id="watchlistBtnText">Add to Watchlist</span>
+                    </button>
+                </div>
+
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-label">Latest NAV</div>
+                        <div class="stat-value" id="statNAV">—</div>
+                        <div class="stat-sub" id="statNAVDate">—</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">CAGR (1 Year)</div>
+                        <div class="stat-value" id="statCAGR1Y">—</div>
+                        <div class="stat-sub">Annualised Return</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">CAGR (3 Year)</div>
+                        <div class="stat-value" id="statCAGR3Y">—</div>
+                        <div class="stat-sub">Annualised Return</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">CAGR (5 Year)</div>
+                        <div class="stat-value" id="statCAGR5Y">—</div>
+                        <div class="stat-sub">Annualised Return</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">CAGR (Max)</div>
+                        <div class="stat-value" id="statCAGRMax">—</div>
+                        <div class="stat-sub" id="statCAGRMaxSub">Since Inception</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Volatility (σ)</div>
+                        <div class="stat-value" id="statVolatility">—</div>
+                        <div class="stat-sub">Annualised Std Dev</div>
+                    </div>
+                </div>
+
+                <div class="chart-section">
+                    <div class="chart-header">
+                        <h2 class="chart-title">NAV History</h2>
+                        <div class="chart-range-btns" id="chartRangeBtns">
+                            <button class="range-btn" data-range="1Y">1Y</button>
+                            <button class="range-btn" data-range="3Y">3Y</button>
+                            <button class="range-btn" data-range="5Y">5Y</button>
+                            <button class="range-btn active" data-range="MAX">Max</button>
+                        </div>
+                    </div>
+                    <div class="chart-canvas-wrapper">
+                        <canvas id="navChart"></canvas>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Table View -->
+            <section id="tableView">
+                <div class="table-header">
+                    <div class="table-breadcrumb" id="tableBreadcrumb"></div>
+                    <h1 class="table-view-title" id="tableTitle">—</h1>
+                    <p class="table-view-subtitle" id="tableSubtitle"></p>
+                </div>
+                <div class="table-card">
+                    <table class="fund-table" id="fundTable">
+                        <thead id="fundTableHead"></thead>
+                        <tbody id="fundTableBody"></tbody>
+                    </table>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <button class="mobile-toggle" id="mobileToggle" onclick="toggleSidebar()">☰</button>
+
+    <div class="toast-container" id="toastContainer"></div>
+
+    <script>
+        /* ═══════════════════════════════════════════════════════════════════
+           STATE
+           ═══════════════════════════════════════════════════════════════════ */
+        let currentFund = null;       // { meta, data } from API
+        let currentCode = null;
+        let fullNavData = [];          // sorted oldest→newest [{ date, nav }]
+        let navChart = null;
+
+        const STORAGE_KEY = 'mf_watchlist';
+
+        /* ═══════════════════════════════════════════════════════════════════
+           1 ─ LOCAL STORAGE WATCHLIST
+           ═══════════════════════════════════════════════════════════════════ */
+        function loadWatchlist() {
+            try {
+                return JSON.parse(localStorage.getItem(STORAGE_KEY)) || [];
+            } catch (e) { return []; }
+        }
+
+        function saveWatchlist(list) {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
+        }
+
+        function addToWatchlist(code, name) {
+            const list = loadWatchlist();
+            if (list.some(item => item.code === code)) return false;
+            list.push({ code, name });
+            saveWatchlist(list);
+            renderWatchlist();
+            return true;
+        }
+
+        function removeFromWatchlist(code) {
+            let list = loadWatchlist();
+            list = list.filter(item => item.code !== code);
+            saveWatchlist(list);
+            renderWatchlist();
+            updateWatchlistBtn();
+        }
+
+        function isInWatchlist(code) {
+            return loadWatchlist().some(item => item.code === code);
+        }
+
+        function renderWatchlist() {
+            const container = document.getElementById('watchlistContainer');
+            const list = loadWatchlist();
+            const countEl = document.getElementById('watchlistCount');
+            countEl.textContent = list.length;
+
+            if (list.length === 0) {
+                container.innerHTML = `
+            <div class="watchlist-empty" id="watchlistEmpty">
+                <div class="watchlist-empty-icon">🔖</div>
+                <p>Your watchlist is empty.<br>Search for a fund and add it here.</p>
+            </div>
+        `;
+                return;
+            }
+
+            container.innerHTML = list.map(item => `
+        <div class="watchlist-item ${currentCode === item.code ? 'active' : ''}"
+             onclick="loadFund('${item.code}')">
+            <div class="watchlist-item-dot"></div>
+            <div class="watchlist-item-info">
+                <div class="watchlist-item-name">${escapeHtml(item.name)}</div>
+                <div class="watchlist-item-code">${item.code}</div>
+            </div>
+            <button class="watchlist-item-remove"
+                    onclick="event.stopPropagation(); removeFromWatchlist('${item.code}')"
+                    title="Remove">✕</button>
+        </div>
+    `).join('');
+        }
+
+        function toggleWatchlist() {
+            if (!currentFund || !currentCode) return;
+            const name = currentFund.meta.scheme_name || 'Unknown Fund';
+            if (isInWatchlist(currentCode)) return;
+            addToWatchlist(currentCode, name);
+            updateWatchlistBtn();
+            showToast('Added to watchlist', 'success');
+        }
+
+        function updateWatchlistBtn() {
+            const btn = document.getElementById('addWatchlistBtn');
+            const icon = document.getElementById('watchlistBtnIcon');
+            const text = document.getElementById('watchlistBtnText');
+            if (!currentCode) return;
+
+            if (isInWatchlist(currentCode)) {
+                btn.classList.add('added');
+                icon.textContent = '✓';
+                text.textContent = 'In Watchlist';
+            } else {
+                btn.classList.remove('added');
+                icon.textContent = '＋';
+                text.textContent = 'Add to Watchlist';
+            }
+        }
+
+        /* ═══════════════════════════════════════════════════════════════════
+           2 ─ FETCH LOGIC
+           ═══════════════════════════════════════════════════════════════════ */
+        async function fetchFundData(schemeCode) {
+            let resp;
+            try {
+                resp = await fetch(`https://api.mfapi.in/mf/${schemeCode}`);
+            } catch (netErr) {
+                throw new Error('Network error — if you opened this via file://, please use a local HTTP server (e.g. python3 -m http.server) to avoid CORS issues.');
+            }
+            if (!resp.ok) throw new Error(`API returned HTTP ${resp.status}`);
+            const json = await resp.json();
+
+            // API returns SUCCESS even for invalid codes, but with empty data/meta
+            if (!json.data || json.data.length === 0 || !json.meta || !json.meta.scheme_name) {
+                throw new Error('Invalid scheme code or no data available for this fund.');
+            }
+
+            return json; // { meta, data, status }
+        }
+
+        /* ═══════════════════════════════════════════════════════════════════
+           3 ─ MATH ENGINE
+           ═══════════════════════════════════════════════════════════════════ */
+
+        /**
+         * Parse the API date format "dd-mm-yyyy" → JS Date
+         */
+        function parseDate(str) {
+            const [d, m, y] = str.split('-').map(Number);
+            return new Date(y, m - 1, d);
+        }
+
+        /**
+         * Prepare the raw data array from the API:
+         *  - Sort oldest → newest
+         *  - Parse NAV as float
+         */
+        function prepareNavData(rawData) {
+            return rawData
+                .map(d => ({
+                    date: parseDate(d.date),
+                    nav: parseFloat(d.nav)
+                }))
+                .filter(d => !isNaN(d.nav) && d.nav > 0)
+                .sort((a, b) => a.date - b.date);
+        }
+
+        /**
+         * CAGR = (endNAV / startNAV) ^ (1 / years) - 1
+         */
+        function calcCAGR(startNAV, endNAV, startDate, endDate) {
+            const diffMs = endDate - startDate;
+            const years = diffMs / (365.25 * 24 * 60 * 60 * 1000);
+            if (years <= 0 || startNAV <= 0) return null;
+            return Math.pow(endNAV / startNAV, 1 / years) - 1;
+        }
+
+        /**
+         * Get CAGR for a specific lookback period (in years).
+         * Pass null for "max" (full data range).
+         */
+        function getCAGR(data, yearsBack) {
+            if (data.length < 2) return null;
+
+            const endEntry = data[data.length - 1];
+
+            if (yearsBack === null) {
+                // Max / since inception
+                const startEntry = data[0];
+                return calcCAGR(startEntry.nav, endEntry.nav, startEntry.date, endEntry.date);
+            }
+
+            const cutoff = new Date(endEntry.date);
+            cutoff.setFullYear(cutoff.getFullYear() - yearsBack);
+
+            // Find the closest entry at or after the cutoff
+            let startEntry = null;
+            for (let i = 0; i < data.length; i++) {
+                if (data[i].date >= cutoff) {
+                    startEntry = data[i];
+                    break;
+                }
+            }
+
+            if (!startEntry || startEntry === endEntry) return null;
+            return calcCAGR(startEntry.nav, endEntry.nav, startEntry.date, endEntry.date);
+        }
+
+        /**
+         * Annualised Standard Deviation of daily log-returns.
+         * σ_annual = σ_daily × √252
+         */
+        function calcVolatility(data) {
+            if (data.length < 30) return null; // need enough data points
+
+            const logReturns = [];
+            for (let i = 1; i < data.length; i++) {
+                if (data[i - 1].nav > 0 && data[i].nav > 0) {
+                    logReturns.push(Math.log(data[i].nav / data[i - 1].nav));
+                }
+            }
+
+            if (logReturns.length < 2) return null;
+
+            const mean = logReturns.reduce((s, v) => s + v, 0) / logReturns.length;
+            const variance = logReturns.reduce((s, v) => s + (v - mean) ** 2, 0) / (logReturns.length - 1);
+            const dailyStd = Math.sqrt(variance);
+            const annualStd = dailyStd * Math.sqrt(252); // 252 trading days
+
+            return annualStd;
+        }
+
+        /* ═══════════════════════════════════════════════════════════════════
+           4 ─ CHART.JS VISUALIZATION
+           ═══════════════════════════════════════════════════════════════════ */
+        function renderChart(data) {
+            const ctx = document.getElementById('navChart').getContext('2d');
+
+            if (navChart) {
+                navChart.destroy();
+            }
+
+            const labels = data.map(d => d.date);
+            const values = data.map(d => d.nav);
+
+            // Gradient fill
+            const gradient = ctx.createLinearGradient(0, 0, 0, 380);
+            gradient.addColorStop(0, 'rgba(56, 189, 248, 0.25)');
+            gradient.addColorStop(0.5, 'rgba(56, 189, 248, 0.06)');
+            gradient.addColorStop(1, 'rgba(56, 189, 248, 0.0)');
+
+            navChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'NAV',
+                        data: values,
+                        borderColor: '#38bdf8',
+                        backgroundColor: gradient,
+                        borderWidth: 2,
+                        fill: true,
+                        tension: 0.1,
+                        pointRadius: 0,
+                        pointHoverRadius: 5,
+                        pointHoverBackgroundColor: '#38bdf8',
+                        pointHoverBorderColor: '#fff',
+                        pointHoverBorderWidth: 2,
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: {
+                        mode: 'index',
+                        intersect: false,
+                    },
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            backgroundColor: 'rgba(17, 24, 39, 0.95)',
+                            borderColor: 'rgba(56, 189, 248, 0.3)',
+                            borderWidth: 1,
+                            titleColor: '#94a3b8',
+                            bodyColor: '#f1f5f9',
+                            titleFont: { size: 12, weight: '400' },
+                            bodyFont: { size: 14, weight: '600' },
+                            padding: 12,
+                            cornerRadius: 8,
+                            displayColors: false,
+                            callbacks: {
+                                title: (items) => {
+                                    const parsed = items[0].parsed;
+                                    if (parsed && parsed.x) {
+                                        const d = new Date(parsed.x);
+                                        return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+                                    }
+                                    return items[0].label || '';
+                                },
+                                label: (item) => `NAV: ₹${parseFloat(item.raw).toFixed(4)}`
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            type: 'time',
+                            time: {
+                                tooltipFormat: 'dd MMM yyyy',
+                                displayFormats: {
+                                    month: 'MMM yyyy',
+                                    year: 'yyyy'
+                                }
+                            },
+                            grid: {
+                                color: 'rgba(255,255,255,0.03)',
+                                drawBorder: false,
+                            },
+                            ticks: {
+                                color: '#64748b',
+                                font: { size: 11 },
+                                maxRotation: 0,
+                                autoSkipPadding: 30,
+                            }
+                        },
+                        y: {
+                            grid: {
+                                color: 'rgba(255,255,255,0.03)',
+                                drawBorder: false,
+                            },
+                            ticks: {
+                                color: '#64748b',
+                                font: { size: 11 },
+                                callback: (val) => '₹' + val.toFixed(2)
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        /* ═══════════════════════════════════════════════════════════════════
+           5 ─ TYING IT ALL TOGETHER
+           ═══════════════════════════════════════════════════════════════════ */
+
+        function showState(state) {
+            document.getElementById('welcomeState').style.display = state === 'welcome' ? 'block' : 'none';
+            document.getElementById('loadingState').style.display = state === 'loading' ? 'block' : 'none';
+            document.getElementById('fundDashboard').style.display = state === 'dashboard' ? 'block' : 'none';
+            document.getElementById('tableView').style.display = state === 'table' ? 'block' : 'none';
+        }
+
+        function formatPercent(value) {
+            if (value === null || value === undefined) return '—';
+            const pct = (value * 100).toFixed(2);
+            return (value >= 0 ? '+' : '') + pct + '%';
+        }
+
+        function getPercentClass(value) {
+            if (value === null || value === undefined) return '';
+            return value >= 0 ? 'stat-positive' : 'stat-negative';
+        }
+
+        function displayFundData() {
+            const { meta = {}, data: rawData } = currentFund;
+            fullNavData = prepareNavData(rawData);
+
+            if (fullNavData.length === 0) {
+                showToast('No valid NAV data found for this fund.', 'error');
+                showState('welcome');
+                return;
+            }
+
+            // Header
+            document.getElementById('fundName').textContent = meta.scheme_name || 'Unknown Fund';
+            document.getElementById('fundHouse').textContent = meta.fund_house || '—';
+            document.getElementById('fundCategory').textContent = meta.scheme_category || '—';
+            document.getElementById('fundType').textContent = meta.scheme_type || '—';
+
+            // Stats
+            const latest = fullNavData[fullNavData.length - 1];
+            document.getElementById('statNAV').textContent = '₹' + latest.nav.toFixed(4);
+            document.getElementById('statNAVDate').textContent = latest.date.toLocaleDateString('en-IN', {
+                day: 'numeric', month: 'short', year: 'numeric'
+            });
+
+            const cagr1 = getCAGR(fullNavData, 1);
+            const cagr3 = getCAGR(fullNavData, 3);
+            const cagr5 = getCAGR(fullNavData, 5);
+            const cagrMax = getCAGR(fullNavData, null);
+            const volatility = calcVolatility(fullNavData);
+
+            const el1 = document.getElementById('statCAGR1Y');
+            el1.textContent = formatPercent(cagr1);
+            el1.className = 'stat-value ' + getPercentClass(cagr1);
+
+            const el3 = document.getElementById('statCAGR3Y');
+            el3.textContent = formatPercent(cagr3);
+            el3.className = 'stat-value ' + getPercentClass(cagr3);
+
+            const el5 = document.getElementById('statCAGR5Y');
+            el5.textContent = formatPercent(cagr5);
+            el5.className = 'stat-value ' + getPercentClass(cagr5);
+
+            const elMax = document.getElementById('statCAGRMax');
+            elMax.textContent = formatPercent(cagrMax);
+            elMax.className = 'stat-value ' + getPercentClass(cagrMax);
+
+            // Inception date
+            const inception = fullNavData[0].date.toLocaleDateString('en-IN', {
+                month: 'short', year: 'numeric'
+            });
+            document.getElementById('statCAGRMaxSub').textContent = `Since ${inception}`;
+
+            const elVol = document.getElementById('statVolatility');
+            if (volatility !== null) {
+                elVol.textContent = (volatility * 100).toFixed(2) + '%';
+                elVol.className = 'stat-value ' + (volatility > 0.20 ? 'stat-negative' : volatility > 0.12 ? 'stat-neutral' : 'stat-positive');
+            } else {
+                elVol.textContent = '—';
+                elVol.className = 'stat-value';
+            }
+
+            // Chart
+            setActiveRange('MAX');
+            updateWatchlistBtn();
+            renderWatchlist();
+
+            showState('dashboard');
+        }
+
+        function filterDataByRange(range) {
+            if (range === 'MAX') return fullNavData;
+
+            const yearsMap = { '1Y': 1, '3Y': 3, '5Y': 5 };
+            const years = yearsMap[range];
+            if (!years) return fullNavData;
+
+            const latest = fullNavData[fullNavData.length - 1].date;
+            const cutoff = new Date(latest);
+            cutoff.setFullYear(cutoff.getFullYear() - years);
+
+            return fullNavData.filter(d => d.date >= cutoff);
+        }
+
+        function setActiveRange(range) {
+            document.querySelectorAll('.range-btn').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.range === range);
+            });
+            const filtered = filterDataByRange(range);
+            renderChart(filtered);
+        }
+
+        let isLoading = false;
+
+        async function loadFund(code) {
+            code = String(code).trim();
+            if (!code) { showToast('Please enter a scheme code.', 'error'); return; }
+            if (isLoading) return; // prevent duplicate fetches
+
+            isLoading = true;
+            const searchBtn = document.getElementById('searchBtn');
+            searchBtn.disabled = true;
+            searchBtn.textContent = 'Loading…';
+
+            currentCode = code;
+            document.getElementById('searchInput').value = code;
+            showState('loading');
+
+            // Close mobile sidebar
+            document.getElementById('sidebar').classList.remove('open');
+            document.getElementById('sidebarOverlay').classList.remove('active');
+
+            try {
+                const data = await fetchFundData(code);
+                currentFund = data;
+                displayFundData();
+            } catch (err) {
+                showState('welcome');
+                showToast(err.message || 'Failed to fetch fund data.', 'error');
+            } finally {
+                isLoading = false;
+                searchBtn.disabled = false;
+                searchBtn.textContent = 'Search Fund';
+            }
+        }
+
+        /* ── Event Listeners ───────────────────────────────────────────── */
+        document.getElementById('searchBtn').addEventListener('click', () => {
+            const code = document.getElementById('searchInput').value.trim();
+            loadFund(code);
+        });
+
+        document.getElementById('searchInput').addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                const code = e.target.value.trim();
+                loadFund(code);
+            }
+        });
+
+        document.getElementById('chartRangeBtns').addEventListener('click', (e) => {
+            const btn = e.target.closest('.range-btn');
+            if (!btn) return;
+            setActiveRange(btn.dataset.range);
+        });
+
+        /* ── Mobile Sidebar ────────────────────────────────────────────── */
+        function toggleSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            const overlay = document.getElementById('sidebarOverlay');
+            sidebar.classList.toggle('open');
+            overlay.classList.toggle('active');
+        }
+
+        document.getElementById('sidebarOverlay').addEventListener('click', () => {
+            document.getElementById('sidebar').classList.remove('open');
+            document.getElementById('sidebarOverlay').classList.remove('active');
+        });
+
+        /* ── Toast ──────────────────────────────────────────────────────── */
+        function showToast(message, type = 'error') {
+            const container = document.getElementById('toastContainer');
+            const toast = document.createElement('div');
+            toast.className = `toast toast-${type}`;
+            toast.textContent = message;
+            container.appendChild(toast);
+            setTimeout(() => toast.remove(), 4000);
+        }
+
+        /* ── Utility ───────────────────────────────────────────────────── */
+        function escapeHtml(str) {
+            const div = document.createElement('div');
+            div.textContent = str;
+            return div.innerHTML;
+        }
+
+        /* ═══════════════════════════════════════════════════════════════════
+           6 ─ CATEGORY NAVIGATION & DATA TABLE
+           ═══════════════════════════════════════════════════════════════════ */
+
+        const CATEGORIES = [
+            {
+                name: 'Hybrid Funds', icon: '⚖️',
+                subs: ['Conservative Hybrid', 'Balanced Advantage', 'Aggressive Hybrid', 'Arbitrage']
+            },
+            {
+                name: 'Equity Funds', icon: '📊',
+                subs: ['Large Cap', 'Mid Cap', 'Small Cap', 'Flexi Cap', 'ELSS']
+            },
+            {
+                name: 'Debt Funds', icon: '🏦',
+                subs: ['Liquid', 'Money Market', 'Corporate Bond', 'Gilt']
+            },
+            {
+                name: 'Passives', icon: '📈',
+                subs: ['Index Funds', 'ETFs']
+            }
+        ];
+
+        /* ── Mock Fund Data ───────────────────────────────────────────── */
+        const MOCK_FUNDS = {
+            'Conservative Hybrid': [
+                { name: 'HDFC Hybrid Debt Fund - Direct', code: '119065', nav: 62.31, cagr1: 8.12, cagr3: 7.89, vol: 4.21, sharpe: 1.42, aum: 3200 },
+                { name: 'ICICI Pru Regular Savings Fund - Direct', code: '120281', nav: 58.94, cagr1: 7.65, cagr3: 7.34, vol: 3.98, sharpe: 1.35, aum: 4100 },
+                { name: 'SBI Conservative Hybrid Fund - Direct', code: '119707', nav: 55.82, cagr1: 7.22, cagr3: 6.95, vol: 3.67, sharpe: 1.28, aum: 2800 },
+                { name: 'Kotak Debt Hybrid Fund - Direct', code: '118285', nav: 48.67, cagr1: 7.98, cagr3: 7.15, vol: 4.05, sharpe: 1.38, aum: 1900 },
+            ],
+            'Balanced Advantage': [
+                { name: 'HDFC Balanced Advantage Fund - Direct', code: '145088', nav: 395.12, cagr1: 15.44, cagr3: 14.81, vol: 10.23, sharpe: 1.18, aum: 67500 },
+                { name: 'ICICI Pru Balanced Advantage Fund - Direct', code: '120242', nav: 62.45, cagr1: 12.88, cagr3: 11.56, vol: 8.95, sharpe: 1.05, aum: 54200 },
+                { name: 'Edelweiss Balanced Advantage Fund - Direct', code: '120574', nav: 43.78, cagr1: 14.21, cagr3: 13.44, vol: 9.67, sharpe: 1.12, aum: 10800 },
+                { name: 'Tata Balanced Advantage Fund - Direct', code: '145547', nav: 18.92, cagr1: 11.56, cagr3: 10.88, vol: 9.12, sharpe: 0.98, aum: 7600 },
+            ],
+            'Aggressive Hybrid': [
+                { name: 'HDFC Hybrid Equity Fund - Direct', code: '119062', nav: 128.45, cagr1: 10.49, cagr3: 12.59, vol: 14.88, sharpe: 0.72, aum: 22100 },
+                { name: 'Canara Robeco Equity Hybrid Fund - Direct', code: '118612', nav: 295.67, cagr1: 13.95, cagr3: 14.22, vol: 12.45, sharpe: 0.95, aum: 9800 },
+                { name: 'SBI Equity Hybrid Fund - Direct', code: '119707', nav: 242.33, cagr1: 11.78, cagr3: 13.12, vol: 13.67, sharpe: 0.82, aum: 62000 },
+                { name: 'Mirae Asset Hybrid Equity Fund - Direct', code: '145087', nav: 28.56, cagr1: 14.33, cagr3: 15.08, vol: 13.11, sharpe: 0.99, aum: 7200 },
+                { name: 'DSP Equity & Bond Fund - Direct', code: '119021', nav: 268.91, cagr1: 12.05, cagr3: 13.78, vol: 12.89, sharpe: 0.88, aum: 8500 },
+            ],
+            'Arbitrage': [
+                { name: 'HDFC Arbitrage Fund - Direct', code: '119064', nav: 27.45, cagr1: 7.12, cagr3: 5.89, vol: 1.23, sharpe: 2.85, aum: 12000 },
+                { name: 'Kotak Equity Arbitrage Fund - Direct', code: '118280', nav: 33.12, cagr1: 7.34, cagr3: 6.12, vol: 1.15, sharpe: 3.02, aum: 35000 },
+                { name: 'Nippon India Arbitrage Fund - Direct', code: '118778', nav: 24.88, cagr1: 7.05, cagr3: 5.78, vol: 1.08, sharpe: 2.92, aum: 14500 },
+                { name: 'Tata Arbitrage Fund - Direct', code: '145521', nav: 13.67, cagr1: 7.22, cagr3: 5.95, vol: 1.18, sharpe: 2.88, aum: 11200 },
+            ],
+            'Large Cap': [
+                { name: 'Mirae Asset Large Cap Fund - Direct', code: '118834', nav: 98.45, cagr1: 14.78, cagr3: 15.23, vol: 14.56, sharpe: 0.89, aum: 37500 },
+                { name: 'Canara Robeco Bluechip Equity Fund - Direct', code: '118621', nav: 52.33, cagr1: 15.12, cagr3: 16.05, vol: 13.89, sharpe: 0.96, aum: 9200 },
+                { name: 'ICICI Pru Bluechip Fund - Direct', code: '120586', nav: 88.67, cagr1: 13.45, cagr3: 14.11, vol: 14.78, sharpe: 0.82, aum: 42000 },
+                { name: 'Axis Bluechip Fund - Direct', code: '120465', nav: 52.11, cagr1: 11.89, cagr3: 12.56, vol: 14.23, sharpe: 0.74, aum: 31500 },
+                { name: 'SBI Blue Chip Fund - Direct', code: '119706', nav: 72.44, cagr1: 12.67, cagr3: 13.22, vol: 14.45, sharpe: 0.78, aum: 38000 },
+            ],
+            'Mid Cap': [
+                { name: 'HDFC Mid-Cap Opportunities Fund - Direct', code: '119041', nav: 132.78, cagr1: 18.45, cagr3: 22.67, vol: 17.89, sharpe: 1.02, aum: 42500 },
+                { name: 'Kotak Emerging Equity Fund - Direct', code: '118304', nav: 95.34, cagr1: 20.12, cagr3: 24.56, vol: 18.45, sharpe: 1.12, aum: 30000 },
+                { name: 'Axis Midcap Fund - Direct', code: '120503', nav: 88.22, cagr1: 16.78, cagr3: 19.89, vol: 16.34, sharpe: 0.95, aum: 22000 },
+                { name: 'DSP Midcap Fund - Direct', code: '119018', nav: 115.67, cagr1: 19.34, cagr3: 23.45, vol: 18.12, sharpe: 1.08, aum: 15500 },
+            ],
+            'Small Cap': [
+                { name: 'Nippon India Small Cap Fund - Direct', code: '118778', nav: 145.23, cagr1: 22.45, cagr3: 30.12, vol: 22.67, sharpe: 1.08, aum: 34000 },
+                { name: 'SBI Small Cap Fund - Direct', code: '125497', nav: 148.56, cagr1: 20.89, cagr3: 27.45, vol: 21.34, sharpe: 0.98, aum: 22000 },
+                { name: 'HDFC Small Cap Fund - Direct', code: '130501', nav: 98.34, cagr1: 24.56, cagr3: 28.89, vol: 23.45, sharpe: 1.02, aum: 18500 },
+                { name: 'Axis Small Cap Fund - Direct', code: '125354', nav: 82.11, cagr1: 19.78, cagr3: 25.67, vol: 20.89, sharpe: 0.92, aum: 15000 },
+            ],
+            'Flexi Cap': [
+                { name: 'Parag Parikh Flexi Cap Fund - Direct', code: '122639', nav: 68.45, cagr1: 16.78, cagr3: 19.56, vol: 13.45, sharpe: 1.12, aum: 48000 },
+                { name: 'HDFC Flexi Cap Fund - Direct', code: '118989', nav: 1620.34, cagr1: 14.23, cagr3: 16.89, vol: 15.67, sharpe: 0.88, aum: 38500 },
+                { name: 'UTI Flexi Cap Fund - Direct', code: '120716', nav: 285.67, cagr1: 13.45, cagr3: 15.78, vol: 14.89, sharpe: 0.82, aum: 25000 },
+                { name: 'Kotak Flexicap Fund - Direct', code: '120200', nav: 62.89, cagr1: 15.12, cagr3: 17.34, vol: 14.23, sharpe: 0.95, aum: 35000 },
+            ],
+            'ELSS': [
+                { name: 'Mirae Asset Tax Saver Fund - Direct', code: '128087', nav: 38.56, cagr1: 15.67, cagr3: 18.34, vol: 15.12, sharpe: 0.98, aum: 17500 },
+                { name: 'Canara Robeco ELSS Tax Saver - Direct', code: '118630', nav: 128.90, cagr1: 14.89, cagr3: 17.56, vol: 14.45, sharpe: 0.95, aum: 6200 },
+                { name: 'Axis Long Term Equity Fund - Direct', code: '120468', nav: 78.34, cagr1: 11.23, cagr3: 13.89, vol: 15.56, sharpe: 0.72, aum: 34000 },
+                { name: 'DSP Tax Saver Fund - Direct', code: '119019', nav: 95.67, cagr1: 16.45, cagr3: 19.12, vol: 16.78, sharpe: 0.92, aum: 10500 },
+            ],
+            'Liquid': [
+                { name: 'HDFC Liquid Fund - Direct', code: '119052', nav: 4652.12, cagr1: 6.78, cagr3: 5.45, vol: 0.35, sharpe: 4.82, aum: 52000 },
+                { name: 'ICICI Pru Liquid Fund - Direct', code: '120255', nav: 342.89, cagr1: 6.82, cagr3: 5.52, vol: 0.32, sharpe: 5.01, aum: 45000 },
+                { name: 'SBI Liquid Fund - Direct', code: '119723', nav: 3512.45, cagr1: 6.75, cagr3: 5.41, vol: 0.38, sharpe: 4.65, aum: 62000 },
+                { name: 'Axis Liquid Fund - Direct', code: '120456', nav: 2567.78, cagr1: 6.80, cagr3: 5.48, vol: 0.33, sharpe: 4.92, aum: 28000 },
+            ],
+            'Money Market': [
+                { name: 'HDFC Money Market Fund - Direct', code: '119054', nav: 4872.34, cagr1: 7.12, cagr3: 5.78, vol: 0.52, sharpe: 3.95, aum: 18000 },
+                { name: 'Tata Money Market Fund - Direct', code: '118927', nav: 4123.56, cagr1: 7.05, cagr3: 5.72, vol: 0.55, sharpe: 3.78, aum: 14500 },
+                { name: 'Aditya Birla SL Money Manager Fund - Direct', code: '119523', nav: 312.67, cagr1: 7.18, cagr3: 5.85, vol: 0.48, sharpe: 4.12, aum: 22000 },
+            ],
+            'Corporate Bond': [
+                { name: 'HDFC Corporate Bond Fund - Direct', code: '119057', nav: 28.45, cagr1: 7.45, cagr3: 6.34, vol: 2.12, sharpe: 1.95, aum: 27000 },
+                { name: 'ICICI Pru Corporate Bond Fund - Direct', code: '120267', nav: 25.67, cagr1: 7.56, cagr3: 6.45, vol: 1.98, sharpe: 2.05, aum: 22000 },
+                { name: 'Kotak Corporate Bond Fund - Direct', code: '118291', nav: 3345.89, cagr1: 7.38, cagr3: 6.28, vol: 2.08, sharpe: 1.92, aum: 12500 },
+                { name: 'Aditya Birla SL Corp Bond Fund - Direct', code: '119530', nav: 98.12, cagr1: 7.62, cagr3: 6.52, vol: 2.15, sharpe: 1.98, aum: 18000 },
+            ],
+            'Gilt': [
+                { name: 'SBI Magnum Gilt Fund - Direct', code: '119731', nav: 58.34, cagr1: 8.12, cagr3: 5.89, vol: 5.67, sharpe: 0.85, aum: 8500 },
+                { name: 'ICICI Pru Gilt Fund - Direct', code: '120271', nav: 85.67, cagr1: 7.89, cagr3: 5.78, vol: 5.45, sharpe: 0.82, aum: 4200 },
+                { name: 'HDFC Gilt Fund - Direct', code: '119956', nav: 47.23, cagr1: 8.34, cagr3: 6.05, vol: 5.89, sharpe: 0.88, aum: 3200 },
+            ],
+            'Index Funds': [
+                { name: 'UTI Nifty 50 Index Fund - Direct', code: '120716', nav: 138.45, cagr1: 13.56, cagr3: 14.89, vol: 14.23, sharpe: 0.82, aum: 12500 },
+                { name: 'HDFC Index Fund Nifty 50 Plan - Direct', code: '119039', nav: 188.67, cagr1: 13.45, cagr3: 14.78, vol: 14.18, sharpe: 0.81, aum: 9800 },
+                { name: 'ICICI Pru Nifty Next 50 Index - Direct', code: '140230', nav: 42.34, cagr1: 16.78, cagr3: 12.45, vol: 17.56, sharpe: 0.72, aum: 5200 },
+                { name: 'Motilal Oswal S&P 500 Index Fund - Direct', code: '145223', nav: 22.89, cagr1: 18.45, cagr3: 16.23, vol: 15.12, sharpe: 0.98, aum: 6800 },
+            ],
+            'ETFs': [
+                { name: 'Nippon India ETF Nifty 50 BeES', code: '118778', nav: 245.67, cagr1: 13.34, cagr3: 14.67, vol: 14.20, sharpe: 0.80, aum: 18000 },
+                { name: 'SBI ETF Nifty 50', code: '143089', nav: 225.45, cagr1: 13.28, cagr3: 14.59, vol: 14.15, sharpe: 0.79, aum: 145000 },
+                { name: 'ICICI Pru Nifty ETF', code: '120243', nav: 218.90, cagr1: 13.42, cagr3: 14.72, vol: 14.22, sharpe: 0.81, aum: 8500 },
+                { name: 'Kotak Nifty ETF', code: '140234', nav: 210.34, cagr1: 13.38, cagr3: 14.65, vol: 14.19, sharpe: 0.80, aum: 5200 },
+            ],
+        };
+
+        /* ── Table Columns Config ─────────────────────────────────────── */
+        const TABLE_COLUMNS = [
+            { key: 'name', label: 'Fund Name', type: 'string' },
+            { key: 'nav', label: 'NAV (₹)', type: 'number', fmt: v => '₹' + v.toFixed(2) },
+            { key: 'cagr1', label: '1Y CAGR', type: 'number', fmt: v => (v >= 0 ? '+' : '') + v.toFixed(2) + '%', color: true },
+            { key: 'cagr3', label: '3Y CAGR', type: 'number', fmt: v => (v >= 0 ? '+' : '') + v.toFixed(2) + '%', color: true },
+            { key: 'vol', label: 'Volatility', type: 'number', fmt: v => v.toFixed(2) + '%', colorInverse: true },
+            { key: 'sharpe', label: 'Sharpe', type: 'number', fmt: v => v.toFixed(2), colorSharpe: true },
+            { key: 'aum', label: 'AUM (₹Cr)', type: 'number', fmt: v => v.toLocaleString('en-IN') },
+        ];
+
+        let currentSubcategory = null;
+        let currentCategoryName = null;
+        let currentTableData = [];
+        let sortState = { key: null, desc: true };
+
+        /* ── Render Category Nav ──────────────────────────────────────── */
+        function renderCategoryNav() {
+            const nav = document.getElementById('categoryNav');
+            nav.innerHTML = CATEGORIES.map((cat, ci) => `
+                <div class="cat-group" id="catGroup${ci}">
+                    <div class="cat-header" onclick="toggleCategory(${ci})">
+                        <span class="cat-header-icon">${cat.icon}</span>
+                        <span class="cat-header-label">${cat.name}</span>
+                        <span class="cat-header-arrow">▶</span>
+                    </div>
+                    <div class="cat-subs">
+                        ${cat.subs.map(sub => `
+                            <button class="cat-sub-item" data-sub="${sub}" data-cat="${cat.name}"
+                                    onclick="selectSubcategory('${sub}', '${cat.name}')">${sub}</button>
+                        `).join('')}
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function toggleCategory(index) {
+            const group = document.getElementById('catGroup' + index);
+            group.classList.toggle('open');
+        }
+
+        function selectSubcategory(sub, catName) {
+            currentSubcategory = sub;
+            currentCategoryName = catName;
+            sortState = { key: null, desc: true };
+
+            // Highlight active
+            document.querySelectorAll('.cat-sub-item').forEach(el => el.classList.remove('active'));
+            const active = document.querySelector(`.cat-sub-item[data-sub="${sub}"]`);
+            if (active) active.classList.add('active');
+
+            // Get data
+            currentTableData = (MOCK_FUNDS[sub] || []).map(f => ({ ...f }));
+
+            renderTable();
+            showState('table');
+
+            // Close mobile sidebar
+            document.getElementById('sidebar').classList.remove('open');
+            document.getElementById('sidebarOverlay').classList.remove('active');
+        }
+
+        /* ── Render Table ─────────────────────────────────────────────── */
+        function renderTable() {
+            // Breadcrumb
+            document.getElementById('tableBreadcrumb').innerHTML =
+                `<span>${currentCategoryName}</span> <span>›</span> <span class="bc-active">${currentSubcategory}</span>`;
+            document.getElementById('tableTitle').textContent = currentSubcategory;
+            document.getElementById('tableSubtitle').textContent =
+                `${currentTableData.length} fund${currentTableData.length !== 1 ? 's' : ''} • Mock data for prototype`;
+
+            // Thead
+            const thead = document.getElementById('fundTableHead');
+            thead.innerHTML = '<tr>' + TABLE_COLUMNS.map(col => {
+                const isSorted = sortState.key === col.key;
+                const arrow = isSorted ? (sortState.desc ? ' ▼' : ' ▲') : ' ▼';
+                return `<th class="${isSorted ? 'sorted' : ''}" onclick="sortTable('${col.key}')">
+                    ${col.label}<span class="sort-arrow">${arrow}</span>
+                </th>`;
+            }).join('') + '</tr>';
+
+            // Tbody
+            const tbody = document.getElementById('fundTableBody');
+            if (currentTableData.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="${TABLE_COLUMNS.length}">
+                    <div class="table-empty"><div class="table-empty-icon">📭</div><p>No funds in this category yet.</p></div>
+                </td></tr>`;
+                return;
+            }
+
+            tbody.innerHTML = currentTableData.map(fund => {
+                const escapedName = escapeHtml(fund.name);
+                return `<tr data-code="${fund.code}" data-name="${escapedName}" class="fund-row">` +
+                    TABLE_COLUMNS.map(col => {
+                        const val = fund[col.key];
+                        let cls = '';
+                        if (col.color && typeof val === 'number') cls = val >= 0 ? 'td-positive' : 'td-negative';
+                        if (col.colorInverse && typeof val === 'number') cls = val > 20 ? 'td-negative' : val > 12 ? 'td-neutral' : 'td-positive';
+                        if (col.colorSharpe && typeof val === 'number') cls = val >= 1.5 ? 'td-positive' : val >= 0.8 ? 'td-neutral' : 'td-negative';
+                        const display = col.fmt ? col.fmt(val) : escapeHtml(String(val));
+                        return `<td class="${cls}">${display}</td>`;
+                    }).join('') +
+                    '</tr>';
+            }).join('');
+
+            // Event delegation for fund rows
+            tbody.querySelectorAll('.fund-row').forEach(row => {
+                row.addEventListener('click', () => {
+                    loadFundFromTable(row.dataset.code, row.dataset.name);
+                });
+            });
+        }
+
+        /* ── Sort Table ───────────────────────────────────────────────── */
+        function sortTable(key) {
+            if (sortState.key === key) {
+                sortState.desc = !sortState.desc;
+            } else {
+                sortState.key = key;
+                sortState.desc = true;
+            }
+
+            const col = TABLE_COLUMNS.find(c => c.key === key);
+            currentTableData.sort((a, b) => {
+                let va = a[key], vb = b[key];
+                if (col.type === 'string') {
+                    va = String(va).toLowerCase();
+                    vb = String(vb).toLowerCase();
+                    return sortState.desc ? vb.localeCompare(va) : va.localeCompare(vb);
+                }
+                return sortState.desc ? vb - va : va - vb;
+            });
+
+            renderTable();
+        }
+
+        /* ── Load Fund from Table Row ─────────────────────────────────── */
+        function loadFundFromTable(code, name) {
+            loadFund(code);
+        }
+
+        /* ── Boot ───────────────────────────────────────────────────────── */
+        renderCategoryNav();
+        renderWatchlist();
+        showState('welcome');
+    </script>
+</body>
+
+</html>
