@@ -3323,7 +3323,7 @@
                         if (col.colorInverse && typeof val === 'number') cls = val > 20 ? 'td-negative' : val > 12 ? 'td-neutral' : 'td-positive';
                         if (col.colorSharpe && typeof val === 'number') cls = val >= 1.5 ? 'td-positive' : val >= 0.8 ? 'td-neutral' : 'td-negative';
 
-                        let displayValue = val !== null && val !== undefined ? (col.fmt ? col.fmt(val) : escapeHtml(String(val))) : '<span style="color:var(--text-muted); font-size: 11px;">Fetch to view</span>';
+                        let displayValue = val !== null && val !== undefined ? (col.fmt ? col.fmt(val) : escapeHtml(String(val))) : '<span style="color:var(--text-muted); font-size: 11px;">—</span>';
                         if (col.key === 'nav') {
                             displayValue = val ? (col.fmt ? col.fmt(val) : escapeHtml(String(val))) : '—';
                             cls += ' fw-500';
