@@ -3895,12 +3895,12 @@
                         const detailUrlA = 'https://corsproxy.io/?url=' + encodeURIComponent('https://groww.in/v1/api/data/mf/web/v2/scheme/search/' + searchIdA);
                         const schemeObjA = await fetch(detailUrlA).then(r => r.json());
                         if (schemeObjA && schemeObjA.scheme_details) {
-                            statsA.expense_ratio = schemeObjA.scheme_details.expense_ratio !== null ? schemeObjA.scheme_details.expense_ratio + '%' : '-';
-                            statsA.aum = schemeObjA.scheme_details.aum ? '₹' + schemeObjA.scheme_details.aum + ' Cr' : '-';
+                            statsA.expense_ratio = schemeObjA.scheme_details.expense_ratio != null ? schemeObjA.scheme_details.expense_ratio + '%' : '-';
+                            statsA.aum = schemeObjA.scheme_details.aum != null ? '₹' + schemeObjA.scheme_details.aum + ' Cr' : '-';
                         }
                     }
                 } catch (e) {
-                    console.warn("Could not fetch advanced stats for Fund A");
+                    console.warn("Could not fetch advanced stats for Fund A", e);
                 }
 
                 // Fetch Advanced for B
@@ -3912,12 +3912,12 @@
                         const detailUrlB = 'https://corsproxy.io/?url=' + encodeURIComponent('https://groww.in/v1/api/data/mf/web/v2/scheme/search/' + searchIdB);
                         const schemeObjB = await fetch(detailUrlB).then(r => r.json());
                         if (schemeObjB && schemeObjB.scheme_details) {
-                            statsB.expense_ratio = schemeObjB.scheme_details.expense_ratio !== null ? schemeObjB.scheme_details.expense_ratio + '%' : '-';
-                            statsB.aum = schemeObjB.scheme_details.aum ? '₹' + schemeObjB.scheme_details.aum + ' Cr' : '-';
+                            statsB.expense_ratio = schemeObjB.scheme_details.expense_ratio != null ? schemeObjB.scheme_details.expense_ratio + '%' : '-';
+                            statsB.aum = schemeObjB.scheme_details.aum != null ? '₹' + schemeObjB.scheme_details.aum + ' Cr' : '-';
                         }
                     }
                 } catch (e) {
-                    console.warn("Could not fetch advanced stats for Fund B");
+                    console.warn("Could not fetch advanced stats for Fund B", e);
                 }
 
                 populateCompareStats(metaA, compareDataA, statsA, 'A');
@@ -3969,9 +3969,14 @@
             const dec3 = document.getElementById(`comp3y${prefix}`);
             const dec5 = document.getElementById(`comp5y${prefix}`);
 
-            dec1.textContent = formatPercent(cagr1); dec1.className = 'compare-stat-value ' + getPercentClass(cagr1);
-            dec3.textContent = formatPercent(cagr3); dec3.className = 'compare-stat-value ' + getPercentClass(cagr3);
-            dec5.textContent = formatPercent(cagr5); dec5.className = 'compare-stat-value ' + getPercentClass(cagr5);
+            dec1.textContent = cagr1 !== null ? formatPercent(cagr1) : '—';
+            dec1.className = 'compare-stat-value ' + (cagr1 !== null ? getPercentClass(cagr1) : '');
+
+            dec3.textContent = cagr3 !== null ? formatPercent(cagr3) : '—';
+            dec3.className = 'compare-stat-value ' + (cagr3 !== null ? getPercentClass(cagr3) : '');
+
+            dec5.textContent = cagr5 !== null ? formatPercent(cagr5) : '—';
+            dec5.className = 'compare-stat-value ' + (cagr5 !== null ? getPercentClass(cagr5) : '');
 
             document.getElementById(`compVol${prefix}`).textContent = vol !== null ? (vol * 100).toFixed(2) + '%' : '—';
             document.getElementById(`compExp${prefix}`).textContent = advStats.expense_ratio;
