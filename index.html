@@ -1738,6 +1738,12 @@
                 <span>Compare Funds</span>
             </div>
 
+            <div id="mobileAccessBtn" class="portfolio-nav-item" onclick="openQrModal()"
+                style="background: linear-gradient(135deg, rgba(16, 185, 129, 0.15), rgba(5, 150, 105, 0.15)); border-color: rgba(16, 185, 129, 0.3);">
+                <span>📱</span>
+                <span>Mobile Access</span>
+            </div>
+
             <nav class="category-nav" id="categoryNav"></nav>
 
             <div class="watchlist-title">
@@ -2134,6 +2140,27 @@
     </div>
 
     <button class="mobile-toggle" id="mobileToggle" onclick="toggleSidebar()">☰</button>
+
+    <!-- QR Code Modal (Mobile Handoff) -->
+    <div class="modal" id="qrModal"
+        style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); backdrop-filter: blur(8px); z-index: 1000; align-items: center; justify-content: center;">
+        <div class="modal-content"
+            style="background: var(--bg-card); border: 1px solid var(--border-glass); border-radius: var(--radius-lg); padding: 32px; width: 90%; max-width: 320px; box-shadow: 0 24px 48px rgba(0,0,0,0.4); text-align: center;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
+                <h3 style="margin: 0; font-size: 18px;">📱 Mobile Access</h3>
+                <button onclick="closeQrModal()"
+                    style="background: none; border: none; color: var(--text-muted); font-size: 20px; cursor: pointer;">✕</button>
+            </div>
+            <p style="font-size: 14px; color: var(--text-secondary); margin-bottom: 24px;">
+                Scan this QR code with your phone's camera to instantly open the dashboard on your mobile device.
+            </p>
+            <div
+                style="background: white; padding: 16px; border-radius: var(--radius-md); display: inline-block; margin-bottom: 16px;">
+                <img src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=https://amank27.github.io/MutualFund-Research-App/"
+                    alt="QR Code for Mobile Access" width="150" height="150" style="display: block;">
+            </div>
+        </div>
+    </div>
 
     <div class="toast-container" id="toastContainer"></div>
 
@@ -3639,6 +3666,16 @@
                 document.getElementById('portfolioEmptyState').textContent = 'Failed to load portfolio: ' + e.message;
             }
         }
+
+        /* ── QR CODE MODAL ──────────────────────────────────────── */
+        function openQrModal() {
+            document.getElementById('qrModal').style.display = 'flex';
+        }
+
+        function closeQrModal() {
+            document.getElementById('qrModal').style.display = 'none';
+        }
+
         /* ── Compare Funds Logic ───────────────────────────────────────── */
         let compareDataA = [];
         let compareDataB = [];
