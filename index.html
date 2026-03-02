@@ -1709,7 +1709,7 @@
         <!-- ── SIDEBAR ──────────────────────────────────────────── -->
         <aside id="sidebar">
             <div class="sidebar-header">
-                <div class="logo">
+                <div class="logo" style="cursor: pointer;" onclick="goHome()" title="Go to Home">
                     <div class="logo-icon">📈</div>
                     <span class="logo-text">MF Insight</span>
                 </div>
@@ -2585,6 +2585,27 @@
         /* ═══════════════════════════════════════════════════════════════════
            5 ─ TYING IT ALL TOGETHER
            ═══════════════════════════════════════════════════════════════════ */
+
+        function goHome() {
+            document.getElementById('searchInput').value = '';
+            currentFund = null;
+            currentCode = null;
+            fullNavData = null;
+            showState('welcome');
+
+            // Close mobile sidebar if open
+            const sidebar = document.getElementById('sidebar');
+            const overlay = document.getElementById('sidebarOverlay');
+            if (sidebar.classList.contains('open')) {
+                sidebar.classList.remove('open');
+                overlay.classList.remove('active');
+            }
+
+            // Remove active states from nav
+            document.getElementById('portfolioNavBtn').classList.remove('active');
+            document.getElementById('compareNavBtn').classList.remove('active');
+            document.querySelectorAll('.cat-sub-item').forEach(el => el.classList.remove('active'));
+        }
 
         function showState(state) {
             document.getElementById('welcomeState').style.display = state === 'welcome' ? 'block' : 'none';
