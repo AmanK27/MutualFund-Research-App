@@ -600,6 +600,70 @@
             transform: translateY(-2px);
         }
 
+        .pf-filter-btn {
+            background: rgba(0, 0, 0, 0.2);
+            border: 1px solid var(--border-glass);
+            color: var(--text-secondary);
+            padding: 6px 16px;
+            border-radius: 20px;
+            font-size: 13px;
+            cursor: pointer;
+            transition: all var(--transition-fast);
+            white-space: nowrap;
+        }
+
+        .pf-filter-btn:hover {
+            color: white;
+            border-color: rgba(255, 255, 255, 0.2);
+        }
+
+        .pf-filter-btn.active {
+            background: rgba(56, 189, 248, 0.1);
+            color: var(--accent);
+            border-color: var(--accent);
+        }
+
+        .top-perf-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-glass);
+            border-radius: var(--radius-md);
+            padding: 16px;
+            cursor: pointer;
+            transition: all var(--transition-normal);
+            text-align: left;
+        }
+
+        .top-perf-card:hover {
+            transform: translateY(-2px);
+            border-color: rgba(56, 189, 248, 0.3);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+        }
+
+        .tp-title {
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--text-primary);
+            margin-bottom: 12px;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+            line-height: 1.4;
+        }
+
+        .tp-return {
+            font-size: 18px;
+            font-weight: 700;
+            color: #4ade80;
+        }
+
+        .tp-sub {
+            font-size: 11px;
+            color: var(--text-muted);
+            margin-top: 4px;
+        }
+
         /* ── LOADING STATE ───────────────────────────────────────── */
         #loadingState {
             display: none;
@@ -1795,6 +1859,38 @@
                     <button class="welcome-code-chip" onclick="loadFund('100119')">100119</button>
                     <button class="welcome-code-chip" onclick="loadFund('118989')">118989</button>
                     <button class="welcome-code-chip" onclick="loadFund('120716')">120716</button>
+                </div>
+
+                <!-- Top 5 Performers UI inside Welcome State -->
+                <div class="top-performers-section"
+                    style="margin-top: 48px; text-align: left; max-width: 800px; margin-left: auto; margin-right: auto;">
+                    <div
+                        style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; flex-wrap: wrap; gap: 16px;">
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <span style="font-size: 20px;">🏆</span>
+                            <h3 style="font-size: 18px; font-weight: 600; color: var(--text-primary);">Top 5 Funds (1Y
+                                Return)</h3>
+                        </div>
+                        <div class="perf-category-filters" id="topPerfFilters"
+                            style="display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px;">
+                            <button class="pf-filter-btn active" data-cat="Equity Funds">Equity</button>
+                            <button class="pf-filter-btn" data-cat="Debt Funds">Debt</button>
+                            <button class="pf-filter-btn" data-cat="Hybrid Funds">Hybrid</button>
+                        </div>
+                    </div>
+
+                    <div id="topPerformersLoading"
+                        style="text-align: center; padding: 40px; color: var(--text-muted); display: none;">
+                        <div class="spinner"
+                            style="width: 24px; height: 24px; border-width: 2px; margin: 0 auto 12px; border-top-color: var(--accent);">
+                        </div>
+                        <div style="font-size: 13px;">Analyzing live category data...</div>
+                    </div>
+
+                    <div id="topPerformersGrid" class="top-perf-grid"
+                        style="display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 16px;">
+                        <!-- Cards injected here -->
+                    </div>
                 </div>
             </section>
 
@@ -4009,7 +4105,95 @@
             await fetchLiveAmfiCategories();
 
             showState('welcome');
+
+            // Auto-load top performers for default category
+            loadTopPerformers('Equity Funds');
         })();
+
+        /* ── Top 5 Performers Logic ─────────────────────────────────────── */
+        async function loadTopPerformers(categoryStr) {
+            const grid = document.getElementById('topPerformersGrid');
+            const loader = document.getElementById('topPerformersLoading');
+            grid.innerHTML = '';
+            loader.style.display = 'block';
+
+            try {
+                const catObj = CATEGORIES.find(c => c.name === categoryStr);
+                if (!catObj) return;
+
+                let allCodes = [];
+                catObj.subs.forEach(sub => {
+                    if (window.LIVE_FUNDS[sub]) {
+                        allCodes = allCodes.concat(window.LIVE_FUNDS[sub]);
+                    }
+                });
+
+                // Dedup and limit to first 25 to avoid rate-limiting or long waits
+                allCodes = allCodes.slice(0, 25);
+
+                const promises = allCodes.map(async (fund) => {
+                    try {
+                        const res = await fetch('https://api.mfapi.in/mf/' + fund.code);
+                        if (!res.ok) return null;
+                        const data = await res.json();
+                        if (!data.data || data.data.length < 252) return null; // Need 1Y data
+
+                        // Parse history format same as app main load
+                        const history = data.data.map(d => ({
+                            date: parseDate(d.date),
+                            nav: parseFloat(d.nav)
+                        })).reverse();
+
+                        const cagr1 = getCagrForYears(history, 1);
+                        if (cagr1 === null) return null;
+
+                        return {
+                            code: fund.code,
+                            name: fund.name,
+                            cagr1: cagr1
+                        };
+                    } catch (e) {
+                        return null;
+                    }
+                });
+
+                const results = await Promise.all(promises);
+                const valid = results.filter(r => r !== null && !isNaN(r.cagr1));
+
+                // Sort descending by 1Y CAGR
+                valid.sort((a, b) => b.cagr1 - a.cagr1);
+
+                const top5 = valid.slice(0, 5);
+
+                loader.style.display = 'none';
+
+                if (top5.length === 0) {
+                    grid.innerHTML = '<div style="grid-column: 1/-1; text-align: center; color: var(--text-muted); font-size: 13px;">Not enough historical data collected.</div>';
+                    return;
+                }
+
+                grid.innerHTML = top5.map(f => `
+                    <div class="top-perf-card" onclick="loadFund('${f.code}')">
+                        <div class="tp-title">${f.name}</div>
+                        <div class="tp-return">${f.cagr1 >= 0 ? '+' : ''}${f.cagr1.toFixed(2)}%</div>
+                        <div class="tp-sub">1Y Annualised</div>
+                    </div>
+                `).join('');
+
+            } catch (err) {
+                console.error(err);
+                loader.style.display = 'none';
+                grid.innerHTML = '<div style="grid-column: 1/-1; text-align: center; color: #f87171; font-size: 13px;">Failed to load data.</div>';
+            }
+        }
+
+        document.getElementById('topPerfFilters').addEventListener('click', (e) => {
+            if (e.target.classList.contains('pf-filter-btn')) {
+                document.querySelectorAll('.pf-filter-btn').forEach(b => b.classList.remove('active'));
+                e.target.classList.add('active');
+                loadTopPerformers(e.target.dataset.cat);
+            }
+        });
     </script>
 </body>
 
