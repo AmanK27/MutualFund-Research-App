@@ -3158,6 +3158,19 @@
                 }, 250);
             });
 
+            // Keyboard navigation (Enter to select first item)
+            input.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    if (results.style.display === 'block') {
+                        const firstItem = results.querySelector('.autocomplete-item');
+                        if (firstItem) firstItem.click();
+                    } else if (inputId === 'searchInput') {
+                        document.getElementById('searchBtn').click();
+                    }
+                }
+            });
+
             // Hide autocomplete when clicking outside
             document.addEventListener('click', (e) => {
                 if (!input.contains(e.target) && !results.contains(e.target)) {
@@ -3860,6 +3873,24 @@
             // Fallback: If user types raw code in input, use it if hidden field is empty
             if (!codeA && /^\\d+$/.test(inputA)) codeA = inputA;
             if (!codeB && /^\\d+$/.test(inputB)) codeB = inputB;
+
+            // Advanced Fallback: If user typed text but didn't click dropdown
+            if ((!codeA && inputA) || (!codeB && inputB)) {
+                if (window.allMfFunds.length === 0) {
+                    await fetchGlobalFundList();
+                }
+            }
+
+            if (!codeA && inputA && window.allMfFunds.length > 0) {
+                const q = inputA.toLowerCase().trim();
+                const m = window.allMfFunds.find(f => f.schemeName.toLowerCase() === q) || window.allMfFunds.find(f => f.schemeName.toLowerCase().includes(q));
+                if (m) codeA = m.schemeCode;
+            }
+            if (!codeB && inputB && window.allMfFunds.length > 0) {
+                const q = inputB.toLowerCase().trim();
+                const m = window.allMfFunds.find(f => f.schemeName.toLowerCase() === q) || window.allMfFunds.find(f => f.schemeName.toLowerCase().includes(q));
+                if (m) codeB = m.schemeCode;
+            }
 
             if (!codeA || !codeB) {
                 showToast("Please select two funds from the search dropdown.", "error");
