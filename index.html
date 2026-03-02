@@ -3145,7 +3145,7 @@
                         results.innerHTML = matches.map(f => {
                             const escapedName = f.schemeName.replace(/'/g, "&#39;").replace(/"/g, "&quot;");
                             return `
-                            <li class="autocomplete-item" onclick="handleAutocompleteSelect('${inputId}', '${resultsId}', '${f.schemeCode}', '${escapedName}', ${onSelectCallback.name})">
+                            <li class="autocomplete-item" onclick="handleAutocompleteSelect('${inputId}', '${resultsId}', '${f.schemeCode}', '${escapedName}')">
                                 <span class="ac-name">${f.schemeName}</span>
                                 <span class="ac-code">${f.schemeCode}</span>
                             </li>
@@ -3166,36 +3166,35 @@
             });
         }
 
-        window.handleAutocompleteSelect = function (inputId, resultsId, code, name, callback) {
+        window.handleAutocompleteSelect = function (inputId, resultsId, code, name) {
             const input = document.getElementById(inputId);
             const results = document.getElementById(resultsId);
 
-            // Step 3: Retain the Fund Name in the search bar
+            // Retain the Fund Name in the search bar
             input.value = name;
             results.style.display = 'none';
 
-            // Trigger the intended action passing the underlying scheme code
-            if (typeof callback === 'function') {
-                callback(code, name);
-            }
+            // Dispatch a custom event instead of relying on serialized inline callbacks
+            const event = new CustomEvent('fundSelected', { detail: { code, name } });
+            input.dispatchEvent(event);
         };
 
-        // Main Home Search Callback
-        function selectMainSearch(code, name) {
-            loadFund(code);
-        }
-
         // Setup Main Search
-        setupAutocomplete('searchInput', 'searchResults', selectMainSearch);
+        setupAutocomplete('searchInput', 'searchResults');
+        document.getElementById('searchInput').addEventListener('fundSelected', (e) => {
+            loadFund(e.detail.code);
+        });
 
         // Setup Compare Search A
-        setupAutocomplete('compareInputA', 'compareResultsA', (code, name) => {
-            document.getElementById('compareCodeA').value = code;
+        setupAutocomplete('compareInputA', 'compareResultsA');
+        document.getElementById('compareInputA').addEventListener('fundSelected', (e) => {
+            document.getElementById('compareCodeA').value = e.detail.code;
         });
 
         // Setup Compare Search B
-        setupAutocomplete('compareInputB', 'compareResultsB', (code, name) => {
-            document.getElementById('compareCodeB').value = code;
+        setupAutocomplete('compareInputB', 'compareResultsB');
+        document.getElementById('compareInputB').addEventListener('fundSelected', (e) => {
+            document.getElementById('compareCodeB').value = e.detail.code;
         });
 
         document.getElementById('searchBtn').addEventListener('click', () => {
