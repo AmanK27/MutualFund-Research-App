@@ -505,6 +505,31 @@
             transform: none;
         }
 
+        #refreshBtn {
+            padding: 14px 24px;
+            background: rgba(255, 255, 255, 0.05);
+            color: var(--text-primary);
+            border: 1px solid var(--border-glass);
+            border-radius: var(--radius-md);
+            font-size: 14px;
+            font-weight: 600;
+            font-family: inherit;
+            cursor: pointer;
+            transition: all var(--transition-normal);
+            white-space: nowrap;
+        }
+
+        #refreshBtn:hover {
+            background: rgba(255, 255, 255, 0.1);
+            border-color: rgba(255, 255, 255, 0.2);
+        }
+
+        #refreshBtn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
         /* ── WELCOME STATE ───────────────────────────────────────── */
         #welcomeState {
             text-align: center;
@@ -1742,6 +1767,8 @@
                         <ul class="autocomplete-list" id="searchResults"></ul>
                     </div>
                     <button id="searchBtn">Search Fund</button>
+                    <button id="refreshBtn" onclick="refreshLiveData(this)" title="Refresh Live AMFI Data">↻
+                        Refresh</button>
                 </div>
             </section>
 
@@ -3059,6 +3086,23 @@
         /* ── Live AMFI Category Parser ────────────────────────────────── */
         window.LIVE_FUNDS = {};
 
+        async function refreshLiveData(btn) {
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '↻ Fetching...';
+            btn.disabled = true;
+            try {
+                await fetchLiveAmfiCategories();
+                btn.innerHTML = '✓ Updated';
+            } catch (error) {
+                console.error(error);
+                btn.innerHTML = '✕ Error';
+            }
+            setTimeout(() => {
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+            }, 2000);
+        }
+
         async function fetchLiveAmfiCategories() {
             try {
                 const proxyUrl = 'https://corsproxy.io/?url=' + encodeURIComponent('https://www.amfiindia.com/spages/NAVAll.txt');
@@ -3088,7 +3132,7 @@
                     'Exchange Traded Fund': 'ETFs' // General bucket for ETFs
                 };
 
-                const categoryRegex = /^Open Ended Schemes\\s*\\((.*-\\s*([^)]+))\\)/i;
+                const categoryRegex = /^Open Ended Schemes\s*\((.*-\s*([^)]+))\)/i;
 
                 // Initialize the LIVE_FUNDS object keys
                 Object.values(categoryMapping).forEach(uiName => {
