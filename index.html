@@ -3088,7 +3088,7 @@
                     'Exchange Traded Fund': 'ETFs' // General bucket for ETFs
                 };
 
-                const categoryRegex = /^Open Ended Schemes \\(.*-\\s*([^)]+)\\)/i;
+                const categoryRegex = /^Open Ended Schemes\\s*\\((.*-\\s*([^)]+))\\)/i;
 
                 // Initialize the LIVE_FUNDS object keys
                 Object.values(categoryMapping).forEach(uiName => {
@@ -3102,8 +3102,8 @@
                     // Header row (doesn't have semicolons)
                     if (!line.includes(';')) {
                         const match = line.match(categoryRegex);
-                        if (match && match[1]) {
-                            let rawCat = match[1].trim();
+                        if (match && match[2]) {
+                            let rawCat = match[2].trim();
                             // Handle ELSS special case
                             if (rawCat.includes("ELSS")) rawCat = "ELSS";
                             // Handle ETF special cases
