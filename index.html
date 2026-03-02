@@ -3066,7 +3066,7 @@
                 if (!res.ok) throw new Error("AMFI fetch failed");
                 const text = await res.text();
 
-                const lines = text.split('\\n');
+                const lines = text.split('\n');
                 let currentCategory = null;
 
                 // We map AMFI official category names to our UI subcategories
@@ -3121,7 +3121,8 @@
                             const navStr = parts[4];
 
                             // We heavily bias towards 'Direct Plan' & 'Growth' to avoid duplicate spam in the table
-                            if (name.includes('Direct') && name.includes('Growth')) {
+                            const nameUpper = name.toUpperCase();
+                            if (nameUpper.includes('DIRECT') && nameUpper.includes('GROWTH')) {
                                 window.LIVE_FUNDS[currentCategory].push({
                                     code: code,
                                     name: name,
