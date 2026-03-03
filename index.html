@@ -3505,13 +3505,19 @@
                 searchTimeout = setTimeout(() => {
                     if (window.allMfFunds.length === 0) return; // Not loaded yet
 
-                    // Strict filter: only Direct + Growth variants, no IDCW/Dividend clutter
+                    // Strict filter: only Direct+Growth variants, no IDCW/Dividend, and only active funds
+                    // (NAV updated within the last 7 days, per the set built during AMFI parsing).
+                    const activeSet = window.activeSchemeCodesSet;
                     const filteredFunds = window.allMfFunds.filter(f => {
                         const n = f.schemeName.toUpperCase();
-                        return n.includes('DIRECT') &&
+                        const passesNameFilter = n.includes('DIRECT') &&
                             n.includes('GROWTH') &&
                             !n.includes('IDCW') &&
                             !n.includes('DIVIDEND');
+                        // Skip staleness check if the set isn't populated yet (AMFI not loaded).
+                        const passesActiveCheck = !activeSet || activeSet.size === 0 ||
+                            activeSet.has(String(f.schemeCode));
+                        return passesNameFilter && passesActiveCheck;
                     });
 
                     // Fuzzy match natively with includes, capped at 50 results to prevent DOM freeze
@@ -3697,6 +3703,13 @@
                 const lines = text.split('\n');
                 let currentCategory = null;
 
+                // Build active-scheme set: only funds with NAV updated within last 7 days
+                window.activeSchemeCodesSet = window.activeSchemeCodesSet || new Set();
+                const _cutoff = new Date();
+                _cutoff.setDate(_cutoff.getDate() - 7);
+                _cutoff.setHours(0, 0, 0, 0);
+                const _monthMap = { Jan: 0, Feb: 1, Mar: 2, Apr: 3, May: 4, Jun: 5, Jul: 6, Aug: 7, Sep: 8, Oct: 9, Nov: 10, Dec: 11 };
+
                 // We map AMFI official category names to our UI subcategories
                 // Maps AMFI official category strings → UI subcategory names.
                 // AMFI uses slashes for dual-named categories (e.g. "Dynamic Asset Allocation/Balanced Advantage")
@@ -3759,33 +3772,50 @@
                         }
                     }
                     // Data row
-                    else if (currentCategory && line.includes(';')) {
+                    else if (line.includes(';')) {
                         const parts = line.split(';');
-                        if (parts.length >= 5) {
+                        if (parts.length >= 6) {
                             const code = parts[0].trim();
                             const name = parts[3].trim();
                             const navStr = parts[4].trim();
-                            const nameUpper = name.toUpperCase();
+                            const dateStr = parts[5].trim(); // format: DD-MMM-YYYY
 
-                            // ETFs don't have "Direct Plan - Growth" variants — their names are just the ETF name.
-                            // For ETFs: include the entry as long as it isn't already in the list (dedup by code).
-                            // For all other categories: keep only Direct-Growth entries to avoid plan spam.
-                            const isEtf = currentCategory === 'ETFs';
-                            const passesFilter = isEtf
-                                ? !window.LIVE_FUNDS['ETFs'].some(f => f.code === code)
-                                : (nameUpper.includes('DIRECT') && nameUpper.includes('GROWTH'));
+                            // Mark scheme as active if NAV date is within last 7 days
+                            if (dateStr) {
+                                const dp = dateStr.split('-');
+                                if (dp.length === 3) {
+                                    const navDate = new Date(_monthMap[dp[1]] !== undefined
+                                        ? Date.UTC(+dp[2], _monthMap[dp[1]], +dp[0])
+                                        : NaN);
+                                    if (!isNaN(navDate) && navDate >= _cutoff) {
+                                        window.activeSchemeCodesSet.add(code);
+                                    }
+                                }
+                            }
 
-                            if (passesFilter) {
-                                window.LIVE_FUNDS[currentCategory].push({
-                                    code: code,
-                                    name: name,
-                                    nav: parseFloat(navStr) || 0,
-                                    cagr1: null,
-                                    cagr3: null,
-                                    vol: null,
-                                    sharpe: null,
-                                    aum: null
-                                });
+                            if (currentCategory && parts.length >= 5) {
+                                const nameUpper = name.toUpperCase();
+
+                                // ETFs don't have "Direct Plan - Growth" variants — their names are just the ETF name.
+                                // For ETFs: include the entry as long as it isn't already in the list (dedup by code).
+                                // For all other categories: keep only Direct-Growth entries to avoid plan spam.
+                                const isEtf = currentCategory === 'ETFs';
+                                const passesFilter = isEtf
+                                    ? !window.LIVE_FUNDS['ETFs'].some(f => f.code === code)
+                                    : (nameUpper.includes('DIRECT') && nameUpper.includes('GROWTH'));
+
+                                if (passesFilter) {
+                                    window.LIVE_FUNDS[currentCategory].push({
+                                        code: code,
+                                        name: name,
+                                        nav: parseFloat(navStr) || 0,
+                                        cagr1: null,
+                                        cagr3: null,
+                                        vol: null,
+                                        sharpe: null,
+                                        aum: null
+                                    });
+                                }
                             }
                         }
                     }
