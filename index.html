@@ -3488,6 +3488,40 @@
             }
         }
 
+        /* ── Trending Funds (shown on empty focus) ────────────────────── */
+        // Curated list of popular, broadly-held Indian mutual funds.
+        // scheme codes are stable Direct-Growth scheme codes from mfapi.in.
+        const TRENDING_FUNDS = [
+            { schemeCode: '122639', schemeName: 'Parag Parikh Flexi Cap Fund - Direct Plan - Growth' },
+            { schemeCode: '120503', schemeName: 'Axis Bluechip Fund - Direct Plan - Growth' },
+            { schemeCode: '118989', schemeName: 'Mirae Asset Large Cap Fund - Direct Plan - Growth' },
+            { schemeCode: '120716', schemeName: 'HDFC Index Fund-NIFTY 50 Plan - Direct Plan - Growth' },
+            { schemeCode: '125354', schemeName: 'Axis Mid Cap Fund - Direct Plan - Growth' },
+            { schemeCode: '119598', schemeName: 'SBI Blue Chip Fund - Direct Plan - Growth' },
+            { schemeCode: '120587', schemeName: 'Kotak Flexicap Fund - Direct Plan - Growth' },
+            { schemeCode: '118825', schemeName: 'Nippon India Index Fund - Nifty 50 Plan - Direct Plan - Growth' },
+            { schemeCode: '130503', schemeName: 'Canara Robeco Flexi Cap Fund - Direct Plan - Growth' },
+            { schemeCode: '119775', schemeName: 'Franklin India Flexi Cap Fund - Direct Plan - Growth' }
+        ];
+
+        function renderTrendingDropdown(inputId, resultsId, results) {
+            results.innerHTML =
+                `<li style="padding:8px 16px 4px; font-size:10px; font-weight:700; letter-spacing:1px;
+                    color:var(--text-muted); text-transform:uppercase; pointer-events:none;
+                    border-bottom:1px solid var(--border-glass); margin-bottom:4px;">
+                    🔥 Trending
+                </li>` +
+                TRENDING_FUNDS.map(f => {
+                    const displayName = formatFundName(f.schemeName);
+                    const escapedDisplay = displayName.replace(/'/g, "&#39;").replace(/"/g, "&quot;");
+                    const escapedRaw = f.schemeName.replace(/'/g, "&#39;").replace(/"/g, "&quot;");
+                    return `<li class="autocomplete-item" onclick="handleAutocompleteSelect('${inputId}', '${resultsId}', '${f.schemeCode}', '${escapedRaw}')">
+                        <span class="ac-name">${escapedDisplay}</span>
+                    </li>`;
+                }).join('');
+            results.style.display = 'block';
+        }
+
         function setupAutocomplete(inputId, resultsId, onSelectCallback) {
             const input = document.getElementById(inputId);
             const results = document.getElementById(resultsId);
@@ -3556,6 +3590,15 @@
                     }
                 }
             });
+
+            // Show Trending list on focus when input is empty (main search only)
+            if (inputId === 'searchInput') {
+                input.addEventListener('focus', () => {
+                    if (input.value.trim().length === 0) {
+                        renderTrendingDropdown(inputId, resultsId, results);
+                    }
+                });
+            }
 
             // Hide autocomplete when clicking outside
             document.addEventListener('click', (e) => {
