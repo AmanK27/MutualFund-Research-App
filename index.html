@@ -3475,8 +3475,17 @@
                 searchTimeout = setTimeout(() => {
                     if (window.allMfFunds.length === 0) return; // Not loaded yet
 
+                    // Strict filter: only Direct + Growth variants, no IDCW/Dividend clutter
+                    const filteredFunds = window.allMfFunds.filter(f => {
+                        const n = f.schemeName.toUpperCase();
+                        return n.includes('DIRECT') &&
+                            n.includes('GROWTH') &&
+                            !n.includes('IDCW') &&
+                            !n.includes('DIVIDEND');
+                    });
+
                     // Fuzzy match natively with includes, capped at 50 results to prevent DOM freeze
-                    const matches = window.allMfFunds.filter(f =>
+                    const matches = filteredFunds.filter(f =>
                         f.schemeName.toLowerCase().includes(query) ||
                         String(f.schemeCode).includes(query)
                     ).slice(0, 50);
