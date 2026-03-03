@@ -3339,17 +3339,26 @@
             }
 
             // Header
-            document.getElementById('fundName').textContent = formatFundName(meta.scheme_name) || 'Unknown Fund';
-            document.getElementById('fundHouse').textContent = meta.fund_house || '—';
-            document.getElementById('fundCategory').textContent = meta.scheme_category || '—';
-            document.getElementById('fundType').textContent = meta.scheme_type || '—';
+            const elFName = document.getElementById('fundName');
+            if (elFName) elFName.textContent = formatFundName(meta.scheme_name) || 'Unknown Fund';
+            const elFHouse = document.getElementById('fundHouse');
+            if (elFHouse) elFHouse.textContent = meta.fund_house || '—';
+            const elFCat = document.getElementById('fundCategory');
+            if (elFCat) elFCat.textContent = meta.scheme_category || '—';
+            const elFType = document.getElementById('fundType');
+            if (elFType) elFType.textContent = meta.scheme_type || '—';
 
             // Stats
             const latest = fullNavData[fullNavData.length - 1];
-            document.getElementById('statNAV').textContent = '₹' + latest.nav.toFixed(4);
-            document.getElementById('statNAVDate').textContent = latest.date.toLocaleDateString('en-IN', {
-                day: 'numeric', month: 'short', year: 'numeric'
-            });
+            const statNavEl = document.getElementById('statNAV');
+            if (statNavEl) statNavEl.textContent = '₹' + latest.nav.toFixed(4);
+
+            const statNavDateEl = document.getElementById('statNAVDate');
+            if (statNavDateEl) {
+                statNavDateEl.textContent = latest.date.toLocaleDateString('en-IN', {
+                    day: 'numeric', month: 'short', year: 'numeric'
+                });
+            }
 
             const cagr1 = getCAGR(fullNavData, 1);
             const cagr3 = getCAGR(fullNavData, 3);
@@ -3358,34 +3367,20 @@
             const volatility = calcVolatility(fullNavData);
 
             const el1 = document.getElementById('statCAGR1Y');
-            el1.textContent = formatPercent(cagr1);
-            el1.className = 'stat-value ' + getPercentClass(cagr1);
-
-            const el3 = document.getElementById('statCAGR3Y');
-            el3.textContent = formatPercent(cagr3);
-            el3.className = 'stat-value ' + getPercentClass(cagr3);
-
-            const el5 = document.getElementById('statCAGR5Y');
-            el5.textContent = formatPercent(cagr5);
-            el5.className = 'stat-value ' + getPercentClass(cagr5);
-
-            const elMax = document.getElementById('statCAGRMax');
-            elMax.textContent = formatPercent(cagrMax);
-            elMax.className = 'stat-value ' + getPercentClass(cagrMax);
-
-            // Inception date
-            const inception = fullNavData[0].date.toLocaleDateString('en-IN', {
-                month: 'short', year: 'numeric'
-            });
-            document.getElementById('statCAGRMaxSub').textContent = `Since ${inception}`;
+            if (el1) {
+                el1.textContent = formatPercent(cagr1);
+                el1.className = 'stat-value ' + getPercentClass(cagr1);
+            }
 
             const elVol = document.getElementById('statVolatility');
-            if (volatility !== null) {
-                elVol.textContent = (volatility * 100).toFixed(2) + '%';
-                elVol.className = 'stat-value ' + (volatility > 0.20 ? 'stat-negative' : volatility > 0.12 ? 'stat-neutral' : 'stat-positive');
-            } else {
-                elVol.textContent = '—';
-                elVol.className = 'stat-value';
+            if (elVol) {
+                if (volatility !== null) {
+                    elVol.textContent = (volatility * 100).toFixed(2) + '%';
+                    elVol.className = 'stat-value ' + (volatility > 0.20 ? 'stat-negative' : volatility > 0.12 ? 'stat-neutral' : 'stat-positive');
+                } else {
+                    elVol.textContent = '—';
+                    elVol.className = 'stat-value';
+                }
             }
 
             // Chart
@@ -3456,9 +3451,12 @@
             }
 
             if (cashflows.length === 0) {
-                document.getElementById('sipInvested').textContent = '—';
-                document.getElementById('sipFinal').textContent = '—';
-                document.getElementById('sipXirr').textContent = '—';
+                const elInv = document.getElementById('sipInvested');
+                if (elInv) elInv.textContent = '—';
+                const elFin = document.getElementById('sipFinal');
+                if (elFin) elFin.textContent = '—';
+                const elXirr = document.getElementById('sipXirr');
+                if (elXirr) elXirr.textContent = '—';
                 return;
             }
 
@@ -3469,15 +3467,20 @@
 
             const xirr = calcXIRR(cashflows);
 
-            document.getElementById('sipInvested').textContent = '₹' + totalInvested.toLocaleString('en-IN');
-            document.getElementById('sipFinal').textContent = '₹' + Math.round(finalValue).toLocaleString('en-IN');
+            const elInv = document.getElementById('sipInvested');
+            if (elInv) elInv.textContent = '₹' + totalInvested.toLocaleString('en-IN');
+            const elFin = document.getElementById('sipFinal');
+            if (elFin) elFin.textContent = '₹' + Math.round(finalValue).toLocaleString('en-IN');
 
-            if (xirr !== null && !isNaN(xirr) && xirr > -0.99 && xirr < 10) {
-                document.getElementById('sipXirr').textContent = (xirr * 100).toFixed(2) + '%';
-                document.getElementById('sipXirr').className = 'sip-res-value sip-res-xirr ' + (xirr >= 0 ? 'stat-positive' : 'stat-negative');
-            } else {
-                document.getElementById('sipXirr').textContent = 'N/A';
-                document.getElementById('sipXirr').className = 'sip-res-value sip-res-xirr';
+            const elXirr = document.getElementById('sipXirr');
+            if (elXirr) {
+                if (xirr !== null && !isNaN(xirr) && xirr > -0.99 && xirr < 10) {
+                    elXirr.textContent = (xirr * 100).toFixed(2) + '%';
+                    elXirr.className = 'sip-res-value sip-res-xirr ' + (xirr >= 0 ? 'stat-positive' : 'stat-negative');
+                } else {
+                    elXirr.textContent = 'N/A';
+                    elXirr.className = 'sip-res-value sip-res-xirr';
+                }
             }
         }
 
@@ -3599,9 +3602,12 @@
 
             card.style.display = 'block';
 
-            document.getElementById('fundAUM').textContent = data.aum ? '₹' + data.aum.toLocaleString('en-IN') + ' Cr' : '—';
-            document.getElementById('fundExpense').textContent = data.expenseRatio ? data.expenseRatio + '%' : '—';
-            document.getElementById('fundExit').textContent = data.exitLoad || '—';
+            const elAum = document.getElementById('fundAUM');
+            if (elAum) elAum.textContent = data.aum ? '₹' + data.aum.toLocaleString('en-IN') + ' Cr' : '—';
+            const elExp = document.getElementById('fundExpense');
+            if (elExp) elExp.textContent = data.expenseRatio ? data.expenseRatio + '%' : '—';
+            const elExit = document.getElementById('fundExit');
+            if (elExit) elExit.textContent = data.exitLoad || '—';
 
             const tbody = document.getElementById('holdingsBody');
             tbody.innerHTML = '';
