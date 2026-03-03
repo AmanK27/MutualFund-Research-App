@@ -3444,6 +3444,7 @@
         /* ── Global Search Cache & Autocomplete ────────────────────────── */
         window.allMfFunds = []; // [ { schemeCode, schemeName } ]
         let searchTimeout;
+        let currentlySelectedSchemeCode = null; // Set when user explicitly picks from dropdown
 
         /* ── Fund Name Simplifier ──────────────────────────────────────── */
         /**
@@ -3535,6 +3536,9 @@
                     return;
                 }
 
+                // Clear any previously-selected fund when the user types new text
+                currentlySelectedSchemeCode = null;
+
                 // Debounce matching logic to keep UI responsive
                 searchTimeout = setTimeout(() => {
                     if (window.allMfFunds.length === 0) return; // Not loaded yet
@@ -3612,11 +3616,17 @@
             const input = document.getElementById(inputId);
             const results = document.getElementById(resultsId);
 
-            // Retain the Fund Name in the search bar
-            input.value = name;
+            // Show the clean (human-readable) name in the search bar.
+            // Store the raw scheme code separately so it doesn't pollute the input.
+            input.value = formatFundName(name);
             results.style.display = 'none';
 
-            // Dispatch a custom event instead of relying on serialized inline callbacks
+            // Store the selected code in global state (used by the search button)
+            if (inputId === 'searchInput') {
+                currentlySelectedSchemeCode = code;
+            }
+
+            // Dispatch a custom event so Compare A/B listeners can capture the code too
             const event = new CustomEvent('fundSelected', { detail: { code, name } });
             input.dispatchEvent(event);
         };
@@ -3640,14 +3650,25 @@
         });
 
         document.getElementById('searchBtn').addEventListener('click', () => {
-            const code = document.getElementById('searchInput').value.trim();
-            // Fallback for direct code entry
-            if (/^\\d+$/.test(code)) {
-                loadFund(code);
-                searchResults.style.display = 'none';
-            } else if (searchResults.style.display === 'block' && searchResults.firstElementChild && searchResults.firstElementChild.classList.contains('autocomplete-item')) {
-                // Trigger first search result if clicking search button without selecting
-                searchResults.firstElementChild.click();
+            const inputVal = document.getElementById('searchInput').value.trim();
+
+            // Priority 1: user explicitly picked a fund from the dropdown
+            if (currentlySelectedSchemeCode) {
+                loadFund(currentlySelectedSchemeCode);
+                document.getElementById('searchResults').style.display = 'none';
+                return;
+            }
+
+            // Priority 2: user typed a raw numeric scheme code directly
+            if (/^\d+$/.test(inputVal)) {
+                loadFund(inputVal);
+                document.getElementById('searchResults').style.display = 'none';
+                return;
+            }
+
+            // Priority 3: partial text typed without selecting — show search results list
+            if (inputVal.length >= 3) {
+                showSearchResults(inputVal);
             }
         });
 
@@ -3656,6 +3677,17 @@
                 document.getElementById('searchBtn').click();
             }
         });
+
+        // Stub — fully implemented in Step 2
+        function showSearchResults(query) {
+            // Placeholder: will render a full result list in Step 2.
+            // For now, fall back to loading the top autocomplete match if visible.
+            const sr = document.getElementById('searchResults');
+            if (sr && sr.style.display === 'block') {
+                const first = sr.querySelector('.autocomplete-item');
+                if (first) first.click();
+            }
+        }
 
         document.getElementById('chartRangeBtns').addEventListener('click', (e) => {
             const btn = e.target.closest('.range-btn');
