@@ -2043,6 +2043,107 @@
             text-shadow: 0 0 20px rgba(16, 185, 129, 0.4);
         }
 
+        /* ── Peer Comparison (Dashboard Side Panel) ─────────────────── */
+        .peer-ranking-card {
+            background: var(--bg-card);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid var(--border-glass);
+            border-radius: var(--radius-lg);
+            padding: 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            margin-top: 24px;
+            display: none;
+            /* hidden by default, managed by JS */
+        }
+
+        .peer-ranking-title {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: var(--text-primary);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .peer-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .peer-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px;
+            background: rgba(0, 0, 0, 0.2);
+            border: 1px solid var(--border-glass);
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            transition: all var(--transition-fast);
+        }
+
+        .peer-item:hover {
+            border-color: var(--border-glow);
+            background: rgba(56, 189, 248, 0.05);
+        }
+
+        .peer-item.peer-highlight {
+            border-color: rgba(16, 185, 129, 0.5);
+            background: rgba(16, 185, 129, 0.05);
+            box-shadow: 0 0 15px rgba(16, 185, 129, 0.1);
+        }
+
+        .peer-info {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            max-width: 65%;
+        }
+
+        .peer-rank {
+            font-size: 11px;
+            color: var(--text-muted);
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .peer-name {
+            font-size: 13px;
+            color: var(--text-primary);
+            font-weight: 500;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .peer-highlight .peer-name {
+            color: var(--accent);
+            font-weight: 600;
+        }
+
+        .peer-metric {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            gap: 2px;
+        }
+
+        .peer-metric-label {
+            font-size: 11px;
+            color: var(--text-muted);
+        }
+
+        .peer-metric-value {
+            font-size: 14px;
+            font-weight: 600;
+        }
+
         /* ── Deep Analysis ─────────────────────────── */
         .analysis-card {
             background: var(--bg-card);
@@ -2465,43 +2566,61 @@
                                     <span class="sip-res-value sip-res-xirr" id="sipXirr">—</span>
                                 </div>
                             </div>
-                        </div>
-                    </div>
-                </div>
 
-                <!-- Deep Fund Analysis -->
-                <div class="analysis-card" id="analysisCard" style="display: none;">
-                    <h2 class="analysis-title">Fund Fundamentals</h2>
-                    <div class="analysis-grid">
-                        <div class="analysis-stat">
-                            <span class="analysis-label">AUM (Size)</span>
-                            <span class="analysis-value" id="fundAUM">—</span>
-                        </div>
-                        <div class="analysis-stat">
-                            <span class="analysis-label">Expense Ratio</span>
-                            <span class="analysis-value" id="fundExpense">—</span>
-                        </div>
-                        <div class="analysis-stat" style="grid-column: 1 / -1; max-width: none;">
-                            <span class="analysis-label">Exit Load</span>
-                            <span class="analysis-value analysis-text-sm" id="fundExit"
-                                style="white-space: pre-wrap;">—</span>
+                            <!-- Peer Comparison Component -->
+                            <div class="peer-ranking-card" id="peerRankingCard">
+                                <div class="peer-ranking-title">
+                                    <span>Category Peers</span>
+                                    <span style="font-size: 12px; font-weight: normal; color: var(--text-muted);"
+                                        id="peerCategoryLabel">—</span>
+                                </div>
+                                <div id="peerRankingLoading"
+                                    style="text-align: center; padding: 20px; color: var(--text-muted); display: none;">
+                                    <div class="spinner"
+                                        style="width: 20px; height: 20px; border-width: 2px; margin: 0 auto 12px; border-top-color: var(--accent);">
+                                    </div>
+                                    <div style="font-size: 12px;">Ranking Peers...</div>
+                                </div>
+                                <div class="peer-list" id="peerRankingList">
+                                    <!-- Dynamic Peer Items Injected Here -->
+                                </div>
+                            </div>
                         </div>
                     </div>
 
-                    <h3 class="analysis-subtitle">Top 10 Holdings</h3>
-                    <div class="holdings-table-wrapper">
-                        <table class="holdings-table">
-                            <thead>
-                                <tr>
-                                    <th>Asset</th>
-                                    <th>Sector</th>
-                                    <th style="text-align: right;">Allocation</th>
-                                </tr>
-                            </thead>
-                            <tbody id="holdingsBody"></tbody>
-                        </table>
+                    <!-- Deep Fund Analysis -->
+                    <div class="analysis-card" id="analysisCard" style="display: none;">
+                        <h2 class="analysis-title">Fund Fundamentals</h2>
+                        <div class="analysis-grid">
+                            <div class="analysis-stat">
+                                <span class="analysis-label">AUM (Size)</span>
+                                <span class="analysis-value" id="fundAUM">—</span>
+                            </div>
+                            <div class="analysis-stat">
+                                <span class="analysis-label">Expense Ratio</span>
+                                <span class="analysis-value" id="fundExpense">—</span>
+                            </div>
+                            <div class="analysis-stat" style="grid-column: 1 / -1; max-width: none;">
+                                <span class="analysis-label">Exit Load</span>
+                                <span class="analysis-value analysis-text-sm" id="fundExit"
+                                    style="white-space: pre-wrap;">—</span>
+                            </div>
+                        </div>
+
+                        <h3 class="analysis-subtitle">Top 10 Holdings</h3>
+                        <div class="holdings-table-wrapper">
+                            <table class="holdings-table">
+                                <thead>
+                                    <tr>
+                                        <th>Asset</th>
+                                        <th>Sector</th>
+                                        <th style="text-align: right;">Allocation</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="holdingsBody"></tbody>
+                            </table>
+                        </div>
                     </div>
-                </div>
             </section>
 
             <!-- Table View -->
@@ -3167,21 +3286,21 @@
          */
         async function getPeerRanking(categoryString, currentSchemeCode) {
             if (!window.allMfFunds || !categoryString) return [];
-            
+
             // Extract core category (e.g. 'Large Cap', 'Small Cap', 'Flexi Cap')
             let keyword = categoryString.replace(/Equity Scheme\s*-?\s*/ig, '')
-                                        .replace(/Open Ended Schemes/ig, '')
-                                        .replace(/Fund/ig, '')
-                                        .trim();
+                .replace(/Open Ended Schemes/ig, '')
+                .replace(/Fund/ig, '')
+                .trim();
             if (!keyword) return [];
 
             // Filter for peers in the same logical bucket, strictly Direct Growth for fair comparison
             let peers = window.allMfFunds.filter(f => {
                 if (!f.schemeName) return false;
                 const nameUpper = f.schemeName.toUpperCase();
-                return nameUpper.includes(keyword.toUpperCase()) && 
-                       nameUpper.includes('DIRECT') && 
-                       nameUpper.includes('GROWTH');
+                return nameUpper.includes(keyword.toUpperCase()) &&
+                    nameUpper.includes('DIRECT') &&
+                    nameUpper.includes('GROWTH');
             });
 
             // Ensure current fund is in the list even if it doesn't strictly match the string filters
@@ -3200,9 +3319,9 @@
                     const res = await fetch(`https://api.mfapi.in/mf/${peer.schemeCode}`);
                     if (!res.ok) return null;
                     const data = await res.json();
-                    
+
                     if (!data || !data.data || data.data.length === 0) return null;
-                    
+
                     // Convert date strings to Date objects
                     const navHistory = data.data.map(d => {
                         const parts = d.date.split('-');
@@ -3211,7 +3330,7 @@
                             nav: parseFloat(d.nav)
                         };
                     }).sort((a, b) => a.date - b.date); // Oldest to newest
-                    
+
                     const cagr1y = getCAGR(navHistory, 1);
                     return {
                         schemeCode: String(peer.schemeCode),
@@ -3225,11 +3344,11 @@
             });
 
             const results = await Promise.all(fetchPromises);
-            
+
             // Filter out failures/nulls, and sort descending by 1Y CAGR
             const validRankings = results.filter(r => r !== null && r.cagr1y !== null);
             validRankings.sort((a, b) => b.cagr1y - a.cagr1y);
-            
+
             return validRankings;
         }
 
@@ -3479,6 +3598,13 @@
             // Calculate SIP
             updateSIPCalculator();
 
+            // Load category peers asynchronously
+            if (meta.scheme_category) {
+                initPeerRanking(meta.scheme_category, currentCode);
+            } else {
+                document.getElementById('peerRankingCard').style.display = 'none';
+            }
+
             // Add listeners for SIP if not added
             if (!window.sipListenersAdded) {
                 document.getElementById('sipAmount').addEventListener('input', updateSIPCalculator);
@@ -3487,6 +3613,78 @@
             }
 
             showState('dashboard');
+        }
+
+        /**
+         * Dynamic Rendering for Peer Comparison (Step 2 & 3)
+         */
+        async function initPeerRanking(category, schemeCode) {
+            const card = document.getElementById('peerRankingCard');
+            const listEl = document.getElementById('peerRankingList');
+            const loading = document.getElementById('peerRankingLoading');
+            const label = document.getElementById('peerCategoryLabel');
+
+            if (!card || !listEl || !loading) return;
+
+            // Optional UI reset
+            card.style.display = 'flex';
+            listEl.innerHTML = '';
+            label.textContent = category.replace(/Equity Scheme\s*-?\s*/ig, '').replace(/Open Ended Schemes/ig, '').trim();
+            loading.style.display = 'block';
+
+            try {
+                const rankedPeers = await getPeerRanking(category, schemeCode);
+                loading.style.display = 'none';
+
+                if (!rankedPeers || rankedPeers.length === 0) {
+                    listEl.innerHTML = '<div style="color:var(--text-muted);font-size:13px;text-align:center;">No peers found for strictly Direct Growth category.</div>';
+                    return;
+                }
+
+                // Render Top 5
+                const topPeers = rankedPeers.slice(0, 5);
+
+                // Check if current fund is in top 5
+                let currentInTop = topPeers.findIndex(p => p.schemeCode === String(schemeCode));
+
+                // Function to build row HTML
+                const buildRow = (peer, index) => {
+                    const isCurrent = peer.schemeCode === String(schemeCode);
+                    const highlightClass = isCurrent ? 'peer-highlight' : '';
+                    return `
+                        <div class="peer-item ${highlightClass}" onclick="loadFund('${peer.schemeCode}')" title="Click to view details">
+                            <div class="peer-info">
+                                <span class="peer-rank">#${index + 1}</span>
+                                <span class="peer-name">${peer.schemeName}</span>
+                            </div>
+                            <div class="peer-metric">
+                                <span class="peer-metric-label">1Y CAGR</span>
+                                <span class="peer-metric-value ${getPercentClass(peer.cagr1y)}">${formatPercent(peer.cagr1y)}</span>
+                            </div>
+                        </div>
+                    `;
+                };
+
+                let html = topPeers.map((p, i) => buildRow(p, i)).join('');
+
+                // Step 3 logic: if current fund is not in top 5, append it to the bottom
+                if (currentInTop === -1) {
+                    const actualIndex = rankedPeers.findIndex(p => p.schemeCode === String(schemeCode));
+                    if (actualIndex !== -1) {
+                        html += `
+                            <div style="text-align:center;color:var(--text-muted);font-size:18px;line-height:10px;">⋮</div>
+                            ${buildRow(rankedPeers[actualIndex], actualIndex)}
+                        `;
+                    }
+                }
+
+                listEl.innerHTML = html;
+
+            } catch (err) {
+                console.error("Peer rendering failed", err);
+                loading.style.display = 'none';
+                listEl.innerHTML = '<div style="color:var(--red);font-size:13px;text-align:center;">Error loading peer data.</div>';
+            }
         }
 
         function updateSIPCalculator() {
