@@ -1364,6 +1364,70 @@
         }
 
         /* ═══════════════════════════════════════════════════════════
+           PAGINATION CONTROLS
+           ═══════════════════════════════════════════════════════════ */
+        .pagination-controls {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 16px 4px 4px;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+
+        .pagination-info {
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+
+        .pagination-buttons {
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .page-btn {
+            padding: 6px 12px;
+            background: transparent;
+            border: 1px solid var(--border-glass);
+            border-radius: var(--radius-sm);
+            color: var(--text-secondary);
+            font-size: 12px;
+            font-weight: 500;
+            font-family: inherit;
+            cursor: pointer;
+            transition: all var(--transition-fast);
+            min-width: 36px;
+            text-align: center;
+        }
+
+        .page-btn:hover {
+            border-color: var(--border-glow);
+            color: var(--accent);
+        }
+
+        .page-btn.active {
+            background: var(--accent-gradient);
+            border-color: transparent;
+            color: #0a0e1a;
+            font-weight: 700;
+        }
+
+        .page-btn:disabled {
+            opacity: 0.35;
+            cursor: not-allowed;
+            pointer-events: none;
+        }
+
+        .page-ellipsis {
+            padding: 6px 4px;
+            color: var(--text-muted);
+            font-size: 12px;
+            user-select: none;
+        }
+
+        /* ═══════════════════════════════════════════════════════════
            LOGIN SCREEN
            ═══════════════════════════════════════════════════════════ */
         #loginScreen {
@@ -2051,6 +2115,10 @@
                         <thead id="fundTableHead"></thead>
                         <tbody id="fundTableBody"></tbody>
                     </table>
+                </div>
+                <div class="pagination-controls" id="paginationControls" style="display:none;">
+                    <span class="pagination-info" id="paginationInfo"></span>
+                    <div class="pagination-buttons" id="paginationButtons"></div>
                 </div>
             </section>
 
@@ -3424,6 +3492,10 @@
         let currentTableData = [];
         let sortState = { key: null, desc: true };
 
+        /* ── Pagination State ─────────────────────────────────────────── */
+        let currentPage = 1;
+        const ITEMS_PER_PAGE = 10;
+
         /* ── Render Category Nav ──────────────────────────────────────── */
         function renderCategoryNav() {
             const nav = document.getElementById('categoryNav');
@@ -3453,6 +3525,7 @@
             currentSubcategory = sub;
             currentCategoryName = catName;
             sortState = { key: null, desc: true };
+            currentPage = 1;
 
             // Highlight active
             document.querySelectorAll('.cat-sub-item').forEach(el => el.classList.remove('active'));
@@ -3477,9 +3550,9 @@
                 `<span>${currentCategoryName}</span> <span>›</span> <span class="bc-active">${currentSubcategory}</span>`;
             document.getElementById('tableTitle').textContent = currentSubcategory;
 
-            // Adjust subtitle to clarify that these are live parsed funds but advanced stats are not calculated in bulk to save RAM.
+            const total = currentTableData.length;
             document.getElementById('tableSubtitle').textContent =
-                `${currentTableData.length} fund${currentTableData.length !== 1 ? 's' : ''} • Live data parsed from AMFI India`;
+                `${total} fund${total !== 1 ? 's' : ''} • Live data parsed from AMFI India`;
 
             // Thead
             const thead = document.getElementById('fundTableHead');
@@ -3493,14 +3566,24 @@
 
             // Tbody
             const tbody = document.getElementById('fundTableBody');
-            if (currentTableData.length === 0) {
+            if (total === 0) {
                 tbody.innerHTML = `<tr><td colspan="${TABLE_COLUMNS.length}">
                     <div class="table-empty"><div class="table-empty-icon">📭</div><p>No funds in this category yet.</p></div>
                 </td></tr>`;
+                document.getElementById('paginationControls').style.display = 'none';
                 return;
             }
 
-            tbody.innerHTML = currentTableData.map(fund => {
+            // Clamp currentPage within valid range
+            const totalPages = Math.ceil(total / ITEMS_PER_PAGE);
+            if (currentPage > totalPages) currentPage = totalPages;
+            if (currentPage < 1) currentPage = 1;
+
+            const startIdx = (currentPage - 1) * ITEMS_PER_PAGE;
+            const endIdx = Math.min(startIdx + ITEMS_PER_PAGE, total);
+            const pageData = currentTableData.slice(startIdx, endIdx);
+
+            tbody.innerHTML = pageData.map(fund => {
                 const escapedName = escapeHtml(fund.name);
                 return `<tr data-code="${fund.code}" data-name="${escapedName}" class="fund-row">` +
                     TABLE_COLUMNS.map(col => {
@@ -3528,7 +3611,7 @@
                 });
             });
 
-            // Lazy load stats for visible rows
+            // Lazy load stats for visible rows only on the current page
             if (window.tableObserver) window.tableObserver.disconnect();
             window.tableObserver = new IntersectionObserver((entries, observer) => {
                 entries.forEach(entry => {
@@ -3536,7 +3619,6 @@
                         const tr = entry.target;
                         const code = tr.dataset.code;
                         const name = tr.dataset.name;
-                        // Unobserve immediately so we don't fetch twice
                         observer.unobserve(tr);
                         fetchRowStats(code, name, tr);
                     }
@@ -3546,6 +3628,72 @@
             tbody.querySelectorAll('.fund-row').forEach(row => {
                 window.tableObserver.observe(row);
             });
+
+            // Render pagination UI
+            renderPagination(total, totalPages);
+        }
+
+        /* ── Render Pagination Controls ───────────────────────────────── */
+        function renderPagination(total, totalPages) {
+            const controls = document.getElementById('paginationControls');
+            const infoEl = document.getElementById('paginationInfo');
+            const btnsEl = document.getElementById('paginationButtons');
+
+            if (totalPages <= 1) {
+                controls.style.display = 'none';
+                return;
+            }
+
+            controls.style.display = 'flex';
+
+            const startIdx = (currentPage - 1) * ITEMS_PER_PAGE + 1;
+            const endIdx = Math.min(currentPage * ITEMS_PER_PAGE, total);
+            infoEl.textContent = `Showing ${startIdx}–${endIdx} of ${total} funds`;
+
+            // Build page buttons with smart ellipsis
+            let html = '';
+
+            // Previous button
+            html += `<button class="page-btn" id="prevPageBtn" onclick="goToPage(${currentPage - 1})" ${currentPage === 1 ? 'disabled' : ''}>← Prev</button>`;
+
+            // Page number buttons
+            const pages = getPageRange(currentPage, totalPages);
+            pages.forEach(p => {
+                if (p === '...') {
+                    html += `<span class="page-ellipsis">…</span>`;
+                } else {
+                    html += `<button class="page-btn ${p === currentPage ? 'active' : ''}" onclick="goToPage(${p})">${p}</button>`;
+                }
+            });
+
+            // Next button
+            html += `<button class="page-btn" id="nextPageBtn" onclick="goToPage(${currentPage + 1})" ${currentPage === totalPages ? 'disabled' : ''}>Next →</button>`;
+
+            btnsEl.innerHTML = html;
+        }
+
+        /* Helper: generates an array of page numbers with ellipsis placeholders */
+        function getPageRange(current, total) {
+            if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1);
+            const pages = [];
+            pages.push(1);
+            if (current > 3) pages.push('...');
+            for (let p = Math.max(2, current - 1); p <= Math.min(total - 1, current + 1); p++) {
+                pages.push(p);
+            }
+            if (current < total - 2) pages.push('...');
+            pages.push(total);
+            return pages;
+        }
+
+        function goToPage(page) {
+            const total = currentTableData.length;
+            const totalPages = Math.ceil(total / ITEMS_PER_PAGE);
+            if (page < 1 || page > totalPages) return;
+            currentPage = page;
+            renderTable();
+            // Scroll table into view smoothly
+            document.getElementById('tableView').scrollIntoView({ behavior: 'smooth', block: 'start' });
         }
 
         /* ── Lazy Load Row Stats ──────────────────────────────────────── */
@@ -3643,6 +3791,8 @@
                 sortState.key = key;
                 sortState.desc = true;
             }
+
+            currentPage = 1; // Reset to first page on sort
 
             const col = TABLE_COLUMNS.find(c => c.key === key);
             currentTableData.sort((a, b) => {
