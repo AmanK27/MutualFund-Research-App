@@ -906,9 +906,9 @@
         /* ── GRID LAYOUT FOR DASHBOARD ───────────────────────────── */
         .dashboard-grid {
             display: grid;
-            grid-template-columns: 1fr 320px;
+            grid-template-columns: 2fr 1fr;
             gap: 24px;
-            align-items: start;
+            align-items: stretch;
         }
 
         .dashboard-main-col {
@@ -1092,7 +1092,7 @@
 
         .chart-canvas-wrapper {
             position: relative;
-            height: 380px;
+            height: 440px;
         }
 
         #navChart {
@@ -3304,14 +3304,14 @@
             document.getElementById('searchResultsState').style.display = state === 'searchResults' ? 'block' : 'none';
 
             // Feature Toggle based on State for Dashboard layout
-            const sideCol = document.querySelector('.dashboard-side-col');
+            const topFunds = document.querySelector('.top-funds-panel');
             const sipCard = document.querySelector('.sip-card');
 
             if (state === 'dashboard') {
-                if (sideCol) sideCol.style.display = 'none';
-                if (sipCard) sipCard.style.display = 'block';
+                if (topFunds) topFunds.style.display = 'none';
+                if (sipCard) sipCard.style.display = 'flex';
             } else if (state === 'welcome') {
-                if (sideCol) sideCol.style.display = 'block';
+                if (topFunds) topFunds.style.display = 'block';
                 if (sipCard) sipCard.style.display = 'none';
             }
 
