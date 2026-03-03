@@ -2522,6 +2522,40 @@
                                 </div>
                             </div>
                         </div>
+
+                        <!-- Deep Fund Analysis (Moved into Main Column) -->
+                        <div class="analysis-card" id="analysisCard" style="display: none;">
+                            <h2 class="analysis-title">Fund Fundamentals</h2>
+                            <div class="analysis-grid">
+                                <div class="analysis-stat">
+                                    <span class="analysis-label">AUM (Size)</span>
+                                    <span class="analysis-value" id="fundAUM">—</span>
+                                </div>
+                                <div class="analysis-stat">
+                                    <span class="analysis-label">Expense Ratio</span>
+                                    <span class="analysis-value" id="fundExpense">—</span>
+                                </div>
+                                <div class="analysis-stat" style="grid-column: 1 / -1; max-width: none;">
+                                    <span class="analysis-label">Exit Load</span>
+                                    <span class="analysis-value analysis-text-sm" id="fundExit"
+                                        style="white-space: pre-wrap;">—</span>
+                                </div>
+                            </div>
+
+                            <h3 class="analysis-subtitle">Top 10 Holdings</h3>
+                            <div class="holdings-table-wrapper">
+                                <table class="holdings-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Asset</th>
+                                            <th>Sector</th>
+                                            <th style="text-align: right;">Allocation</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="holdingsBody"></tbody>
+                                </table>
+                            </div>
+                        </div>
                     </div>
 
                     <div class="dashboard-side-col">
@@ -2588,39 +2622,6 @@
                         </div>
                     </div>
 
-                    <!-- Deep Fund Analysis -->
-                    <div class="analysis-card" id="analysisCard" style="display: none;">
-                        <h2 class="analysis-title">Fund Fundamentals</h2>
-                        <div class="analysis-grid">
-                            <div class="analysis-stat">
-                                <span class="analysis-label">AUM (Size)</span>
-                                <span class="analysis-value" id="fundAUM">—</span>
-                            </div>
-                            <div class="analysis-stat">
-                                <span class="analysis-label">Expense Ratio</span>
-                                <span class="analysis-value" id="fundExpense">—</span>
-                            </div>
-                            <div class="analysis-stat" style="grid-column: 1 / -1; max-width: none;">
-                                <span class="analysis-label">Exit Load</span>
-                                <span class="analysis-value analysis-text-sm" id="fundExit"
-                                    style="white-space: pre-wrap;">—</span>
-                            </div>
-                        </div>
-
-                        <h3 class="analysis-subtitle">Top 10 Holdings</h3>
-                        <div class="holdings-table-wrapper">
-                            <table class="holdings-table">
-                                <thead>
-                                    <tr>
-                                        <th>Asset</th>
-                                        <th>Sector</th>
-                                        <th style="text-align: right;">Allocation</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="holdingsBody"></tbody>
-                            </table>
-                        </div>
-                    </div>
             </section>
 
             <!-- Table View -->
@@ -3847,12 +3848,14 @@
                 // 1. Search Groww for the fund via corsproxy
                 const cleanName = sanitizeForGroww(schemeName);
                 const searchUrl = 'https://groww.in/v1/api/search/v3/query/global/st_p_query?page=0&query=' + encodeURIComponent(cleanName);
-                const proxySearchUrl = 'https://corsproxy.io/?' + encodeURIComponent(searchUrl);
+                const proxySearchUrl = 'https://api.allorigins.win/get?url=' + encodeURIComponent(searchUrl);
 
                 const res = await fetch(proxySearchUrl);
                 if (!res.ok) return null;
 
-                const json = await res.json();
+                const wrapperJson = await res.json();
+                if (!wrapperJson.contents) return null;
+                const json = JSON.parse(wrapperJson.contents);
 
                 const contentArr = json.data && json.data.content ? json.data.content.filter(x => x.entity_type === 'Scheme') : [];
                 if (contentArr.length === 0) return null;
@@ -3863,12 +3866,14 @@
 
                 // 2. Fetch Scheme Details via proxy
                 const detailUrl = 'https://groww.in/v1/api/data/mf/web/v2/scheme/search/' + searchId;
-                const proxyDetailUrl = 'https://corsproxy.io/?' + encodeURIComponent(detailUrl);
+                const proxyDetailUrl = 'https://api.allorigins.win/get?url=' + encodeURIComponent(detailUrl);
 
                 const detailRes = await fetch(proxyDetailUrl);
                 if (!detailRes.ok) return null;
 
-                const detailJson = await detailRes.json();
+                const detailWrapper = await detailRes.json();
+                if (!detailWrapper.contents) return null;
+                const detailJson = JSON.parse(detailWrapper.contents);
 
                 return {
                     aum: detailJson.aum,
