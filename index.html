@@ -716,14 +716,18 @@
         }
 
         .top-perf-card {
-            background: var(--bg-card);
+            background: rgba(30, 41, 59, 0.4);
             border: 1px solid var(--border-glass);
             border-radius: var(--radius-md);
             padding: 16px;
             cursor: pointer;
             transition: all var(--transition-normal);
             text-align: left;
-            margin-bottom: 12px;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
         }
 
         .top-perf-card:last-child {
@@ -732,7 +736,7 @@
 
         .top-perf-card:hover {
             transform: translateX(4px);
-            background: var(--bg-card-hover);
+            background: rgba(255, 255, 255, 0.03);
             border-color: rgba(16, 185, 129, 0.3);
         }
 
@@ -740,19 +744,22 @@
             display: flex;
             align-items: center;
             gap: 12px;
+            flex: 1;
+            min-width: 0;
         }
 
         .tp-avatar {
-            width: 32px;
-            height: 32px;
-            background: rgba(255, 255, 255, 0.1);
+            width: 36px;
+            height: 36px;
+            background: rgba(16, 185, 129, 0.1);
+            border: 1px solid rgba(16, 185, 129, 0.2);
             border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 11px;
+            font-size: 13px;
             font-weight: 600;
-            color: var(--text-secondary);
+            color: var(--accent);
             flex-shrink: 0;
         }
 
@@ -771,20 +778,20 @@
             line-height: 1.4;
         }
 
-        .tp-return {
-            font-size: 14px;
-            font-weight: 700;
-            color: var(--accent);
-            background: rgba(16, 185, 129, 0.15);
-            padding: 4px 8px;
-            border-radius: 6px;
-            margin-left: 8px;
-        }
-
         .tp-sub {
             font-size: 11px;
             color: var(--text-muted);
             margin-top: 2px;
+        }
+
+        .tp-return {
+            font-size: 13px;
+            font-weight: 700;
+            color: var(--accent);
+            background: rgba(16, 185, 129, 0.15);
+            padding: 6px 10px;
+            border-radius: 6px;
+            flex-shrink: 0;
         }
 
         /* ── LOADING STATE ───────────────────────────────────────── */
@@ -5384,13 +5391,23 @@
                     return;
                 }
 
-                grid.innerHTML = top5.map(f => `
+                grid.innerHTML = top5.map(f => {
+                    const words = f.name.split(' ').filter(w => w.length > 0);
+                    const init1 = words[0] ? words[0][0].toUpperCase() : '';
+                    const init2 = words[1] && !words[1].toLowerCase().includes('fund') ? words[1][0].toUpperCase() : '';
+                    const initials = init1 + init2 || 'MF';
+                    return `
                     <div class="top-perf-card" onclick="loadFund('${f.code}')">
-                        <div class="tp-title">${f.name}</div>
+                        <div class="tp-header">
+                            <div class="tp-avatar">${initials}</div>
+                            <div class="tp-info">
+                                <div class="tp-title" title="${f.name}">${f.name}</div>
+                                <div class="tp-sub">${horizonLabel} Annualised CAGR</div>
+                            </div>
+                        </div>
                         <div class="tp-return">${f.cagr >= 0 ? '+' : ''}${(f.cagr * 100).toFixed(2)}%</div>
-                        <div class="tp-sub">${horizonLabel} Annualised CAGR</div>
                     </div>
-                `).join('');
+                `}).join('');
 
             } catch (err) {
                 console.error(err);
