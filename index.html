@@ -3609,22 +3609,31 @@
                 let currentCategory = null;
 
                 // We map AMFI official category names to our UI subcategories
+                // Maps AMFI official category strings → UI subcategory names.
+                // AMFI uses slashes for dual-named categories (e.g. "Dynamic Asset Allocation/Balanced Advantage")
+                // so we need both the canonical names AND the full slash-variants.
                 const categoryMapping = {
+                    // Hybrid
                     'Conservative Hybrid Fund': 'Conservative Hybrid',
                     'Balanced Advantage Fund': 'Balanced Advantage',
+                    'Dynamic Asset Allocation/Balanced Advantage': 'Balanced Advantage',
+                    'Dynamic Asset Allocation or Balanced Advantage': 'Balanced Advantage',
                     'Aggressive Hybrid Fund': 'Aggressive Hybrid',
                     'Arbitrage Fund': 'Arbitrage',
+                    // Equity
                     'Large Cap Fund': 'Large Cap',
                     'Mid Cap Fund': 'Mid Cap',
                     'Small Cap Fund': 'Small Cap',
                     'Flexi Cap Fund': 'Flexi Cap',
                     'ELSS': 'ELSS',
+                    // Debt
                     'Liquid Fund': 'Liquid',
                     'Money Market Fund': 'Money Market',
                     'Corporate Bond Fund': 'Corporate Bond',
                     'Gilt Fund': 'Gilt',
+                    // Passives
                     'Index Funds': 'Index Funds',
-                    'Exchange Traded Fund': 'ETFs' // General bucket for ETFs
+                    'Exchange Traded Fund': 'ETFs'
                 };
 
                 const categoryRegex = /^Open Ended Schemes\s*\((.*-\s*([^)]+))\)/i;
@@ -3643,10 +3652,19 @@
                         const match = line.match(categoryRegex);
                         if (match && match[2]) {
                             let rawCat = match[2].trim();
-                            // Handle ELSS special case
+
+                            // ── Special-case normalisation ──────────────────────
+                            // ELSS
                             if (rawCat.includes("ELSS")) rawCat = "ELSS";
-                            // Handle ETF special cases
-                            if (rawCat.includes("Other Scheme -  ETF")) rawCat = "Exchange Traded Fund";
+                            // ETF
+                            if (rawCat.includes("ETF")) rawCat = "Exchange Traded Fund";
+                            // Balanced Advantage: AMFI may use "Dynamic Asset Allocation/Balanced Advantage"
+                            // The regex captures everything after the last ' - ', so rawCat can be the full slash-name.
+                            // Direct dictionary lookup handles it; the includes() fallback is extra safety.
+                            if (!categoryMapping[rawCat] && rawCat.toLowerCase().includes('balanced advantage')) {
+                                rawCat = 'Balanced Advantage Fund';
+                            }
+                            // ────────────────────────────────────────────────────
 
                             currentCategory = categoryMapping[rawCat] || null;
                         }
