@@ -941,15 +941,20 @@
         }
 
         .stat-card {
-            background: var(--bg-card);
-            backdrop-filter: blur(16px);
-            -webkit-backdrop-filter: blur(16px);
+            background: rgba(30, 41, 59, 0.4);
+            backdrop-filter: blur(24px) saturate(1.2);
+            -webkit-backdrop-filter: blur(24px) saturate(1.2);
             border: 1px solid var(--border-glass);
-            border-radius: var(--radius-lg);
-            padding: 20px;
+            border-radius: var(--radius-xl);
+            padding: 24px;
             transition: all var(--transition-normal);
             position: relative;
             overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            justify-content: space-between;
+            min-height: 140px;
         }
 
         .stat-card::before {
@@ -957,17 +962,18 @@
             position: absolute;
             top: 0;
             left: 0;
-            right: 0;
-            height: 2px;
-            background: var(--accent-gradient);
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(circle at top left, rgba(16, 185, 129, 0.05) 0%, transparent 70%);
             opacity: 0;
             transition: opacity var(--transition-normal);
+            pointer-events: none;
         }
 
         .stat-card:hover {
-            border-color: var(--border-glow);
+            border-color: rgba(16, 185, 129, 0.3);
             transform: translateY(-2px);
-            box-shadow: var(--shadow-glow);
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4), var(--shadow-glow);
         }
 
         .stat-card:hover::before {
@@ -975,23 +981,40 @@
         }
 
         .stat-label {
-            font-size: 11px;
-            text-transform: uppercase;
-            letter-spacing: 1.2px;
-            color: var(--text-muted);
-            font-weight: 600;
+            font-size: 13px;
+            color: var(--text-primary);
+            font-weight: 500;
             margin-bottom: 8px;
+            z-index: 1;
         }
 
         .stat-value {
-            font-size: 26px;
+            font-size: 28px;
             font-weight: 700;
+            color: var(--accent);
+            z-index: 1;
         }
 
         .stat-sub {
-            font-size: 12px;
+            font-size: 11px;
             color: var(--text-muted);
             margin-top: 4px;
+            z-index: 1;
+        }
+
+        /* Simulated Sparkline Placeholder for Bonus Task */
+        .stat-sparkline {
+            position: absolute;
+            bottom: 16px;
+            right: 16px;
+            width: 80px;
+            height: 30px;
+            opacity: 0.6;
+        }
+
+        .stat-sparkline svg {
+            width: 100%;
+            height: 100%;
         }
 
         .stat-positive {
@@ -2344,19 +2367,47 @@
 
                         <div class="stats-grid">
                             <div class="stat-card">
-                                <div class="stat-label">CAGR (1 Year)</div>
-                                <div class="stat-value" id="statCAGR1Y">—</div>
+                                <div>
+                                    <div class="stat-label">CAGR (1 Year)</div>
+                                    <div class="stat-value" id="statCAGR1Y">—</div>
+                                </div>
                                 <div class="stat-sub">Annualised Return</div>
+                                <div class="stat-sparkline">
+                                    <svg viewBox="0 0 100 30" preserveAspectRatio="none">
+                                        <path d="M0,25 Q20,10 40,20 T80,10 L100,5" stroke="var(--accent)"
+                                            stroke-width="2" fill="none" opacity="0.8" stroke-linecap="round" />
+                                        <path d="M0,25 Q20,10 40,20 T80,10 L100,5 L100,30 L0,30 Z"
+                                            fill="rgba(16, 185, 129, 0.15)" stroke="none" />
+                                    </svg>
+                                </div>
                             </div>
                             <div class="stat-card">
-                                <div class="stat-label">Volatility (σ)</div>
-                                <div class="stat-value" id="statVolatility">—</div>
+                                <div>
+                                    <div class="stat-label">Volatility (σ)</div>
+                                    <div class="stat-value" id="statVolatility">—</div>
+                                </div>
                                 <div class="stat-sub">Annualised Std Dev</div>
+                                <div class="stat-sparkline">
+                                    <svg viewBox="0 0 100 30" preserveAspectRatio="none">
+                                        <path d="M0,15 L20,5 L40,20 L60,10 L80,25 L100,15" stroke="var(--text-muted)"
+                                            stroke-width="2" fill="none" opacity="0.6" stroke-linecap="round"
+                                            stroke-linejoin="round" />
+                                    </svg>
+                                </div>
                             </div>
                             <div class="stat-card">
-                                <div class="stat-label">Expense Ratio</div>
-                                <div class="stat-value" id="statExpenseRatio">—</div>
+                                <div>
+                                    <div class="stat-label">Expense Ratio</div>
+                                    <div class="stat-value" id="statExpenseRatio">—</div>
+                                </div>
                                 <div class="stat-sub">As per latest data</div>
+                                <div class="stat-sparkline">
+                                    <!-- Placeholder straightish line for expense ratio, showing stability -->
+                                    <svg viewBox="0 0 100 30" preserveAspectRatio="none">
+                                        <line x1="0" y1="15" x2="100" y2="15" stroke="var(--accent)" stroke-width="2"
+                                            stroke-dasharray="4,4" opacity="0.6" />
+                                    </svg>
+                                </div>
                             </div>
                         </div>
                     </div>
