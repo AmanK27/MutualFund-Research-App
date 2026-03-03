@@ -3656,13 +3656,13 @@
                             // ── Special-case normalisation ──────────────────────
                             // ELSS
                             if (rawCat.includes("ELSS")) rawCat = "ELSS";
-                            // ETF
-                            if (rawCat.includes("ETF")) rawCat = "Exchange Traded Fund";
-                            // Balanced Advantage: AMFI may use "Dynamic Asset Allocation/Balanced Advantage"
-                            // The regex captures everything after the last ' - ', so rawCat can be the full slash-name.
-                            // Direct dictionary lookup handles it; the includes() fallback is extra safety.
+                            // Balanced Advantage: AMFI uses "Dynamic Asset Allocation/Balanced Advantage"
                             if (!categoryMapping[rawCat] && rawCat.toLowerCase().includes('balanced advantage')) {
-                                rawCat = 'Balanced Advantage Fund';
+                                rawCat = 'Dynamic Asset Allocation/Balanced Advantage';
+                            }
+                            // ETF: must come AFTER Balanced Advantage check to avoid false matches
+                            if (!categoryMapping[rawCat] && rawCat.toUpperCase().includes('ETF')) {
+                                rawCat = 'Exchange Traded Fund';
                             }
                             // ────────────────────────────────────────────────────
 
@@ -3673,18 +3673,25 @@
                     else if (currentCategory && line.includes(';')) {
                         const parts = line.split(';');
                         if (parts.length >= 5) {
-                            const code = parts[0];
-                            const name = parts[3];
-                            const navStr = parts[4];
-
-                            // We heavily bias towards 'Direct Plan' & 'Growth' to avoid duplicate spam in the table
+                            const code = parts[0].trim();
+                            const name = parts[3].trim();
+                            const navStr = parts[4].trim();
                             const nameUpper = name.toUpperCase();
-                            if (nameUpper.includes('DIRECT') && nameUpper.includes('GROWTH')) {
+
+                            // ETFs don't have "Direct Plan - Growth" variants — their names are just the ETF name.
+                            // For ETFs: include the entry as long as it isn't already in the list (dedup by code).
+                            // For all other categories: keep only Direct-Growth entries to avoid plan spam.
+                            const isEtf = currentCategory === 'ETFs';
+                            const passesFilter = isEtf
+                                ? !window.LIVE_FUNDS['ETFs'].some(f => f.code === code)
+                                : (nameUpper.includes('DIRECT') && nameUpper.includes('GROWTH'));
+
+                            if (passesFilter) {
                                 window.LIVE_FUNDS[currentCategory].push({
                                     code: code,
                                     name: name,
                                     nav: parseFloat(navStr) || 0,
-                                    cagr1: null, // Will fetch dynamically if needed or show N/A
+                                    cagr1: null,
                                     cagr3: null,
                                     vol: null,
                                     sharpe: null,
