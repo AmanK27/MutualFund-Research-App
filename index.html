@@ -3084,7 +3084,7 @@
             }
 
             // Header
-            document.getElementById('fundName').textContent = meta.scheme_name || 'Unknown Fund';
+            document.getElementById('fundName').textContent = formatFundName(meta.scheme_name) || 'Unknown Fund';
             document.getElementById('fundHouse').textContent = meta.fund_house || '—';
             document.getElementById('fundCategory').textContent = meta.scheme_category || '—';
             document.getElementById('fundType').textContent = meta.scheme_type || '—';
@@ -3445,6 +3445,36 @@
         window.allMfFunds = []; // [ { schemeCode, schemeName } ]
         let searchTimeout;
 
+        /* ── Fund Name Simplifier ──────────────────────────────────────── */
+        /**
+         * Strips plan/option boilerplate and trailing scheme codes from a raw AMC fund name.
+         * The underlying schemeCode is never touched — only the display string is cleaned.
+         *
+         * Examples:
+         *   "Axis Liquid Fund - Direct Plan - Growth Option"        → "Axis Liquid Fund"
+         *   "HDFC Mid-Cap Opportunities Fund - Direct Plan - Growth"  → "HDFC Mid-Cap Opportunities Fund"
+         *   "SBI BlueChip Fund Regular Plan Growth 123456"           → "SBI BlueChip Fund"
+         */
+        function formatFundName(rawName) {
+            if (!rawName) return rawName;
+            return rawName
+                // Remove common suffix blocks (order matters — most specific first)
+                .replace(/\s*-\s*direct\s+plan\s*-\s*growth\s+option/gi, '')
+                .replace(/\s*-\s*direct\s+plan\s*-\s*growth/gi, '')
+                .replace(/\s*-\s*regular\s+plan\s*-\s*growth\s+option/gi, '')
+                .replace(/\s*-\s*regular\s+plan\s*-\s*growth/gi, '')
+                .replace(/\s*-\s*direct\s+plan/gi, '')
+                .replace(/\s*-\s*regular\s+plan/gi, '')
+                .replace(/\s*-\s*growth\s+option/gi, '')
+                .replace(/\s*-\s*growth/gi, '')
+                .replace(/\s*-\s*idcw(\s+\w+)*/gi, '')    // e.g. "- IDCW Daily"
+                .replace(/\s*-\s*dividend(\s+\w+)*/gi, '') // e.g. "- Dividend Monthly"
+                .replace(/\bOption\b/gi, '')               // stray "Option" word
+                .replace(/\b\d{6}\b/g, '')                 // trailing 6-digit scheme codes
+                .replace(/\s{2,}/g, ' ')                   // collapse multiple spaces
+                .trim();
+        }
+
         async function fetchGlobalFundList() {
             try {
                 // Fetch all 45k+ funds once in the background
@@ -3492,10 +3522,12 @@
 
                     if (matches.length > 0) {
                         results.innerHTML = matches.map(f => {
-                            const escapedName = f.schemeName.replace(/'/g, "&#39;").replace(/"/g, "&quot;");
+                            const displayName = formatFundName(f.schemeName);
+                            const escapedDisplay = displayName.replace(/'/g, "&#39;").replace(/"/g, "&quot;");
+                            const escapedRaw = f.schemeName.replace(/'/g, "&#39;").replace(/"/g, "&quot;");
                             return `
-                            <li class="autocomplete-item" onclick="handleAutocompleteSelect('${inputId}', '${resultsId}', '${f.schemeCode}', '${escapedName}')">
-                                <span class="ac-name">${f.schemeName}</span>
+                            <li class="autocomplete-item" onclick="handleAutocompleteSelect('${inputId}', '${resultsId}', '${f.schemeCode}', '${escapedRaw}')">
+                                <span class="ac-name">${escapedDisplay}</span>
                                 <span class="ac-code">${f.schemeCode}</span>
                             </li>
                         `}).join('');
