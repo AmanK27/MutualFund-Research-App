@@ -1420,6 +1420,153 @@
             pointer-events: none;
         }
 
+        /* ═══════════════════════════════════════════════════════════
+           FILTER PANEL
+           ═══════════════════════════════════════════════════════════ */
+        .filter-panel {
+            background: var(--bg-card);
+            border: 1px solid var(--border-glass);
+            border-radius: var(--radius-lg);
+            margin-bottom: 16px;
+            overflow: hidden;
+            transition: all var(--transition-normal);
+        }
+
+        .filter-panel-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 14px 20px;
+            cursor: pointer;
+            user-select: none;
+            gap: 12px;
+        }
+
+        .filter-panel-header:hover {
+            background: var(--bg-card-hover);
+        }
+
+        .filter-panel-title {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .filter-active-badge {
+            display: none;
+            background: rgba(56, 189, 248, 0.15);
+            color: var(--accent);
+            font-size: 10px;
+            font-weight: 700;
+            padding: 2px 8px;
+            border-radius: 99px;
+        }
+
+        .filter-active-badge.visible {
+            display: inline-block;
+        }
+
+        .filter-toggle-arrow {
+            font-size: 10px;
+            color: var(--text-muted);
+            transition: transform var(--transition-fast);
+        }
+
+        .filter-panel.open .filter-toggle-arrow {
+            transform: rotate(180deg);
+        }
+
+        .filter-panel-body {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height var(--transition-normal);
+        }
+
+        .filter-panel.open .filter-panel-body {
+            max-height: 200px;
+        }
+
+        .filter-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 12px;
+            padding: 0 20px 16px;
+        }
+
+        .filter-group label {
+            display: block;
+            font-size: 11px;
+            color: var(--text-muted);
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+            margin-bottom: 6px;
+        }
+
+        .filter-select,
+        .filter-input {
+            width: 100%;
+            padding: 9px 12px;
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid var(--border-glass);
+            border-radius: var(--radius-sm);
+            color: var(--text-primary);
+            font-size: 12px;
+            font-family: inherit;
+            outline: none;
+            transition: border-color var(--transition-fast);
+            box-sizing: border-box;
+        }
+
+        .filter-select:focus,
+        .filter-input:focus {
+            border-color: var(--accent);
+        }
+
+        .filter-select option {
+            background: #111827;
+            color: var(--text-primary);
+        }
+
+        .filter-nav-range {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+        }
+
+        .filter-clear-btn {
+            padding: 9px 16px;
+            background: transparent;
+            border: 1px solid var(--border-glass);
+            border-radius: var(--radius-sm);
+            color: var(--text-muted);
+            font-size: 12px;
+            font-family: inherit;
+            cursor: pointer;
+            transition: all var(--transition-fast);
+            align-self: end;
+            width: 100%;
+        }
+
+        .filter-clear-btn:hover {
+            border-color: var(--red);
+            color: var(--red);
+            background: var(--red-bg);
+        }
+
+        @media (max-width: 768px) {
+            .filter-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .filter-panel.open .filter-panel-body {
+                max-height: 600px;
+            }
+        }
+
         .page-ellipsis {
             padding: 6px 4px;
             color: var(--text-muted);
@@ -2110,6 +2257,51 @@
                     <h1 class="table-view-title" id="tableTitle">—</h1>
                     <p class="table-view-subtitle" id="tableSubtitle"></p>
                 </div>
+
+                <!-- Filter Panel -->
+                <div class="filter-panel" id="filterPanel">
+                    <div class="filter-panel-header" onclick="toggleFilterPanel()">
+                        <span class="filter-panel-title">
+                            🔧 Advanced Filters
+                            <span class="filter-active-badge" id="filterActiveBadge">ACTIVE</span>
+                        </span>
+                        <span class="filter-toggle-arrow">▼</span>
+                    </div>
+                    <div class="filter-panel-body">
+                        <div class="filter-grid">
+                            <div class="filter-group">
+                                <label>Fund Type</label>
+                                <select class="filter-select" id="filterType" onchange="applyFilters()">
+                                    <option value="">All Types</option>
+                                    <option value="direct-growth">Direct — Growth</option>
+                                    <option value="direct-idcw">Direct — IDCW</option>
+                                    <option value="regular-growth">Regular — Growth</option>
+                                    <option value="regular-idcw">Regular — IDCW</option>
+                                </select>
+                            </div>
+                            <div class="filter-group">
+                                <label>Fund House</label>
+                                <select class="filter-select" id="filterHouse" onchange="applyFilters()">
+                                    <option value="">All Fund Houses</option>
+                                </select>
+                            </div>
+                            <div class="filter-group">
+                                <label>NAV Range (₹)</label>
+                                <div class="filter-nav-range">
+                                    <input type="number" class="filter-input" id="filterNavMin" placeholder="Min"
+                                        min="0" step="1" oninput="applyFilters()">
+                                    <input type="number" class="filter-input" id="filterNavMax" placeholder="Max"
+                                        min="0" step="1" oninput="applyFilters()">
+                                </div>
+                            </div>
+                            <div class="filter-group">
+                                <label>&nbsp;</label>
+                                <button class="filter-clear-btn" onclick="clearFilters()">✕ Clear Filters</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="table-card">
                     <table class="fund-table" id="fundTable">
                         <thead id="fundTableHead"></thead>
@@ -3532,8 +3724,14 @@
             const active = document.querySelector(`.cat-sub-item[data-sub="${sub}"]`);
             if (active) active.classList.add('active');
 
-            // Get live data
+            // Reset filters when switching category
+            resetFilterState();
+
+            // Get live data (apply filters immediately — all clear so same as raw)
             currentTableData = (window.LIVE_FUNDS[sub] || []).map(f => ({ ...f }));
+
+            // Populate Fund House dropdown from this category's data
+            populateFundHouseFilter(currentTableData);
 
             renderTable();
             showState('table');
@@ -3781,6 +3979,96 @@
                     updateCell(6, 'aum');
                 }
             }
+        }
+
+        /* ── Filters Logic ───────────────────────────────────────────── */
+        let activeFilters = { type: '', house: '', navMin: null, navMax: null };
+
+        function toggleFilterPanel() {
+            document.getElementById('filterPanel').classList.toggle('open');
+        }
+
+        function resetFilterState() {
+            activeFilters = { type: '', house: '', navMin: null, navMax: null };
+            const fp = document.getElementById('filterPanel');
+            if (fp) {
+                const typeEl = document.getElementById('filterType');
+                const houseEl = document.getElementById('filterHouse');
+                const minEl = document.getElementById('filterNavMin');
+                const maxEl = document.getElementById('filterNavMax');
+                if (typeEl) typeEl.value = '';
+                if (houseEl) houseEl.value = '';
+                if (minEl) minEl.value = '';
+                if (maxEl) maxEl.value = '';
+                document.getElementById('filterActiveBadge').classList.remove('visible');
+                fp.classList.remove('open');
+            }
+        }
+
+        function populateFundHouseFilter(funds) {
+            const houseEl = document.getElementById('filterHouse');
+            if (!houseEl) return;
+            const houses = new Set();
+            funds.forEach(f => {
+                const match = f.name.match(/^([A-Za-z\s]+(?:Mutual Fund|AMC|Asset|MF))/i);
+                if (match) {
+                    houses.add(match[1].trim());
+                } else {
+                    const parts = f.name.split(' ');
+                    if (parts.length >= 2) houses.add(parts.slice(0, 2).join(' '));
+                }
+            });
+            const sorted = [...houses].sort();
+            houseEl.innerHTML = '<option value="">All Fund Houses</option>' +
+                sorted.map(h => `<option value="${h.toLowerCase()}">${h}</option>`).join('');
+        }
+
+        function applyFilters() {
+            const typeVal = document.getElementById('filterType').value;
+            const houseVal = document.getElementById('filterHouse').value.toLowerCase();
+            const navMinVal = parseFloat(document.getElementById('filterNavMin').value);
+            const navMaxVal = parseFloat(document.getElementById('filterNavMax').value);
+
+            activeFilters = {
+                type: typeVal,
+                house: houseVal,
+                navMin: isNaN(navMinVal) ? null : navMinVal,
+                navMax: isNaN(navMaxVal) ? null : navMaxVal
+            };
+
+            const rawData = (window.LIVE_FUNDS[currentSubcategory] || []);
+
+            currentTableData = rawData.filter(f => {
+                const nameUpper = f.name.toUpperCase();
+                const isDirect = nameUpper.includes('DIRECT');
+                const isGrowth = nameUpper.includes('GROWTH');
+                const isIDCW = nameUpper.includes('IDCW') || nameUpper.includes('DIVIDEND');
+
+                if (activeFilters.type === 'direct-growth' && !(isDirect && isGrowth)) return false;
+                if (activeFilters.type === 'direct-idcw' && !(isDirect && isIDCW)) return false;
+                if (activeFilters.type === 'regular-growth' && !(!isDirect && isGrowth)) return false;
+                if (activeFilters.type === 'regular-idcw' && !(!isDirect && isIDCW)) return false;
+
+                if (activeFilters.house && !f.name.toLowerCase().includes(activeFilters.house)) return false;
+
+                if (activeFilters.navMin !== null && f.nav < activeFilters.navMin) return false;
+                if (activeFilters.navMax !== null && f.nav > activeFilters.navMax) return false;
+
+                return true;
+            }).map(f => ({ ...f }));
+
+            const isActive = !!(activeFilters.type || activeFilters.house || activeFilters.navMin !== null || activeFilters.navMax !== null);
+            document.getElementById('filterActiveBadge').classList.toggle('visible', isActive);
+
+            currentPage = 1;
+            renderTable();
+        }
+
+        function clearFilters() {
+            resetFilterState();
+            currentTableData = (window.LIVE_FUNDS[currentSubcategory] || []).map(f => ({ ...f }));
+            currentPage = 1;
+            renderTable();
         }
 
         /* ── Sort Table ───────────────────────────────────────────────── */
