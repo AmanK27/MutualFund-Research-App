@@ -3299,6 +3299,18 @@
             document.getElementById('compareView').style.display = state === 'compare' ? 'block' : 'none';
             document.getElementById('searchResultsState').style.display = state === 'searchResults' ? 'block' : 'none';
 
+            // Feature Toggle based on State for Dashboard layout
+            const sideCol = document.querySelector('.dashboard-side-col');
+            const sipCard = document.querySelector('.sip-card');
+
+            if (state === 'dashboard') {
+                if (sideCol) sideCol.style.display = 'none';
+                if (sipCard) sipCard.style.display = 'block';
+            } else if (state === 'welcome') {
+                if (sideCol) sideCol.style.display = 'block';
+                if (sipCard) sipCard.style.display = 'none';
+            }
+
             // Manage active state of special nav buttons
             const pfBtn = document.getElementById('portfolioNavBtn');
             const compBtn = document.getElementById('compareNavBtn');
