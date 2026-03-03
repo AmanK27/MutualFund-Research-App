@@ -423,7 +423,7 @@
         #main {
             flex: 1;
             padding: 32px;
-            max-width: 1100px;
+            max-width: 1400px;
             margin: 0 auto;
             width: 100%;
         }
@@ -722,37 +722,68 @@
             cursor: pointer;
             transition: all var(--transition-normal);
             text-align: left;
+            margin-bottom: 12px;
+        }
+
+        .top-perf-card:last-child {
+            margin-bottom: 0;
         }
 
         .top-perf-card:hover {
-            transform: translateY(-2px);
-            border-color: rgba(56, 189, 248, 0.3);
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+            transform: translateX(4px);
+            background: var(--bg-card-hover);
+            border-color: rgba(16, 185, 129, 0.3);
+        }
+
+        .tp-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .tp-avatar {
+            width: 32px;
+            height: 32px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            flex-shrink: 0;
+        }
+
+        .tp-info {
+            flex: 1;
+            min-width: 0;
         }
 
         .tp-title {
             font-size: 13px;
             font-weight: 500;
             color: var(--text-primary);
-            margin-bottom: 12px;
-            display: -webkit-box;
-            -webkit-line-clamp: 2;
-            line-clamp: 2;
-            -webkit-box-orient: vertical;
+            white-space: nowrap;
             overflow: hidden;
+            text-overflow: ellipsis;
             line-height: 1.4;
         }
 
         .tp-return {
-            font-size: 18px;
+            font-size: 14px;
             font-weight: 700;
-            color: #4ade80;
+            color: var(--accent);
+            background: rgba(16, 185, 129, 0.15);
+            padding: 4px 8px;
+            border-radius: 6px;
+            margin-left: 8px;
         }
 
         .tp-sub {
             font-size: 11px;
             color: var(--text-muted);
-            margin-top: 4px;
+            margin-top: 2px;
         }
 
         /* ── LOADING STATE ───────────────────────────────────────── */
@@ -864,12 +895,48 @@
             cursor: default;
         }
 
+        /* ── GRID LAYOUT FOR DASHBOARD ───────────────────────────── */
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: 1fr 320px;
+            gap: 24px;
+            align-items: start;
+        }
+
+        .dashboard-main-col {
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+        }
+
+        .dashboard-side-col {
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+        }
+
+        .top-funds-panel {
+            background: var(--bg-card);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid var(--border-glass);
+            border-radius: var(--radius-lg);
+            padding: 24px;
+            height: 100%;
+        }
+
+        .top-funds-title {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 20px;
+            color: var(--text-primary);
+        }
+
         /* ── STATS GRID ──────────────────────────────────────────── */
         .stats-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 16px;
-            margin-bottom: 28px;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 24px;
         }
 
         .stat-card {
@@ -988,7 +1055,7 @@
         .range-btn.active {
             background: var(--accent-gradient);
             border-color: transparent;
-            color: #0a0e1a;
+            color: #0B1120;
             font-weight: 600;
         }
 
@@ -1119,8 +1186,12 @@
                 padding: 20px 16px;
             }
 
+            .dashboard-grid {
+                grid-template-columns: 1fr;
+            }
+
             .stats-grid {
-                grid-template-columns: 1fr 1fr;
+                grid-template-columns: repeat(2, 1fr);
             }
 
             .chart-canvas-wrapper {
@@ -2253,51 +2324,56 @@
                     </div>
                 </div>
 
-                <div class="stats-grid">
-                    <div class="stat-card">
-                        <div class="stat-label">Latest NAV</div>
-                        <div class="stat-value" id="statNAV">—</div>
-                        <div class="stat-sub" id="statNAVDate">—</div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-label">CAGR (1 Year)</div>
-                        <div class="stat-value" id="statCAGR1Y">—</div>
-                        <div class="stat-sub">Annualised Return</div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-label">CAGR (3 Year)</div>
-                        <div class="stat-value" id="statCAGR3Y">—</div>
-                        <div class="stat-sub">Annualised Return</div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-label">CAGR (5 Year)</div>
-                        <div class="stat-value" id="statCAGR5Y">—</div>
-                        <div class="stat-sub">Annualised Return</div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-label">CAGR (Max)</div>
-                        <div class="stat-value" id="statCAGRMax">—</div>
-                        <div class="stat-sub" id="statCAGRMaxSub">Since Inception</div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-label">Volatility (σ)</div>
-                        <div class="stat-value" id="statVolatility">—</div>
-                        <div class="stat-sub">Annualised Std Dev</div>
-                    </div>
-                </div>
+                <div class="dashboard-grid">
+                    <div class="dashboard-main-col">
+                        <div class="chart-section">
+                            <div class="chart-header">
+                                <h2 class="chart-title">NAV History</h2>
+                                <div class="chart-range-btns" id="chartRangeBtns">
+                                    <button class="range-btn" data-range="1Y">1Y</button>
+                                    <button class="range-btn" data-range="3Y">3Y</button>
+                                    <button class="range-btn" data-range="5Y">5Y</button>
+                                    <button class="range-btn active" data-range="MAX">Max</button>
+                                </div>
+                            </div>
+                            <div class="chart-canvas-wrapper">
+                                <canvas id="navChart"></canvas>
+                            </div>
+                        </div>
 
-                <div class="chart-section">
-                    <div class="chart-header">
-                        <h2 class="chart-title">NAV History</h2>
-                        <div class="chart-range-btns" id="chartRangeBtns">
-                            <button class="range-btn" data-range="1Y">1Y</button>
-                            <button class="range-btn" data-range="3Y">3Y</button>
-                            <button class="range-btn" data-range="5Y">5Y</button>
-                            <button class="range-btn active" data-range="MAX">Max</button>
+                        <div class="stats-grid">
+                            <div class="stat-card">
+                                <div class="stat-label">CAGR (1 Year)</div>
+                                <div class="stat-value" id="statCAGR1Y">—</div>
+                                <div class="stat-sub">Annualised Return</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-label">Volatility (σ)</div>
+                                <div class="stat-value" id="statVolatility">—</div>
+                                <div class="stat-sub">Annualised Std Dev</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-label">Expense Ratio</div>
+                                <div class="stat-value" id="statExpenseRatio">—</div>
+                                <div class="stat-sub">As per latest data</div>
+                            </div>
                         </div>
                     </div>
-                    <div class="chart-canvas-wrapper">
-                        <canvas id="navChart"></canvas>
+
+                    <div class="dashboard-side-col">
+                        <div class="top-funds-panel">
+                            <h3 class="top-funds-title">Top 5 Performing Funds</h3>
+                            <div id="sideTopPerformersLoading"
+                                style="text-align: center; padding: 20px; color: var(--text-muted); display: none;">
+                                <div class="spinner"
+                                    style="width: 20px; height: 20px; border-width: 2px; margin: 0 auto 12px; border-top-color: var(--accent);">
+                                </div>
+                                <div style="font-size: 12px;">Validating funds...</div>
+                            </div>
+                            <div id="sideTopPerformersGrid">
+                                <!-- Top 5 list items injected here -->
+                            </div>
+                        </div>
                     </div>
                 </div>
 
