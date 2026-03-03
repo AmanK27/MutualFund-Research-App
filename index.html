@@ -2025,6 +2025,12 @@
                 <span>Mobile Access</span>
             </div>
 
+            <div id="glossaryNavBtn" class="portfolio-nav-item" onclick="openGlossary()"
+                style="background: linear-gradient(135deg, rgba(168, 85, 247, 0.15), rgba(139, 92, 246, 0.15)); border-color: rgba(168, 85, 247, 0.3);">
+                <span>📖</span>
+                <span>MF Glossary</span>
+            </div>
+
             <nav class="category-nav" id="categoryNav"></nav>
 
             <div class="watchlist-title">
@@ -2558,6 +2564,49 @@
     </div>
 
     <div class="toast-container" id="toastContainer"></div>
+
+    <!-- Glossary Modal -->
+    <div id="glossaryModal" style="display:none; position:fixed; inset:0; z-index:1100; display:none;">
+        <!-- Backdrop -->
+        <div id="glossaryBackdrop" onclick="closeGlossary()"
+            style="position:absolute; inset:0; background:rgba(0,0,0,0.6); backdrop-filter:blur(4px);"></div>
+        <!-- Panel -->
+        <div id="glossaryPanel" style="
+            position:absolute; right:0; top:0; bottom:0; width:min(480px, 100vw);
+            background: var(--bg-card);
+            border-left: 1px solid var(--border-glass);
+            display:flex; flex-direction:column;
+            transform: translateX(100%);
+            transition: transform 0.3s cubic-bezier(0.4,0,0.2,1);
+        ">
+            <!-- Header -->
+            <div
+                style="display:flex; align-items:center; justify-content:space-between; padding:20px 24px; border-bottom:1px solid var(--border-glass); flex-shrink:0;">
+                <div style="display:flex; align-items:center; gap:10px;">
+                    <span style="font-size:22px;">📖</span>
+                    <div>
+                        <h2 style="font-size:16px; font-weight:700; color:var(--text-primary); margin:0;">MF Glossary
+                        </h2>
+                        <p style="font-size:11px; color:var(--text-muted); margin:0;">20 essential mutual fund terms</p>
+                    </div>
+                </div>
+                <button onclick="closeGlossary()"
+                    style="background:none; border:none; color:var(--text-muted); font-size:20px; cursor:pointer; padding:4px; line-height:1; transition:color var(--transition-fast);"
+                    onmouseover="this.style.color='var(--text-primary)'"
+                    onmouseout="this.style.color='var(--text-muted)'">×</button>
+            </div>
+            <!-- Search -->
+            <div style="padding:16px 24px 12px; flex-shrink:0;">
+                <input id="glossarySearch" type="text" placeholder="🔍 Search terms or definitions..."
+                    oninput="searchGlossary(this.value)"
+                    style="width:100%; box-sizing:border-box; padding:10px 14px; background:rgba(0,0,0,0.3); border:1px solid var(--border-glass); border-radius:var(--radius-sm); color:var(--text-primary); font-size:13px; font-family:inherit; outline:none; transition:border-color var(--transition-fast);"
+                    onfocus="this.style.borderColor='var(--accent)'"
+                    onblur="this.style.borderColor='var(--border-glass)'">
+            </div>
+            <!-- List -->
+            <div id="glossaryList" style="flex:1; overflow-y:auto; padding:0 24px 24px;"></div>
+        </div>
+    </div>
 
     <script>
         /* ═══════════════════════════════════════════════════════════════════
@@ -4885,6 +4934,165 @@
                 loadTopPerformers(e.target.dataset.cat, topFundsHorizon);
             }
         });
+
+        /* ═══════════════════════════════════════════════════════════════════
+           8 ─ MF GLOSSARY
+           ═══════════════════════════════════════════════════════════════════ */
+
+        const GLOSSARY_TERMS = [
+            {
+                term: 'NAV (Net Asset Value)',
+                definition: 'The per-unit market value of a mutual fund. Calculated as (Total Assets − Liabilities) ÷ Total Units outstanding. This is the price at which units are bought or sold on a given day.'
+            },
+            {
+                term: 'CAGR (Compound Annual Growth Rate)',
+                definition: 'The rate at which an investment grows from its beginning value to its ending value, assuming profits are reinvested each year. Formula: (Ending Value / Beginning Value)^(1/N) − 1, where N is the number of years.'
+            },
+            {
+                term: 'XIRR (Extended Internal Rate of Return)',
+                definition: 'A function that calculates the return on an investment where cash flows occur at irregular intervals of time. Commonly used to measure the actual return on SIP investments.'
+            },
+            {
+                term: 'SIP (Systematic Investment Plan)',
+                definition: 'A disciplined investment method where a fixed amount is invested in a mutual fund at regular intervals (weekly, monthly, quarterly). Benefits from rupee-cost averaging and the power of compounding.'
+            },
+            {
+                term: 'AUM (Assets Under Management)',
+                definition: 'The total market value of all the investments managed by a mutual fund at a given point in time. A larger AUM can indicate greater investor trust, but very large AUM can limit a fund\'s agility in smaller-cap strategies.'
+            },
+            {
+                term: 'Expense Ratio (TER)',
+                definition: 'The annual fee charged by a mutual fund to cover operating costs (fund management, administration, marketing). Expressed as a percentage of AUM. Lower expense ratios directly improve net returns for investors.'
+            },
+            {
+                term: 'Exit Load',
+                definition: 'A fee charged to investors when they redeem (sell) their mutual fund units before a specified period. Exists to discourage short-term trading. E.g., 1% if redeemed within 1 year of purchase.'
+            },
+            {
+                term: 'Sharpe Ratio',
+                definition: 'A risk-adjusted performance measure. Calculated as (Portfolio Return − Risk-Free Rate) ÷ Standard Deviation. A higher Sharpe Ratio means more return per unit of risk taken. A ratio above 1 is generally considered good.'
+            },
+            {
+                term: 'Alpha',
+                definition: 'The excess return of a fund compared to its benchmark index. A positive alpha means the fund manager has added value over the index; negative alpha means underperformance. E.g., Alpha of +2 means 2% extra return above benchmark.'
+            },
+            {
+                term: 'Beta',
+                definition: 'A measure of a fund\'s sensitivity to market movements relative to its benchmark. Beta of 1 means moves exactly with the market; Beta > 1 is more volatile; Beta < 1 is less volatile. Useful for assessing market risk.'
+            },
+            {
+                term: 'Standard Deviation (Volatility)',
+                definition: 'Measures how much a fund\'s returns fluctuate around its average return over a period. Higher standard deviation indicates higher volatility and risk. A stable fund with consistent returns will have lower standard deviation.'
+            },
+            {
+                term: 'Benchmark Index',
+                definition: 'A standard index (e.g., NIFTY 50, BSE Sensex, NIFTY Midcap 150) against which a fund\'s performance is measured. The fund manager aims to outperform (generate alpha over) its stated benchmark.'
+            },
+            {
+                term: 'IDCW (Income Distribution cum Capital Withdrawal)',
+                definition: 'Formerly called the "Dividend" option. In this plan, the fund periodically distributes a portion of realised gains to investors. The NAV reduces by the amount distributed. Not to be confused with a guaranteed income.'
+            },
+            {
+                term: 'SWP (Systematic Withdrawal Plan)',
+                definition: 'The opposite of SIP. Allows investors to withdraw a fixed amount from a mutual fund at regular intervals. Useful for creating a regular cash flow in retirement while keeping the remaining corpus invested.'
+            },
+            {
+                term: 'Direct Plan',
+                definition: 'A plan where investors purchase mutual fund units directly from the AMC (Asset Management Company) without involving a distributor. Has a lower expense ratio than Regular plans because no commission is paid to an intermediary.'
+            },
+            {
+                term: 'Regular Plan',
+                definition: 'A plan where mutual fund units are purchased through a distributor or intermediary. Carries a higher expense ratio than Direct plans because a commission is paid to the distributor. The NAV of Regular plans is always lower than Direct plans.'
+            },
+            {
+                term: 'Growth Option',
+                definition: 'In this option, all gains and dividends are reinvested within the fund, increasing the NAV over time. No payouts are made to the investor. Best suited for long-term wealth creation and tax efficiency (gains taxed only on redemption).'
+            },
+            {
+                term: 'ELSS (Equity Linked Savings Scheme)',
+                definition: 'A type of equity mutual fund that offers tax deductions up to ₹1.5 lakh per year under Section 80C of the Income Tax Act. Has a mandatory 3-year lock-in period — the shortest among all 80C instruments.'
+            },
+            {
+                term: 'Debt Fund',
+                definition: 'A mutual fund that primarily invests in fixed-income securities such as government bonds, corporate bonds, treasury bills, and money market instruments. Generally lower risk and lower potential return than equity funds.'
+            },
+            {
+                term: 'Flexi Cap Fund',
+                definition: 'An equity mutual fund that can invest across companies of any market capitalisation (large cap, mid cap, or small cap) without any minimum allocation constraint. The fund manager has full flexibility to allocate based on market conditions.'
+            }
+        ];
+
+        function openGlossary() {
+            const modal = document.getElementById('glossaryModal');
+            const panel = document.getElementById('glossaryPanel');
+            const searchEl = document.getElementById('glossarySearch');
+
+            modal.style.display = 'block';
+            document.body.style.overflow = 'hidden';
+
+            // Trigger slide-in animation
+            requestAnimationFrame(() => {
+                panel.style.transform = 'translateX(0)';
+            });
+
+            // Reset and render
+            if (searchEl) searchEl.value = '';
+            renderGlossary(GLOSSARY_TERMS);
+        }
+
+        function closeGlossary() {
+            const modal = document.getElementById('glossaryModal');
+            const panel = document.getElementById('glossaryPanel');
+
+            panel.style.transform = 'translateX(100%)';
+            document.body.style.overflow = '';
+
+            setTimeout(() => {
+                modal.style.display = 'none';
+            }, 300); // match CSS transition duration
+        }
+
+        function renderGlossary(terms) {
+            const list = document.getElementById('glossaryList');
+            if (!list) return;
+
+            if (terms.length === 0) {
+                list.innerHTML = `<div style="text-align:center; padding:40px 0; color:var(--text-muted); font-size:13px;">No terms match your search.</div>`;
+                return;
+            }
+
+            list.innerHTML = terms.map((t, i) => `
+                <div style="
+                    border-bottom: 1px solid var(--border-glass);
+                    padding: 18px 0;
+                    ${i === 0 ? 'padding-top: 8px;' : ''}
+                ">
+                    <div style="font-size:13px; font-weight:700; color:var(--accent); margin-bottom:6px; letter-spacing:0.2px;">${escapeHtml(t.term)}</div>
+                    <div style="font-size:12px; color:var(--text-secondary); line-height:1.7;">${escapeHtml(t.definition)}</div>
+                </div>
+            `).join('');
+        }
+
+        function searchGlossary(query) {
+            const q = query.toLowerCase().trim();
+            if (!q) {
+                renderGlossary(GLOSSARY_TERMS);
+                return;
+            }
+            const filtered = GLOSSARY_TERMS.filter(t =>
+                t.term.toLowerCase().includes(q) ||
+                t.definition.toLowerCase().includes(q)
+            );
+            renderGlossary(filtered);
+        }
+
+        // Close on Escape key
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && document.getElementById('glossaryModal').style.display === 'block') {
+                closeGlossary();
+            }
+        });
+
     </script>
 </body>
 
