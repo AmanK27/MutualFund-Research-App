@@ -2079,17 +2079,32 @@
                 <div class="top-performers-section"
                     style="margin-top: 48px; text-align: left; max-width: 800px; margin-left: auto; margin-right: auto;">
                     <div
-                        style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; flex-wrap: wrap; gap: 16px;">
+                        style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 24px; flex-wrap: wrap; gap: 16px;">
                         <div style="display: flex; align-items: center; gap: 8px;">
                             <span style="font-size: 20px;">🏆</span>
-                            <h3 style="font-size: 18px; font-weight: 600; color: var(--text-primary);">Top 5 Funds (1Y
+                            <h3 id="topFundsHeading"
+                                style="font-size: 18px; font-weight: 600; color: var(--text-primary);">Top 5 Funds (1Y
                                 Return)</h3>
                         </div>
-                        <div class="perf-category-filters" id="topPerfFilters"
-                            style="display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px;">
-                            <button class="pf-filter-btn active" data-cat="Equity Funds">Equity</button>
-                            <button class="pf-filter-btn" data-cat="Debt Funds">Debt</button>
-                            <button class="pf-filter-btn" data-cat="Hybrid Funds">Hybrid</button>
+                        <div style="display: flex; flex-direction: column; gap: 10px; align-items: flex-end;">
+                            <!-- Time horizon selector -->
+                            <div id="topFundsHorizonBtns" style="display: flex; gap: 6px;">
+                                <button class="range-btn active" data-horizon="1Y"
+                                    onclick="setTopFundsHorizon('1Y')">1Y</button>
+                                <button class="range-btn" data-horizon="3Y"
+                                    onclick="setTopFundsHorizon('3Y')">3Y</button>
+                                <button class="range-btn" data-horizon="5Y"
+                                    onclick="setTopFundsHorizon('5Y')">5Y</button>
+                                <button class="range-btn" data-horizon="Max"
+                                    onclick="setTopFundsHorizon('Max')">Max</button>
+                            </div>
+                            <!-- Category filters -->
+                            <div class="perf-category-filters" id="topPerfFilters"
+                                style="display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px;">
+                                <button class="pf-filter-btn active" data-cat="Equity Funds">Equity</button>
+                                <button class="pf-filter-btn" data-cat="Debt Funds">Debt</button>
+                                <button class="pf-filter-btn" data-cat="Hybrid Funds">Hybrid</button>
+                            </div>
                         </div>
                     </div>
 
@@ -4699,15 +4714,38 @@
             showState('welcome');
 
             // Auto-load top performers for default category
-            loadTopPerformers('Equity Funds');
+            loadTopPerformers('Equity Funds', topFundsHorizon);
         })();
 
         /* ── Top 5 Performers Logic ─────────────────────────────────────── */
-        async function loadTopPerformers(categoryStr) {
+        let topFundsHorizon = '1Y'; // '1Y' | '3Y' | '5Y' | 'Max'
+        let topFundsCategory = 'Equity Funds';
+
+        const HORIZON_YEARS_MAP = { '1Y': 1, '3Y': 3, '5Y': 5, 'Max': null };
+        const HORIZON_MIN_DAYS = { '1Y': 252, '3Y': 252 * 3, '5Y': 252 * 5, 'Max': 252 };
+
+        function setTopFundsHorizon(horizon) {
+            topFundsHorizon = horizon;
+            // Update horizon button active states
+            document.querySelectorAll('#topFundsHorizonBtns .range-btn').forEach(b => {
+                b.classList.toggle('active', b.dataset.horizon === horizon);
+            });
+            loadTopPerformers(topFundsCategory, horizon);
+        }
+
+        async function loadTopPerformers(categoryStr, horizon) {
+            horizon = horizon || topFundsHorizon;
+            topFundsCategory = categoryStr;
+
             const grid = document.getElementById('topPerformersGrid');
             const loader = document.getElementById('topPerformersLoading');
+            const heading = document.getElementById('topFundsHeading');
             grid.innerHTML = '';
             loader.style.display = 'block';
+
+            // Update heading to current horizon
+            const horizonLabel = horizon === 'Max' ? 'All-Time' : horizon;
+            if (heading) heading.textContent = `Top 5 Funds (${horizonLabel} Return)`;
 
             try {
                 const catObj = CATEGORIES.find(c => c.name === categoryStr);
@@ -4720,55 +4758,60 @@
                     }
                 });
 
-                // Dedup and limit to first 25 to avoid rate-limiting or long waits
-                allCodes = allCodes.slice(0, 25);
+                // Limit to 30 to avoid excessive fetching
+                allCodes = allCodes.slice(0, 30);
+
+                const minDays = HORIZON_MIN_DAYS[horizon] || 252;
+                const yearsBack = HORIZON_YEARS_MAP[horizon]; // null = Max
 
                 const promises = allCodes.map(async (fund) => {
                     try {
                         const res = await fetch('https://api.mfapi.in/mf/' + fund.code);
                         if (!res.ok) return null;
                         const data = await res.json();
-                        if (!data.data || data.data.length < 252) return null; // Need 1Y data
+                        if (!data.data || data.data.length < minDays) return null;
 
-                        // Parse history format same as app main load
                         const history = data.data.map(d => ({
                             date: parseDate(d.date),
                             nav: parseFloat(d.nav)
-                        })).reverse();
+                        })).reverse(); // oldest → newest
 
-                        const cagr1 = getCagrForYears(history, 1);
-                        if (cagr1 === null) return null;
+                        let cagr;
+                        if (yearsBack === null) {
+                            // Max: use getCAGR full range
+                            cagr = getCAGR(history, null);
+                        } else {
+                            cagr = getCagrForYears(history, yearsBack);
+                        }
 
-                        return {
-                            code: fund.code,
-                            name: fund.name,
-                            cagr1: cagr1
-                        };
+                        if (cagr === null || isNaN(cagr)) return null;
+
+                        return { code: fund.code, name: fund.name, cagr, horizon };
                     } catch (e) {
                         return null;
                     }
                 });
 
                 const results = await Promise.all(promises);
-                const valid = results.filter(r => r !== null && !isNaN(r.cagr1));
+                const valid = results.filter(r => r !== null);
 
-                // Sort descending by 1Y CAGR
-                valid.sort((a, b) => b.cagr1 - a.cagr1);
+                // Sort by selected CAGR descending
+                valid.sort((a, b) => b.cagr - a.cagr);
 
                 const top5 = valid.slice(0, 5);
 
                 loader.style.display = 'none';
 
                 if (top5.length === 0) {
-                    grid.innerHTML = '<div style="grid-column: 1/-1; text-align: center; color: var(--text-muted); font-size: 13px;">Not enough historical data collected.</div>';
+                    grid.innerHTML = `<div style="grid-column: 1/-1; text-align: center; color: var(--text-muted); font-size: 13px;">Not enough ${horizonLabel} historical data for this category.</div>`;
                     return;
                 }
 
                 grid.innerHTML = top5.map(f => `
                     <div class="top-perf-card" onclick="loadFund('${f.code}')">
                         <div class="tp-title">${f.name}</div>
-                        <div class="tp-return">${f.cagr1 >= 0 ? '+' : ''}${f.cagr1.toFixed(2)}%</div>
-                        <div class="tp-sub">1Y Annualised</div>
+                        <div class="tp-return">${f.cagr >= 0 ? '+' : ''}${(f.cagr * 100).toFixed(2)}%</div>
+                        <div class="tp-sub">${horizonLabel} Annualised CAGR</div>
                     </div>
                 `).join('');
 
@@ -4783,7 +4826,7 @@
             if (e.target.classList.contains('pf-filter-btn')) {
                 document.querySelectorAll('.pf-filter-btn').forEach(b => b.classList.remove('active'));
                 e.target.classList.add('active');
-                loadTopPerformers(e.target.dataset.cat);
+                loadTopPerformers(e.target.dataset.cat, topFundsHorizon);
             }
         });
     </script>
