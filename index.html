@@ -2080,11 +2080,17 @@
                     style="margin-top: 48px; text-align: left; max-width: 800px; margin-left: auto; margin-right: auto;">
                     <div
                         style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 24px; flex-wrap: wrap; gap: 16px;">
-                        <div style="display: flex; align-items: center; gap: 8px;">
+                        <div style="display: flex; align-items: center; gap: 10px;">
                             <span style="font-size: 20px;">🏆</span>
                             <h3 id="topFundsHeading"
                                 style="font-size: 18px; font-weight: 600; color: var(--text-primary);">Top 5 Funds (1Y
                                 Return)</h3>
+                            <button id="topFundsRefreshBtn" onclick="refreshTopFunds()" title="Refresh latest data"
+                                style="display:flex; align-items:center; gap:6px; padding:6px 14px; background:rgba(56,189,248,0.08); border:1px solid rgba(56,189,248,0.25); border-radius:var(--radius-sm); color:var(--accent); font-size:12px; font-weight:600; font-family:inherit; cursor:pointer; transition:all var(--transition-fast);">
+                                <span id="topFundsRefreshSpinner"
+                                    style="display:none; width:12px; height:12px; border:2px solid rgba(56,189,248,0.3); border-top-color:var(--accent); border-radius:50%; animation:spin 0.8s linear infinite;"></span>
+                                <span id="topFundsRefreshLabel">↻ Refresh</span>
+                            </button>
                         </div>
                         <div style="display: flex; flex-direction: column; gap: 10px; align-items: flex-end;">
                             <!-- Time horizon selector -->
@@ -4726,11 +4732,36 @@
 
         function setTopFundsHorizon(horizon) {
             topFundsHorizon = horizon;
-            // Update horizon button active states
             document.querySelectorAll('#topFundsHorizonBtns .range-btn').forEach(b => {
                 b.classList.toggle('active', b.dataset.horizon === horizon);
             });
             loadTopPerformers(topFundsCategory, horizon);
+        }
+
+        async function refreshTopFunds() {
+            const btn = document.getElementById('topFundsRefreshBtn');
+            const spinner = document.getElementById('topFundsRefreshSpinner');
+            const label = document.getElementById('topFundsRefreshLabel');
+            if (!btn || btn.disabled) return;
+
+            btn.disabled = true;
+            spinner.style.display = 'inline-block';
+            label.textContent = 'Fetching…';
+
+            try {
+                // Re-fetch fresh AMFI categories (clears & rebuilds LIVE_FUNDS)
+                await fetchLiveAmfiCategories();
+                // Re-rank top performers with current category + horizon
+                await loadTopPerformers(topFundsCategory, topFundsHorizon);
+                label.textContent = '✓ Updated';
+            } catch (e) {
+                console.error('Refresh failed:', e);
+                label.textContent = '✕ Error';
+            } finally {
+                spinner.style.display = 'none';
+                btn.disabled = false;
+                setTimeout(() => { label.textContent = '↻ Refresh'; }, 2000);
+            }
         }
 
         async function loadTopPerformers(categoryStr, horizon) {
