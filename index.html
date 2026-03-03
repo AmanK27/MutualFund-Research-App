@@ -2396,6 +2396,37 @@
             </section>
 
             <!-- Compare View -->
+            <!-- Search Results State -->
+            <section id="searchResultsState" style="display: none;">
+                <div style="max-width: 860px; margin: 0 auto; padding: 32px 0;">
+                    <div style="display:flex; align-items:center; gap:12px; margin-bottom:24px;">
+                        <span style="font-size:22px;">&#128269;</span>
+                        <div>
+                            <h2 style="font-size:20px; font-weight:700; color:var(--text-primary); margin:0;">Search
+                                Results</h2>
+                            <p id="searchResultsSubtitle"
+                                style="font-size:13px; color:var(--text-muted); margin:4px 0 0;"></p>
+                        </div>
+                    </div>
+                    <div class="table-card" style="overflow:hidden;">
+                        <table class="fund-table" id="searchResultsTable" style="width:100%;">
+                            <thead>
+                                <tr>
+                                    <th style="text-align:left;">Fund Name</th>
+                                    <th style="text-align:right;">NAV (&#8377;)</th>
+                                    <th style="text-align:right;">Scheme Code</th>
+                                </tr>
+                            </thead>
+                            <tbody id="searchResultsBody"></tbody>
+                        </table>
+                        <div id="searchResultsEmpty"
+                            style="display:none; text-align:center; padding:40px 0; color:var(--text-muted); font-size:14px;">
+                            No matching active funds found. Try a broader search term.
+                        </div>
+                    </div>
+                </div>
+            </section>
+
             <section id="compareView" style="display: none;">
                 <div class="welcome-icon">⚖️</div>
                 <h2 class="welcome-title">Compare Funds</h2>
@@ -3043,6 +3074,7 @@
             document.getElementById('tableView').style.display = state === 'table' ? 'block' : 'none';
             document.getElementById('portfolioView').style.display = state === 'portfolio' ? 'block' : 'none';
             document.getElementById('compareView').style.display = state === 'compare' ? 'block' : 'none';
+            document.getElementById('searchResultsState').style.display = state === 'searchResults' ? 'block' : 'none';
 
             // Manage active state of special nav buttons
             const pfBtn = document.getElementById('portfolioNavBtn');
@@ -3680,13 +3712,52 @@
 
         // Stub — fully implemented in Step 2
         function showSearchResults(query) {
-            // Placeholder: will render a full result list in Step 2.
-            // For now, fall back to loading the top autocomplete match if visible.
-            const sr = document.getElementById('searchResults');
-            if (sr && sr.style.display === 'block') {
-                const first = sr.querySelector('.autocomplete-item');
-                if (first) first.click();
+            const q = query.toLowerCase().trim();
+
+            // Filter from the already-stripped Direct+Growth active fund pool
+            const activeSet = window.activeSchemeCodesSet;
+            const pool = window.allMfFunds.filter(f => {
+                const n = f.schemeName.toUpperCase();
+                const passesName = n.includes('DIRECT') && n.includes('GROWTH') &&
+                    !n.includes('IDCW') && !n.includes('DIVIDEND');
+                const passesActive = !activeSet || activeSet.size === 0 ||
+                    activeSet.has(String(f.schemeCode));
+                return passesName && passesActive;
+            });
+
+            const matches = pool.filter(f =>
+                f.schemeName.toLowerCase().includes(q) ||
+                String(f.schemeCode).includes(q)
+            ).slice(0, 100); // cap at 100 rows for DOM performance
+
+            const subtitle = document.getElementById('searchResultsSubtitle');
+            const body = document.getElementById('searchResultsBody');
+            const emptyMsg = document.getElementById('searchResultsEmpty');
+
+            if (subtitle) subtitle.textContent =
+                matches.length > 0
+                    ? `${matches.length} fund${matches.length === 1 ? '' : 's'} matched "${query}"`
+                    : `No results for "${query}"`;
+
+            if (matches.length === 0) {
+                body.innerHTML = '';
+                emptyMsg.style.display = 'block';
+            } else {
+                emptyMsg.style.display = 'none';
+                body.innerHTML = matches.map(f => {
+                    const display = escapeHtml(formatFundName(f.schemeName));
+                    return `
+                        <tr class="table-row" style="cursor:pointer;" onclick="loadFund('${f.schemeCode}')">
+                            <td style="text-align:left; font-weight:500;">${display}</td>
+                            <td style="text-align:right; color:var(--text-secondary); font-size:12px;">—</td>
+                            <td style="text-align:right; color:var(--text-muted); font-size:11px;">${f.schemeCode}</td>
+                        </tr>`;
+                }).join('');
             }
+
+            // Hide the autocomplete dropdown
+            document.getElementById('searchResults').style.display = 'none';
+            showState('searchResults');
         }
 
         document.getElementById('chartRangeBtns').addEventListener('click', (e) => {
