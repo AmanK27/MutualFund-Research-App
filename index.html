@@ -536,6 +536,94 @@
             transform: none;
         }
 
+        /* ── Search Autocomplete Dropdown ─────────────────────────────── */
+        .autocomplete-list {
+            position: absolute;
+            top: calc(100% + 6px);
+            left: 0;
+            right: 0;
+            background: #0f1626;
+            border: 1px solid rgba(56, 189, 248, 0.2);
+            border-radius: 14px;
+            list-style: none;
+            padding: 6px;
+            margin: 0;
+            max-height: 380px;
+            overflow-y: auto;
+            z-index: 999;
+            box-shadow: 0 16px 48px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(56, 189, 248, 0.06);
+            animation: ac-fadein 0.15s ease;
+            display: none;
+            /* toggled by JS */
+        }
+
+        @keyframes ac-fadein {
+            from {
+                opacity: 0;
+                transform: translateY(-6px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* Scrollbar */
+        .autocomplete-list::-webkit-scrollbar {
+            width: 4px;
+        }
+
+        .autocomplete-list::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        .autocomplete-list::-webkit-scrollbar-thumb {
+            background: rgba(56, 189, 248, 0.3);
+            border-radius: 4px;
+        }
+
+        .ac-section-header {
+            padding: 8px 12px 6px;
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: 0.8px;
+            text-transform: uppercase;
+            color: var(--text-muted);
+            pointer-events: none;
+            user-select: none;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+            margin-bottom: 4px;
+        }
+
+        .ac-item {
+            padding: 10px 14px;
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--text-primary);
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background 0.12s ease, color 0.12s ease;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            line-height: 1.4;
+        }
+
+        .ac-item:hover,
+        .ac-item.ac-focused {
+            background: rgba(56, 189, 248, 0.12);
+            color: #38bdf8;
+        }
+
+        .ac-empty {
+            padding: 16px 14px;
+            font-size: 13px;
+            color: var(--text-muted);
+            text-align: center;
+            pointer-events: none;
+        }
+
         /* ── WELCOME STATE ───────────────────────────────────────── */
         #welcomeState {
             text-align: center;
@@ -3521,9 +3609,7 @@
             }
         }
 
-        /* ── Trending Funds (shown on empty focus) ────────────────────── */
-        // Curated list of popular, broadly-held Indian mutual funds.
-        // scheme codes are stable Direct-Growth scheme codes from mfapi.in.
+        /* ── Trending Funds (♥ shown on empty focus) ──────────────────*/
         const TRENDING_FUNDS = [
             { schemeCode: '122639', schemeName: 'Parag Parikh Flexi Cap Fund - Direct Plan - Growth' },
             { schemeCode: '120503', schemeName: 'Axis Bluechip Fund - Direct Plan - Growth' },
@@ -3537,176 +3623,218 @@
             { schemeCode: '119775', schemeName: 'Franklin India Flexi Cap Fund - Direct Plan - Growth' }
         ];
 
-        function renderTrendingDropdown(inputId, resultsId, results) {
-            results.innerHTML =
-                `<li style="padding:8px 16px 4px; font-size:10px; font-weight:700; letter-spacing:1px;
-                    color:var(--text-muted); text-transform:uppercase; pointer-events:none;
-                    border-bottom:1px solid var(--border-glass); margin-bottom:4px;">
-                    🔥 Trending
-                </li>` +
-                TRENDING_FUNDS.map(f => {
-                    const displayName = formatFundName(f.schemeName);
-                    const escapedDisplay = displayName.replace(/'/g, "&#39;").replace(/"/g, "&quot;");
-                    const escapedRaw = f.schemeName.replace(/'/g, "&#39;").replace(/"/g, "&quot;");
-                    return `<li class="autocomplete-item" onclick="handleAutocompleteSelect('${inputId}', '${resultsId}', '${f.schemeCode}', '${escapedRaw}')">
-                        <span class="ac-name">${escapedDisplay}</span>
-                    </li>`;
-                }).join('');
-            results.style.display = 'block';
+        /* ── Autocomplete Registry ──────────────────────────────────*/
+        // Maps DOM element id → { code, name } for the currently highlighted item.
+        // Avoids inline onclick attributes entirely — safe with any fund name characters.
+        const _acRegistry = {};
+
+        function _buildDropdownItem(listEl, code, displayName, inputId, resultsId) {
+            const li = document.createElement('li');
+            li.className = 'ac-item';
+            li.setAttribute('data-code', code);
+            const uid = 'ac_' + code + '_' + inputId;
+            li.id = uid;
+            // Show clean name
+            li.textContent = displayName;
+            // Store in registry
+            _acRegistry[uid] = { code: String(code), name: displayName };
+            li.addEventListener('mousedown', (e) => {
+                e.preventDefault(); // keep focus on input
+                _selectFund(inputId, resultsId, String(code), displayName);
+            });
+            listEl.appendChild(li);
         }
 
-        function setupAutocomplete(inputId, resultsId, onSelectCallback) {
-            const input = document.getElementById(inputId);
-            const results = document.getElementById(resultsId);
+        function _getActivePool() {
+            const activeSet = window.activeSchemeCodesSet;
+            return window.allMfFunds.filter(f => {
+                const n = f.schemeName.toUpperCase();
+                const passesName = n.includes('DIRECT') && n.includes('GROWTH') &&
+                    !n.includes('IDCW') && !n.includes('DIVIDEND');
+                const passesActive = !activeSet || activeSet.size === 0 ||
+                    activeSet.has(String(f.schemeCode));
+                return passesName && passesActive;
+            });
+        }
 
-            input.addEventListener('input', (e) => {
-                const query = e.target.value.toLowerCase().trim();
+        function _selectFund(inputId, resultsId, code, cleanName) {
+            const input = document.getElementById(inputId);
+            const resultsList = document.getElementById(resultsId);
+
+            // Set the clean readable name in the input — never the code
+            input.value = cleanName;
+            resultsList.style.display = 'none';
+
+            if (inputId === 'searchInput') {
+                // For main search: store and immediately navigate to the fund dashboard
+                currentlySelectedSchemeCode = code;
+                loadFund(code);
+            } else if (inputId === 'compareInputA') {
+                document.getElementById('compareCodeA').value = code;
+            } else if (inputId === 'compareInputB') {
+                document.getElementById('compareCodeB').value = code;
+            }
+        }
+
+        function _renderTrending(inputId, resultsId) {
+            const resultsList = document.getElementById(resultsId);
+            resultsList.innerHTML = '';
+
+            // Section header
+            const header = document.createElement('li');
+            header.className = 'ac-section-header';
+            header.textContent = '🔥  Trending Funds';
+            resultsList.appendChild(header);
+
+            TRENDING_FUNDS.forEach(f => {
+                _buildDropdownItem(resultsList, f.schemeCode, formatFundName(f.schemeName), inputId, resultsId);
+            });
+
+            resultsList.style.display = 'block';
+        }
+
+        function setupAutocomplete(inputId, resultsId) {
+            const input = document.getElementById(inputId);
+            const resultsList = document.getElementById(resultsId);
+            let _focusedIndex = -1;
+
+            function _getItems() {
+                return Array.from(resultsList.querySelectorAll('.ac-item'));
+            }
+
+            function _setFocus(idx) {
+                const items = _getItems();
+                items.forEach(el => el.classList.remove('ac-focused'));
+                if (idx >= 0 && idx < items.length) {
+                    items[idx].classList.add('ac-focused');
+                    items[idx].scrollIntoView({ block: 'nearest' });
+                }
+                _focusedIndex = idx;
+            }
+
+            // ---- Input event: search as you type ----
+            input.addEventListener('input', () => {
+                const query = input.value.trim();
+                _focusedIndex = -1;
                 clearTimeout(searchTimeout);
 
-                if (query.length < 3) {
-                    results.style.display = 'none';
+                if (query.length === 0) {
+                    if (inputId === 'searchInput') {
+                        _renderTrending(inputId, resultsId);
+                    } else {
+                        resultsList.style.display = 'none';
+                    }
+                    currentlySelectedSchemeCode = null;
                     return;
                 }
 
-                // Clear any previously-selected fund when the user types new text
+                if (query.length < 3) {
+                    resultsList.style.display = 'none';
+                    currentlySelectedSchemeCode = null;
+                    return;
+                }
+
+                // User typed — clear stored selection
                 currentlySelectedSchemeCode = null;
 
-                // Debounce matching logic to keep UI responsive
                 searchTimeout = setTimeout(() => {
-                    if (window.allMfFunds.length === 0) return; // Not loaded yet
+                    if (window.allMfFunds.length === 0) return;
+                    const q = query.toLowerCase();
+                    const matches = _getActivePool().filter(f =>
+                        f.schemeName.toLowerCase().includes(q) ||
+                        String(f.schemeCode).includes(q)
+                    ).slice(0, 40);
 
-                    // Strict filter: only Direct+Growth variants, no IDCW/Dividend, and only active funds
-                    // (NAV updated within the last 7 days, per the set built during AMFI parsing).
-                    const activeSet = window.activeSchemeCodesSet;
-                    const filteredFunds = window.allMfFunds.filter(f => {
-                        const n = f.schemeName.toUpperCase();
-                        const passesNameFilter = n.includes('DIRECT') &&
-                            n.includes('GROWTH') &&
-                            !n.includes('IDCW') &&
-                            !n.includes('DIVIDEND');
-                        // Skip staleness check if the set isn't populated yet (AMFI not loaded).
-                        const passesActiveCheck = !activeSet || activeSet.size === 0 ||
-                            activeSet.has(String(f.schemeCode));
-                        return passesNameFilter && passesActiveCheck;
-                    });
-
-                    // Fuzzy match natively with includes, capped at 50 results to prevent DOM freeze
-                    const matches = filteredFunds.filter(f =>
-                        f.schemeName.toLowerCase().includes(query) ||
-                        String(f.schemeCode).includes(query)
-                    ).slice(0, 50);
-
-                    if (matches.length > 0) {
-                        results.innerHTML = matches.map(f => {
-                            const displayName = formatFundName(f.schemeName);
-                            const escapedDisplay = displayName.replace(/'/g, "&#39;").replace(/"/g, "&quot;");
-                            const escapedRaw = f.schemeName.replace(/'/g, "&#39;").replace(/"/g, "&quot;");
-                            return `
-                            <li class="autocomplete-item" onclick="handleAutocompleteSelect('${inputId}', '${resultsId}', '${f.schemeCode}', '${escapedRaw}')">
-                                <span class="ac-name">${escapedDisplay}</span>
-                            </li>
-                        `}).join('');
-                        results.style.display = 'block';
+                    resultsList.innerHTML = '';
+                    if (matches.length === 0) {
+                        const empty = document.createElement('li');
+                        empty.className = 'ac-empty';
+                        empty.textContent = 'No matching funds found';
+                        resultsList.appendChild(empty);
                     } else {
-                        results.innerHTML = '<li style="padding: 12px 16px; color: var(--text-muted); text-align: center;">No funds found</li>';
-                        results.style.display = 'block';
+                        // Subtle header
+                        const hdr = document.createElement('li');
+                        hdr.className = 'ac-section-header';
+                        hdr.textContent = `🔍  ${matches.length} result${matches.length > 1 ? 's' : ''} for “${query}”`;
+                        resultsList.appendChild(hdr);
+                        matches.forEach(f => {
+                            _buildDropdownItem(resultsList, f.schemeCode, formatFundName(f.schemeName), inputId, resultsId);
+                        });
                     }
-                }, 250);
+                    resultsList.style.display = 'block';
+                }, 220);
             });
 
-            // Keyboard navigation (Enter to select first item)
+            // ---- Focus: show trending if empty (main search only) ----
+            input.addEventListener('focus', () => {
+                if (inputId === 'searchInput' && input.value.trim().length === 0) {
+                    _renderTrending(inputId, resultsId);
+                }
+            });
+
+            // ---- Keyboard navigation ----
             input.addEventListener('keydown', (e) => {
-                if (e.key === 'Enter') {
+                const items = _getItems();
+
+                if (e.key === 'ArrowDown') {
                     e.preventDefault();
-                    if (results.style.display === 'block') {
-                        const firstItem = results.querySelector('.autocomplete-item');
-                        if (firstItem) firstItem.click();
+                    _setFocus(Math.min(_focusedIndex + 1, items.length - 1));
+                } else if (e.key === 'ArrowUp') {
+                    e.preventDefault();
+                    _setFocus(Math.max(_focusedIndex - 1, 0));
+                } else if (e.key === 'Escape') {
+                    resultsList.style.display = 'none';
+                    _focusedIndex = -1;
+                } else if (e.key === 'Enter') {
+                    e.preventDefault();
+                    e.stopPropagation(); // prevent any outer listener from double-firing
+
+                    if (_focusedIndex >= 0 && items[_focusedIndex]) {
+                        // Arrow-key highlighted item — select it
+                        const uid = items[_focusedIndex].id;
+                        const entry = _acRegistry[uid];
+                        if (entry) _selectFund(inputId, resultsId, entry.code, entry.name);
                     } else if (inputId === 'searchInput') {
-                        document.getElementById('searchBtn').click();
+                        // No item highlighted — treat as a text search
+                        resultsList.style.display = 'none';
+                        const val = input.value.trim();
+                        if (currentlySelectedSchemeCode) {
+                            loadFund(currentlySelectedSchemeCode);
+                        } else if (/^\d+$/.test(val)) {
+                            loadFund(val);
+                        } else if (val.length >= 3) {
+                            showSearchResults(val);
+                        }
                     }
                 }
             });
 
-            // Show Trending list on focus when input is empty (main search only)
-            if (inputId === 'searchInput') {
-                input.addEventListener('focus', () => {
-                    if (input.value.trim().length === 0) {
-                        renderTrendingDropdown(inputId, resultsId, results);
-                    }
-                });
-            }
-
-            // Hide autocomplete when clicking outside
+            // ---- Hide when clicking outside ----
             document.addEventListener('click', (e) => {
-                if (!input.contains(e.target) && !results.contains(e.target)) {
-                    results.style.display = 'none';
+                if (!input.contains(e.target) && !resultsList.contains(e.target)) {
+                    resultsList.style.display = 'none';
+                    _focusedIndex = -1;
                 }
             });
         }
 
-        window.handleAutocompleteSelect = function (inputId, resultsId, code, name) {
-            const input = document.getElementById(inputId);
-            const results = document.getElementById(resultsId);
-
-            // Show the clean (human-readable) name in the search bar.
-            // Store the raw scheme code separately so it doesn't pollute the input.
-            input.value = formatFundName(name);
-            results.style.display = 'none';
-
-            // Store the selected code in global state (used by the search button)
-            if (inputId === 'searchInput') {
-                currentlySelectedSchemeCode = code;
-            }
-
-            // Dispatch a custom event so Compare A/B listeners can capture the code too
-            const event = new CustomEvent('fundSelected', { detail: { code, name } });
-            input.dispatchEvent(event);
-        };
-
-        // Setup Main Search
+        // ---------- Wire up autocomplete instances ----------
         setupAutocomplete('searchInput', 'searchResults');
-        document.getElementById('searchInput').addEventListener('fundSelected', (e) => {
-            loadFund(e.detail.code);
-        });
-
-        // Setup Compare Search A
         setupAutocomplete('compareInputA', 'compareResultsA');
-        document.getElementById('compareInputA').addEventListener('fundSelected', (e) => {
-            document.getElementById('compareCodeA').value = e.detail.code;
-        });
-
-        // Setup Compare Search B
         setupAutocomplete('compareInputB', 'compareResultsB');
-        document.getElementById('compareInputB').addEventListener('fundSelected', (e) => {
-            document.getElementById('compareCodeB').value = e.detail.code;
-        });
 
+        // ---------- Search button ----------
         document.getElementById('searchBtn').addEventListener('click', () => {
             const inputVal = document.getElementById('searchInput').value.trim();
+            document.getElementById('searchResults').style.display = 'none';
 
-            // Priority 1: user explicitly picked a fund from the dropdown
             if (currentlySelectedSchemeCode) {
+                // Already loaded by _selectFund, but allow re-trigger if button is pressed after
                 loadFund(currentlySelectedSchemeCode);
-                document.getElementById('searchResults').style.display = 'none';
-                return;
-            }
-
-            // Priority 2: user typed a raw numeric scheme code directly
-            if (/^\d+$/.test(inputVal)) {
+            } else if (/^\d+$/.test(inputVal)) {
                 loadFund(inputVal);
-                document.getElementById('searchResults').style.display = 'none';
-                return;
-            }
-
-            // Priority 3: partial text typed without selecting — show search results list
-            if (inputVal.length >= 3) {
+            } else if (inputVal.length >= 3) {
                 showSearchResults(inputVal);
-            }
-        });
-
-        searchInput.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') {
-                document.getElementById('searchBtn').click();
             }
         });
 
