@@ -2959,10 +2959,20 @@
         }
 
         /* ── Deep Analysis Proxy Fetch ─────────────────────────────────── */
+        function sanitizeForGroww(name) {
+            if (!name) return '';
+            return name.replace(/-?\s*(Direct|Regular)\s*Plan\s*-?\s*Growth\s*(Option)?/ig, '')
+                .replace(/-?\s*Direct\s*Growth/ig, '')
+                .replace(/-?\s*Growth\s*Option/ig, '')
+                .replace(/-/g, ' ')
+                .trim();
+        }
+
         async function fetchAdvancedFundData(schemeName) {
             try {
                 // 1. Search Groww for the fund via corsproxy
-                const searchUrl = 'https://groww.in/v1/api/search/v3/query/global/st_p_query?page=0&query=' + encodeURIComponent(schemeName);
+                const cleanName = sanitizeForGroww(schemeName);
+                const searchUrl = 'https://groww.in/v1/api/search/v3/query/global/st_p_query?page=0&query=' + encodeURIComponent(cleanName);
                 const proxySearchUrl = 'https://corsproxy.io/?' + encodeURIComponent(searchUrl);
 
                 const res = await fetch(proxySearchUrl);
@@ -2970,10 +2980,10 @@
 
                 const json = await res.json();
 
-                const contentArr = json.data && json.data.content ? json.data.content : [];
+                const contentArr = json.data && json.data.content ? json.data.content.filter(x => x.entity_type === 'Scheme') : [];
                 if (contentArr.length === 0) return null;
 
-                // Extract search ID from first hit
+                // Extract search ID from first valid Scheme hit
                 const searchId = contentArr[0].search_id;
                 if (!searchId) return null;
 
@@ -3517,6 +3527,112 @@
                     loadFundFromTable(row.dataset.code, row.dataset.name);
                 });
             });
+
+            // Lazy load stats for visible rows
+            if (window.tableObserver) window.tableObserver.disconnect();
+            window.tableObserver = new IntersectionObserver((entries, observer) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        const tr = entry.target;
+                        const code = tr.dataset.code;
+                        const name = tr.dataset.name;
+                        // Unobserve immediately so we don't fetch twice
+                        observer.unobserve(tr);
+                        fetchRowStats(code, name, tr);
+                    }
+                });
+            }, { rootMargin: '200px' });
+
+            tbody.querySelectorAll('.fund-row').forEach(row => {
+                window.tableObserver.observe(row);
+            });
+        }
+
+        /* ── Lazy Load Row Stats ──────────────────────────────────────── */
+        async function fetchRowStats(code, name, rowElement) {
+            const fund = currentTableData.find(f => f.code === String(code));
+            if (!fund || fund._statsLoading || fund._statsLoaded) return;
+            fund._statsLoading = true;
+
+            const cells = rowElement.querySelectorAll('td');
+
+            try {
+                // Fetch NAV History
+                const navRes = await fetch(`https://api.mfapi.in/mf/${code}`).then(res => res.json()).catch(() => null);
+
+                if (navRes && navRes.data && navRes.data.length > 0) {
+                    const history = navRes.data.map(d => ({
+                        date: parseDate(d.date),
+                        nav: parseFloat(d.nav)
+                    })).reverse();
+
+                    const cagr1 = getCagrForYears(history, 1);
+                    const cagr3 = getCagrForYears(history, 3);
+                    const vol = calcVolatility(history);
+
+                    fund.cagr1 = cagr1;
+                    fund.cagr3 = cagr3;
+                    if (vol !== null) {
+                        fund.vol = vol * 100; // Store as percentage
+                        if (cagr1 !== null && fund.vol > 0) {
+                            fund.sharpe = (cagr1 - 0.07) / (vol * 100); // approx risk free 7%
+                        }
+                    }
+                }
+
+                // Fetch AUM
+                try {
+                    const cleanName = sanitizeForGroww(name);
+                    const searchUrl = 'https://corsproxy.io/?url=' + encodeURIComponent('https://groww.in/v1/api/search/v3/query/global/st_p_query?page=0&query=' + encodeURIComponent(cleanName));
+                    const searchRes = await fetch(searchUrl).then(r => r.json());
+
+                    if (searchRes && searchRes.data && searchRes.data.content) {
+                        const schemeHit = searchRes.data.content.find(x => x.entity_type === 'Scheme');
+                        if (schemeHit && schemeHit.search_id) {
+                            const detailUrl = 'https://corsproxy.io/?url=' + encodeURIComponent('https://groww.in/v1/api/data/mf/web/v2/scheme/search/' + schemeHit.search_id);
+                            const schemeObj = await fetch(detailUrl).then(r => r.json());
+                            if (schemeObj && schemeObj.aum) {
+                                fund.aum = schemeObj.aum;
+                            }
+                        }
+                    }
+                } catch (e) { /* ignore aum fail */ }
+
+                fund._statsLoaded = true;
+
+            } catch (err) {
+                console.error("Stats fetch error for UI table code", code, err);
+            } finally {
+                fund._statsLoading = false;
+
+                // Update UI visually if this row element is still in the DOM and valid
+                if (rowElement && rowElement.dataset.code === String(code)) {
+                    // Update indices: 2(1Y), 3(3Y), 4(Vol), 5(Sharpe), 6(AUM)
+                    const updateCell = (idx, colKey) => {
+                        const col = TABLE_COLUMNS.find(c => c.key === colKey);
+                        const val = fund[colKey];
+                        if (!cells[idx]) return;
+
+                        if (val === null || val === undefined) {
+                            cells[idx].innerHTML = '<span style="color:var(--text-muted); font-size: 11px;">—</span>';
+                            cells[idx].className = '';
+                        } else {
+                            cells[idx].innerHTML = col.fmt ? col.fmt(val) : escapeHtml(String(val));
+                            let cls = '';
+                            if (col.color && typeof val === 'number') cls = val >= 0 ? 'td-positive' : 'td-negative';
+                            if (col.colorInverse && typeof val === 'number') cls = val > 20 ? 'td-negative' : val > 12 ? 'td-neutral' : 'td-positive';
+                            if (col.colorSharpe && typeof val === 'number') cls = val >= 1.5 ? 'td-positive' : val >= 0.8 ? 'td-neutral' : 'td-negative';
+                            cells[idx].className = cls;
+                        }
+                    };
+
+                    updateCell(2, 'cagr1');
+                    updateCell(3, 'cagr3');
+                    updateCell(4, 'vol');
+                    updateCell(5, 'sharpe');
+                    updateCell(6, 'aum');
+                }
+            }
         }
 
         /* ── Sort Table ───────────────────────────────────────────────── */
