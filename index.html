@@ -3161,6 +3161,78 @@
             };
         }
 
+        /**
+         * Dynamic Peer Grouping & Ranking Logic (Step 1)
+         * Filters master list for peers, fetches NAV, calculates 1Y CAGR.
+         */
+        async function getPeerRanking(categoryString, currentSchemeCode) {
+            if (!window.allMfFunds || !categoryString) return [];
+            
+            // Extract core category (e.g. 'Large Cap', 'Small Cap', 'Flexi Cap')
+            let keyword = categoryString.replace(/Equity Scheme\s*-?\s*/ig, '')
+                                        .replace(/Open Ended Schemes/ig, '')
+                                        .replace(/Fund/ig, '')
+                                        .trim();
+            if (!keyword) return [];
+
+            // Filter for peers in the same logical bucket, strictly Direct Growth for fair comparison
+            let peers = window.allMfFunds.filter(f => {
+                if (!f.schemeName) return false;
+                const nameUpper = f.schemeName.toUpperCase();
+                return nameUpper.includes(keyword.toUpperCase()) && 
+                       nameUpper.includes('DIRECT') && 
+                       nameUpper.includes('GROWTH');
+            });
+
+            // Ensure current fund is in the list even if it doesn't strictly match the string filters
+            const hasCurrent = peers.find(p => String(p.schemeCode) === String(currentSchemeCode));
+            if (!hasCurrent) {
+                const currentFromMaster = window.allMfFunds.find(p => String(p.schemeCode) === String(currentSchemeCode));
+                if (currentFromMaster) peers.push(currentFromMaster);
+            }
+
+            // Limit to ~15 to prevent hammering the MF API
+            peers = peers.slice(0, 15);
+
+            // Fetch NAV data concurrently
+            const fetchPromises = peers.map(async (peer) => {
+                try {
+                    const res = await fetch(`https://api.mfapi.in/mf/${peer.schemeCode}`);
+                    if (!res.ok) return null;
+                    const data = await res.json();
+                    
+                    if (!data || !data.data || data.data.length === 0) return null;
+                    
+                    // Convert date strings to Date objects
+                    const navHistory = data.data.map(d => {
+                        const parts = d.date.split('-');
+                        return {
+                            date: new Date(parts[2], parts[1] - 1, parts[0]),
+                            nav: parseFloat(d.nav)
+                        };
+                    }).sort((a, b) => a.date - b.date); // Oldest to newest
+                    
+                    const cagr1y = getCAGR(navHistory, 1);
+                    return {
+                        schemeCode: String(peer.schemeCode),
+                        schemeName: formatFundName(peer.schemeName),
+                        cagr1y: cagr1y
+                    };
+                } catch (err) {
+                    console.error("Peer fetch failed for", peer.schemeCode, err);
+                    return null;
+                }
+            });
+
+            const results = await Promise.all(fetchPromises);
+            
+            // Filter out failures/nulls, and sort descending by 1Y CAGR
+            const validRankings = results.filter(r => r !== null && r.cagr1y !== null);
+            validRankings.sort((a, b) => b.cagr1y - a.cagr1y);
+            
+            return validRankings;
+        }
+
         /* ═══════════════════════════════════════════════════════════════════
            4 ─ CHART.JS VISUALIZATION
            ═══════════════════════════════════════════════════════════════════ */
