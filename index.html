@@ -4536,6 +4536,21 @@
             try {
                 await fetchLiveAmfiCategories();
                 btn.innerHTML = '✓ Updated';
+
+                // Re-render whichever view is currently active so the user
+                // sees the refreshed data without having to re-navigate.
+                const tableView = document.getElementById('tableView');
+                const welcomeState = document.getElementById('welcomeState');
+
+                if (tableView && tableView.style.display !== 'none' && currentSubcategory) {
+                    // Re-select the active subcategory to repopulate the table
+                    // with freshly fetched LIVE_FUNDS data
+                    currentTableData = (window.LIVE_FUNDS[currentSubcategory] || []).map(f => ({ ...f }));
+                    renderTable();
+                } else if (welcomeState && welcomeState.style.display !== 'none') {
+                    // Re-run top performers on the welcome screen
+                    loadTopPerformers(topFundsCategory, topFundsHorizon);
+                }
             } catch (error) {
                 console.error(error);
                 btn.innerHTML = '✕ Error';
