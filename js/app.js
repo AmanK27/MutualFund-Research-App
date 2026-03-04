@@ -2292,19 +2292,20 @@ document.querySelectorAll('#compareRangeBtns .range-btn').forEach(btn => {
 });
 
 function renderCompareChart() {
-    if (compareDataA.length === 0 || compareDataB.length === 0) return;
+    if (!compareState.fundA.data || !compareState.fundB.data ||
+        compareState.fundA.data.length === 0 || compareState.fundB.data.length === 0) return;
 
     // Determine Common Start Date based on range
     const now = new Date();
     let limitDate = new Date("1970-01-01");
 
-    if (currentCompareRange === '1Y') { limitDate = new Date(now.setFullYear(now.getFullYear() - 1)); }
-    else if (currentCompareRange === '3Y') { limitDate = new Date(now.setFullYear(now.getFullYear() - 3)); }
-    else if (currentCompareRange === '5Y') { limitDate = new Date(now.setFullYear(now.getFullYear() - 5)); }
+    if (currentCompareRange === '1Y') { limitDate = new Date(new Date().setFullYear(now.getFullYear() - 1)); }
+    else if (currentCompareRange === '3Y') { limitDate = new Date(new Date().setFullYear(now.getFullYear() - 3)); }
+    else if (currentCompareRange === '5Y') { limitDate = new Date(new Date().setFullYear(now.getFullYear() - 5)); }
 
     // Filter data
-    const filtA = compareDataA.filter(d => d.date >= limitDate);
-    const filtB = compareDataB.filter(d => d.date >= limitDate);
+    const filtA = compareState.fundA.data.filter(d => d.date >= limitDate);
+    const filtB = compareState.fundB.data.filter(d => d.date >= limitDate);
 
     if (filtA.length === 0 || filtB.length === 0) {
         showToast("Not enough data for the selected range to compare", "error");
@@ -2318,7 +2319,9 @@ function renderCompareChart() {
     const normA = filtA.map(d => ({ x: d.date.getTime(), y: (d.nav / baseNavA) * 100 }));
     const normB = filtB.map(d => ({ x: d.date.getTime(), y: (d.nav / baseNavB) * 100 }));
 
-    const ctx = document.getElementById('compareChart').getContext('2d');
+    const canvas = document.getElementById('compareChart');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
     if (compareChartInstance) {
         compareChartInstance.destroy();
     }
@@ -2328,7 +2331,7 @@ function renderCompareChart() {
         data: {
             datasets: [
                 {
-                    label: document.getElementById('compNameA').textContent,
+                    label: formatFundName(compareState.fundA.meta.scheme_name),
                     data: normA,
                     borderColor: '#38bdf8',
                     backgroundColor: 'rgba(56, 189, 248, 0.1)',
@@ -2339,7 +2342,7 @@ function renderCompareChart() {
                     pointHoverRadius: 6
                 },
                 {
-                    label: document.getElementById('compNameB').textContent,
+                    label: formatFundName(compareState.fundB.meta.scheme_name),
                     data: normB,
                     borderColor: '#ec4899', // Pink
                     backgroundColor: 'rgba(236, 72, 153, 0.1)',
