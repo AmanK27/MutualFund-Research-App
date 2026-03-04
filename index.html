@@ -590,13 +590,13 @@
             <div id="portfolioTxnModal"
                 style="display:none;position:fixed;inset:0;z-index:1200;align-items:center;justify-content:center;background:rgba(0,0,0,0.6);backdrop-filter:blur(6px);">
                 <div class="pf-modal-card"
-                    style="background:var(--bg-card);border:1px solid var(--border-glass);border-radius:var(--radius-lg);padding:28px;width:min(520px,95vw);max-height:90vh;overflow-y:auto;transform:scale(0.95);transition:transform 0.2s cubic-bezier(0.4,0,0.2,1);">
+                    style="background:var(--bg-card);border:1px solid var(--border-glass);border-radius:var(--radius-lg);padding:28px;width:min(540px,95vw);max-height:90vh;overflow-y:auto;transform:scale(0.95);transition:transform 0.2s cubic-bezier(0.4,0,0.2,1);">
                     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
                         <div>
                             <h3 style="font-size:17px;font-weight:700;color:var(--text-primary);margin:0;">Add
                                 Transaction</h3>
-                            <p style="font-size:12px;color:var(--text-muted);margin:4px 0 0;">Record a Buy, Sell, or SIP
-                                transaction in your portfolio.</p>
+                            <p style="font-size:12px;color:var(--text-muted);margin:4px 0 0;">Record a Lump Sum
+                                purchase, a Sell, or set up a monthly SIP.</p>
                         </div>
                         <button onclick="closePortfolioTxnModal()"
                             style="background:none;border:none;color:var(--text-muted);font-size:22px;cursor:pointer;line-height:1;padding:4px;">&times;</button>
@@ -626,7 +626,7 @@
                         <label
                             style="font-size:12px;color:var(--text-secondary);font-weight:500;display:block;margin-bottom:6px;">Transaction
                             Type</label>
-                        <select id="pfTxnType"
+                        <select id="pfTxnType" onchange="onTxnTypeChange()"
                             style="width:100%;padding:10px 14px;background:rgba(0,0,0,0.3);border:1px solid var(--border-glass);border-radius:var(--radius-sm);color:var(--text-primary);font-size:13px;font-family:inherit;outline:none;">
                             <option value="buy">🟢 Buy (Lump Sum)</option>
                             <option value="sip">🔵 SIP (Monthly)</option>
@@ -634,10 +634,22 @@
                         </select>
                     </div>
 
+                    <!-- SIP Status (SIP only) -->
+                    <div id="pfSipStatusRow" style="display:none;margin-bottom:16px;">
+                        <label
+                            style="font-size:12px;color:var(--text-secondary);font-weight:500;display:block;margin-bottom:6px;">SIP
+                            Status</label>
+                        <select id="pfSipStatus" onchange="onSipStatusChange()"
+                            style="width:100%;padding:10px 14px;background:rgba(0,0,0,0.3);border:1px solid var(--border-glass);border-radius:var(--radius-sm);color:var(--text-primary);font-size:13px;font-family:inherit;outline:none;">
+                            <option value="active">▶ In Progress (still running)</option>
+                            <option value="paused">⏸ Paused / Stopped</option>
+                        </select>
+                    </div>
+
                     <!-- Amount + Date Row -->
                     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px;">
                         <div>
-                            <label
+                            <label id="pfAmountLabel"
                                 style="font-size:12px;color:var(--text-secondary);font-weight:500;display:block;margin-bottom:6px;">Amount
                                 Invested (₹)</label>
                             <input type="number" id="pfTxnAmount" placeholder="e.g. 10000" oninput="recomputePfUnits()"
@@ -646,7 +658,7 @@
                                 onblur="this.style.borderColor='var(--border-glass)'">
                         </div>
                         <div>
-                            <label
+                            <label id="pfDateLabel"
                                 style="font-size:12px;color:var(--text-secondary);font-weight:500;display:block;margin-bottom:6px;">Transaction
                                 Date</label>
                             <input type="date" id="pfTxnDate" onchange="autofetchPfNav()"
@@ -656,13 +668,27 @@
                         </div>
                     </div>
 
-                    <!-- NAV + Units Row -->
-                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:24px;">
+                    <!-- Last SIP Date (Paused SIP only) -->
+                    <div id="pfLastSipDateRow" style="display:none;margin-bottom:16px;">
+                        <label
+                            style="font-size:12px;color:var(--text-secondary);font-weight:500;display:block;margin-bottom:6px;">Last
+                            SIP Date
+                            <span style="color:var(--text-muted);font-weight:400;">(date of final instalment)</span>
+                        </label>
+                        <input type="date" id="pfLastSipDate"
+                            style="width:100%;box-sizing:border-box;padding:10px 14px;background:rgba(0,0,0,0.3);border:1px solid var(--border-glass);border-radius:var(--radius-sm);color:var(--text-primary);font-size:13px;font-family:inherit;outline:none;"
+                            onfocus="this.style.borderColor='var(--accent)'"
+                            onblur="this.style.borderColor='var(--border-glass)'">
+                    </div>
+
+                    <!-- NAV + Units Row (Lumpsum/Sell only) -->
+                    <div id="pfNavUnitsRow"
+                        style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:24px;">
                         <div>
                             <label
                                 style="font-size:12px;color:var(--text-secondary);font-weight:500;display:block;margin-bottom:6px;">NAV
-                                at Purchase (₹) <span
-                                    style="color:var(--text-muted);font-weight:400;">(auto-fetched)</span></label>
+                                at Purchase (₹)
+                                <span style="color:var(--text-muted);font-weight:400;">(auto-fetched)</span></label>
                             <input type="number" id="pfTxnNav" placeholder="Fetching…" step="0.0001"
                                 oninput="recomputePfUnits()"
                                 style="width:100%;box-sizing:border-box;padding:10px 14px;background:rgba(0,0,0,0.3);border:1px solid var(--border-glass);border-radius:var(--radius-sm);color:var(--text-primary);font-size:13px;font-family:inherit;outline:none;"
@@ -672,10 +698,22 @@
                         <div>
                             <label
                                 style="font-size:12px;color:var(--text-secondary);font-weight:500;display:block;margin-bottom:6px;">Units
-                                Allotted <span
-                                    style="color:var(--text-muted);font-weight:400;">(auto-computed)</span></label>
+                                Allotted
+                                <span style="color:var(--text-muted);font-weight:400;">(auto-computed)</span></label>
                             <input type="number" id="pfTxnUnits" placeholder="Auto-calculated" step="0.0001" readonly
                                 style="width:100%;box-sizing:border-box;padding:10px 14px;background:rgba(0,0,0,0.15);border:1px solid var(--border-glass);border-radius:var(--radius-sm);color:var(--text-secondary);font-size:13px;font-family:inherit;outline:none;">
+                        </div>
+                    </div>
+
+                    <!-- SIP Preview Info (SIP only) -->
+                    <div id="pfSipPreviewRow"
+                        style="display:none;margin-bottom:24px;padding:12px 14px;background:rgba(56,189,248,0.06);border:1px solid rgba(56,189,248,0.15);border-radius:var(--radius-sm);">
+                        <div style="font-size:12px;color:var(--text-secondary);line-height:1.7;">
+                            ℹ️ The app will simulate your entire SIP history using historical NAVs from
+                            <strong>mfapi.in</strong>.
+                            Each monthly instalment will be mapped to the nearest valid trading day.<br>
+                            <span style="color:var(--text-muted);">Calculation runs on save — this may take a few
+                                seconds.</span>
                         </div>
                     </div>
 

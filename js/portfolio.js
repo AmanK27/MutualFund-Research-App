@@ -38,7 +38,12 @@ function openPortfolioTxnModal() {
     document.getElementById('pfTxnUnits').value = '';
     document.getElementById('pfTxnDate').value = new Date().toISOString().split('T')[0];
     document.getElementById('pfTxnType').value = 'buy';
+    document.getElementById('pfSipStatus').value = 'active';
+    document.getElementById('pfLastSipDate').value = '';
     document.getElementById('pfSelectedFundLabel').textContent = 'No fund selected';
+
+    // Reset dynamic UI to Lump Sum state
+    onTxnTypeChange();
 
     // Eagerly load the global fund list if not already fetched
     if (!window.allMfFunds || window.allMfFunds.length === 0) {
@@ -50,6 +55,35 @@ function openPortfolioTxnModal() {
         });
     }
 }
+
+/* ── UI State Machine ────────────────────────────────────────────── */
+function onTxnTypeChange() {
+    const type = document.getElementById('pfTxnType').value;
+    const isSip = type === 'sip';
+
+    // SIP-specific rows
+    document.getElementById('pfSipStatusRow').style.display = isSip ? 'block' : 'none';
+    document.getElementById('pfSipPreviewRow').style.display = isSip ? 'block' : 'none';
+
+    // NAV + Units only shown for Lump Sum / Sell
+    document.getElementById('pfNavUnitsRow').style.display = isSip ? 'none' : 'grid';
+
+    // Dynamic labels
+    document.getElementById('pfAmountLabel').textContent =
+        isSip ? 'Monthly SIP Amount (₹)' : 'Amount Invested (₹)';
+    document.getElementById('pfDateLabel').textContent =
+        isSip ? 'SIP Start Date' : (type === 'sell' ? 'Sell Date' : 'Transaction Date');
+
+    // Reset last SIP date row whenever type changes
+    document.getElementById('pfLastSipDateRow').style.display = 'none';
+    document.getElementById('pfSipStatus').value = 'active';
+}
+
+function onSipStatusChange() {
+    const status = document.getElementById('pfSipStatus').value;
+    document.getElementById('pfLastSipDateRow').style.display = status === 'paused' ? 'block' : 'none';
+}
+
 
 function closePortfolioTxnModal() {
     const modal = document.getElementById('portfolioTxnModal');
@@ -413,6 +447,8 @@ async function deleteTxnAndRefresh(txnId) {
 /* ── Expose to global scope ─────────────────────────────────────── */
 window.openPortfolioTxnModal = openPortfolioTxnModal;
 window.closePortfolioTxnModal = closePortfolioTxnModal;
+window.onTxnTypeChange = onTxnTypeChange;
+window.onSipStatusChange = onSipStatusChange;
 window.handlePfFundSearch = handlePfFundSearch;
 window.selectPfFund = selectPfFund;
 window.autofetchPfNav = autofetchPfNav;
