@@ -1,5 +1,9 @@
-/* ═══════════════════════════════════════════════════════════════════\n   app.js — Core App State, UI Rendering & Orchestration\n   ═══════════════════════════════════════════════════════════════════ */\n\n/* ═══════════════════════════════════════════════════════════════════
-   STATE
+/* ═══════════════════════════════════════════════════════════════════
+   app.js — Core App State, UI Rendering & Orchestration
+   ═══════════════════════════════════════════════════════════════════ */
+
+/* ═══════════════════════════════════════════════════════════════════
+
    ═══════════════════════════════════════════════════════════════════ */
 let currentFund = null;       // { meta, data } from API
 let currentCode = null;
@@ -1692,7 +1696,8 @@ function handleGuestSignIn() {
     // Mock db transactions block to let portfolio view work locally without crashing
     window.isGuestMode = true;
 }
-\nfunction handleSignOut() {
+
+function handleSignOut() {
     auth.signOut().then(function () {
         showToast('Signed out successfully', 'success');
     }).catch(function (error) {
