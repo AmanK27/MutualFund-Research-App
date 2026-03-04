@@ -713,27 +713,17 @@
                         <div
                             style="font-size:11px;font-weight:600;color:var(--accent);letter-spacing:0.05em;text-transform:uppercase;margin-bottom:12px;">
                             📈 Step-Up Configuration</div>
-                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
-                            <div>
-                                <label
-                                    style="font-size:12px;color:var(--text-secondary);font-weight:500;display:block;margin-bottom:6px;">Step-Up
-                                    Amount (₹)
-                                    <span style="color:var(--text-muted);font-weight:400;">per interval</span>
-                                </label>
-                                <input type="number" id="pfStepUpAmount" placeholder="e.g. 1000" min="0"
-                                    style="width:100%;box-sizing:border-box;padding:10px 14px;background:rgba(0,0,0,0.3);border:1px solid var(--border-glass);border-radius:var(--radius-sm);color:var(--text-primary);font-size:13px;font-family:inherit;outline:none;"
-                                    onfocus="this.style.borderColor='var(--accent)'"
-                                    onblur="this.style.borderColor='var(--border-glass)'">
-                            </div>
-                            <div>
-                                <label
-                                    style="font-size:12px;color:var(--text-secondary);font-weight:500;display:block;margin-bottom:6px;">Step-Up
-                                    Start Date</label>
-                                <input type="date" id="pfStepUpStartDate"
-                                    style="width:100%;box-sizing:border-box;padding:10px 14px;background:rgba(0,0,0,0.3);border:1px solid var(--border-glass);border-radius:var(--radius-sm);color:var(--text-primary);font-size:13px;font-family:inherit;outline:none;"
-                                    onfocus="this.style.borderColor='var(--accent)'"
-                                    onblur="this.style.borderColor='var(--border-glass)'">
-                            </div>
+                        <div style="margin-bottom:12px;">
+                            <label
+                                style="font-size:12px;color:var(--text-secondary);font-weight:500;display:block;margin-bottom:6px;">Step-Up
+                                Amount (₹)
+                                <span style="color:var(--text-muted);font-weight:400;">added per interval from SIP
+                                    start</span>
+                            </label>
+                            <input type="number" id="pfStepUpAmount" placeholder="e.g. 1000" min="0"
+                                style="width:100%;box-sizing:border-box;padding:10px 14px;background:rgba(0,0,0,0.3);border:1px solid var(--border-glass);border-radius:var(--radius-sm);color:var(--text-primary);font-size:13px;font-family:inherit;outline:none;"
+                                onfocus="this.style.borderColor='var(--accent)'"
+                                onblur="this.style.borderColor='var(--border-glass)'">
                         </div>
                         <div>
                             <label
