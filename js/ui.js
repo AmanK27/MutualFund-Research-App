@@ -1,0 +1,1 @@
+/* ui.js - Reserved for future isolated UI components. Current rendering logic resides in app.js for state access. */\n
