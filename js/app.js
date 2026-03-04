@@ -14,8 +14,8 @@ const STORAGE_KEY = 'mf_watchlist';
 
 /* --- Compare State --- */
 let compareState = {
-    fundA: { meta: null, data: [], advanced: null },
-    fundB: { meta: null, data: [], advanced: null },
+    fundA: { meta: null, data: [], portfolio: {}, risk: {} },
+    fundB: { meta: null, data: [], portfolio: {}, risk: {} },
     activeTab: 'returns'
 };
 
@@ -31,46 +31,24 @@ const COMPARE_ROWS = {
         { label: '2 Years', period: 2 },
         { label: '3 Years', period: 3 },
         { label: '5 Years', period: 5 },
-        { label: '7 Years', period: 7 },
         { label: '10 Years', period: 10 }
     ],
     risk: [
-        { label: 'Mean (%)', key: 'mean' },
-        { label: 'Std Dev (%)', key: 'standard_deviation' },
+        { label: 'Volatility', key: 'volatility' },
         { label: 'Sharpe', key: 'sharpe' },
         { label: 'Sortino', key: 'sortino' },
         { label: 'Beta', key: 'beta' },
         { label: 'Alpha', key: 'alpha' }
     ],
     assets: [
-        { label: 'Equity', key: 'EQUITY' },
-        { label: 'Debt', key: 'DEBT' },
-        { label: 'Cash & Cash Eq.', key: 'CASH' },
-        { label: 'Commodities', key: 'COMMODITY' }
-    ],
-    ratings: [
-        { label: 'AAA', key: 'AAA' },
-        { label: 'SOV', key: 'SOV' },
-        { label: 'Cash Equivalent', key: 'Cash Equivalent' },
-        { label: 'Unrated / Others', key: 'Unrated' }
-    ],
-    holdings: [
-        { label: 'Number of Securities', key: 'holdings_count' },
-        { label: 'Top 5 Concentration (%)', key: 'top_5_concentration' },
-        { label: 'Top 10 Concentration (%)', key: 'top_10_concentration' },
-        { label: 'Modified Duration (Yrs)', key: 'modified_duration' },
-        { label: 'Average Maturity (Yrs)', key: 'avg_maturity' },
-        { label: 'Yield to Maturity (%)', key: 'ytm' }
+        { label: 'Equity (%)', key: 'equity_percentage' },
+        { label: 'Debt (%)', key: 'debt_percentage' },
+        { label: 'Cash & Cash Eq. (%)', key: 'cash_percentage' }
     ],
     details: [
-        { label: 'Minimum Investment', key: 'minInvestment' },
-        { label: 'Min Addl Investment', key: 'minAdditionalInvestment' },
-        { label: 'Min SIP', key: 'minSipInvestment' },
-        { label: 'Min Withdrawal', key: 'minWithdrawal' },
-        { label: 'Fund House', key: 'fundHouse' },
-        { label: 'Type', key: 'schemeType' },
-        { label: 'Risk Grade', key: 'riskGrade' },
-        { label: 'Return Grade', key: 'returnGrade' }
+        { label: 'AUM', key: 'aum', type: 'currency' },
+        { label: 'Expense Ratio (%)', key: 'expense_ratio' },
+        { label: 'Exit Load', key: 'exit_load' }
     ]
 };
 
@@ -2103,24 +2081,17 @@ document.getElementById('runCompareBtn').addEventListener('click', async () => {
     document.getElementById('compareLoadingState').style.display = 'block';
 
     try {
-        const [rawA, rawB] = await Promise.all([
-            fetchFundData(codeA),
-            fetchFundData(codeB)
+        const [fundA, fundB] = await Promise.all([
+            aggregateFundDetails(codeA, inputA),
+            aggregateFundDetails(codeB, inputB)
         ]);
 
-        compareState.fundA.meta = rawA.meta;
-        compareState.fundA.data = prepareNavData(rawA.data);
-        compareState.fundB.meta = rawB.meta;
-        compareState.fundB.data = prepareNavData(rawB.data);
+        if (!fundA || !fundB) {
+            throw new Error("Failed to load aggregated fund details.");
+        }
 
-        // Fetch advanced Groww data in parallel
-        const [advA, advB] = await Promise.all([
-            fetchAdvancedFundData(rawA.meta.scheme_name),
-            fetchAdvancedFundData(rawB.meta.scheme_name)
-        ]);
-
-        compareState.fundA.advanced = advA;
-        compareState.fundB.advanced = advB;
+        compareState.fundA = fundA;
+        compareState.fundB = fundB;
 
         renderCompareChart();
         renderCompareTable(); // Initial render for active tab (defaults to returns)
@@ -2174,30 +2145,22 @@ function renderCompareTable() {
             valA = formatPercent(valA);
             valB = formatPercent(valB);
         } else if (compareState.activeTab === 'risk') {
-            const riskA = compareState.fundA.advanced?.riskStats || {};
-            const riskB = compareState.fundB.advanced?.riskStats || {};
-            valA = formatCompareData(riskA[row.key]);
-            valB = formatCompareData(riskB[row.key]);
+            valA = formatCompareData(compareState.fundA.risk?.[row.key]);
+            valB = formatCompareData(compareState.fundB.risk?.[row.key]);
         } else if (compareState.activeTab === 'assets') {
-            const assetsA = compareState.fundA.advanced?.assetAllocation || [];
-            const assetsB = compareState.fundB.advanced?.assetAllocation || [];
-            const findAsset = (list, key) => list.find(a => a.asset_class === key)?.allocation;
-            valA = formatCompareData(findAsset(assetsA, row.key), '%');
-            valB = formatCompareData(findAsset(assetsB, row.key), '%');
-        } else if (compareState.activeTab === 'ratings') {
-            const ratingsA = compareState.fundA.advanced?.ratingDistribution || [];
-            const ratingsB = compareState.fundB.advanced?.ratingDistribution || [];
-            const findRating = (list, key) => list.find(r => r.rating === key)?.allocation;
-            valA = formatCompareData(findRating(ratingsA, row.key), '%');
-            valB = formatCompareData(findRating(ratingsB, row.key), '%');
-        } else if (compareState.activeTab === 'holdings') {
-            const statsA = compareState.fundA.advanced?.details?.portfolio_stats || {};
-            const statsB = compareState.fundB.advanced?.details?.portfolio_stats || {};
-            valA = formatCompareData(statsA[row.key] || compareState.fundA.advanced?.details?.[row.key]);
-            valB = formatCompareData(statsB[row.key] || compareState.fundB.advanced?.details?.[row.key]);
+            valA = formatCompareData(compareState.fundA.portfolio?.[row.key], '%');
+            valB = formatCompareData(compareState.fundB.portfolio?.[row.key], '%');
         } else if (compareState.activeTab === 'details') {
-            valA = formatCompareData(compareState.fundA.advanced?.[row.key]);
-            valB = formatCompareData(compareState.fundB.advanced?.[row.key]);
+            if (row.type === 'currency' && compareState.fundA.portfolio?.[row.key]) {
+                valA = '₹' + compareState.fundA.portfolio[row.key] + ' Cr';
+            } else {
+                valA = formatCompareData(compareState.fundA.portfolio?.[row.key]);
+            }
+            if (row.type === 'currency' && compareState.fundB.portfolio?.[row.key]) {
+                valB = '₹' + compareState.fundB.portfolio[row.key] + ' Cr';
+            } else {
+                valB = formatCompareData(compareState.fundB.portfolio?.[row.key]);
+            }
         }
 
         return `<tr>
@@ -2209,27 +2172,31 @@ function renderCompareTable() {
 
     // Special Case: Top 10 Holdings Section
     if (compareState.activeTab === 'holdings') {
-        const holdingsA = (compareState.fundA.advanced?.holdings || []).slice(0, 10);
-        const holdingsB = (compareState.fundB.advanced?.holdings || []).slice(0, 10);
+        const holdingsA = (compareState.fundA.portfolio?.holdings || []).slice(0, 10);
+        const holdingsB = (compareState.fundB.portfolio?.holdings || []).slice(0, 10);
 
-        tbody.innerHTML += `
-            <tr class="sub-header">
-                <td colspan="3">Top 10 Holdings</td>
-            </tr>
-        `;
-
-        for (let i = 0; i < 10; i++) {
-            const hA = holdingsA[i];
-            const hB = holdingsB[i];
-            if (!hA && !hB) break;
-
+        if (holdingsA.length > 0 || holdingsB.length > 0) {
             tbody.innerHTML += `
-                <tr>
-                    <td>Asset #${i + 1}</td>
-                    <td>${hA ? `${hA.company_name} <br><small style="color:var(--text-muted)">${hA.corpus_per}%</small>` : '-'}</td>
-                    <td>${hB ? `${hB.company_name} <br><small style="color:var(--text-muted)">${hB.corpus_per}%</small>` : '-'}</td>
+                <tr class="sub-header">
+                    <td colspan="3">Top 10 Holdings</td>
                 </tr>
             `;
+
+            for (let i = 0; i < 10; i++) {
+                const hA = holdingsA[i];
+                const hB = holdingsB[i];
+                if (!hA && !hB) break;
+
+                tbody.innerHTML += `
+                    <tr>
+                        <td>Asset #${i + 1}</td>
+                        <td>${hA ? `${hA.company_name || hA.name || '-'} <br><small style="color:var(--text-muted)">${hA.corpus_per || hA.weight || hA.asset_percentage || '-'}%</small>` : '-'}</td>
+                        <td>${hB ? `${hB.company_name || hB.name || '-'} <br><small style="color:var(--text-muted)">${hB.corpus_per || hB.weight || hB.asset_percentage || '-'}%</small>` : '-'}</td>
+                    </tr>
+                `;
+            }
+        } else {
+            tbody.innerHTML = `<tr><td colspan="3" style="text-align:center;color:var(--text-muted);padding:32px;">No holding data available from upstream API</td></tr>`;
         }
     }
 }
