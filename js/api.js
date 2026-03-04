@@ -350,15 +350,22 @@ async function getPeerRanking(categoryString, currentSchemeCode) {
 async function resolveKuveraName(cleanFundName) {
     try {
         const query = encodeURIComponent(cleanFundName);
+        console.log(`[Diagnostic] resolveKuveraName: Searching Kuvera for "${cleanFundName}"`);
         const proxyUrl = `https://corsproxy.io/?url=${encodeURIComponent('https://api.kuvera.in/api/v3/funds/search.json?q=' + query)}`;
 
         const res = await fetch(proxyUrl);
-        if (!res.ok) return null;
+        if (!res.ok) {
+            console.error(`[Diagnostic] resolveKuveraName: Kuvera search failed with status ${res.status}`);
+            return null;
+        }
 
         const data = await res.json();
+        console.log(`[Diagnostic] resolveKuveraName: Kuvera search response length: ${data ? data.length : 0}`);
         if (data && data.length > 0 && data[0].isin) {
+            console.log(`[Diagnostic] resolveKuveraName: Resolved to ISIN: ${data[0].isin}`);
             return data[0].isin;
         }
+        console.warn(`[Diagnostic] resolveKuveraName: No ISIN found for "${cleanFundName}"`);
         return null;
     } catch (e) {
         console.warn(`Kuvera ISIN resolution failed for ${cleanFundName}:`, e);
@@ -380,6 +387,7 @@ async function resolveGrowwSlug(cleanFundName) {
         .replace(/[^a-z0-9]+/g, '-')
         .replace(/(^-|-$)/g, '');
 
+    console.log(`[Diagnostic] resolveGrowwSlug: Generated slug "${slug}" for "${cleanFundName}"`);
     return slug;
 }
 
@@ -389,10 +397,15 @@ async function resolveGrowwSlug(cleanFundName) {
 async function fetchKuveraDetails(isin) {
     if (!isin) return null;
     try {
+        console.log(`[Diagnostic] fetchKuveraDetails: Fetching profile for ISIN: ${isin}`);
         const proxyUrl = `https://corsproxy.io/?url=${encodeURIComponent('https://api.kuvera.in/api/v3/funds/' + isin + '.json')}`;
         const res = await fetch(proxyUrl);
-        if (!res.ok) return null;
+        if (!res.ok) {
+            console.error(`[Diagnostic] fetchKuveraDetails: Request failed with status ${res.status}`);
+            return null;
+        }
         const data = await res.json();
+        console.log(`[Diagnostic] fetchKuveraDetails: Raw Payload for ${isin}:`, data);
         return data; // Extract holdings, sectors, volatility, sharpe, sortino, alpha, beta later
     } catch (e) {
         console.warn(`Kuvera detail fetch failed for ISIN ${isin}:`, e);
@@ -406,10 +419,15 @@ async function fetchKuveraDetails(isin) {
 async function fetchGrowwDetails(slug) {
     if (!slug) return null;
     try {
+        console.log(`[Diagnostic] fetchGrowwDetails: Fetching data for slug: ${slug}`);
         const proxyUrl = `https://corsproxy.io/?url=${encodeURIComponent('https://groww.in/v1/api/data/mf/web/v3/scheme/search/' + slug)}`;
         const res = await fetch(proxyUrl);
-        if (!res.ok) return null;
+        if (!res.ok) {
+            console.error(`[Diagnostic] fetchGrowwDetails: Request failed with status ${res.status}`);
+            return null;
+        }
         const data = await res.json();
+        console.log(`[Diagnostic] fetchGrowwDetails: Raw Payload for ${slug}:`, data);
         return data; // Extract aum, expense_ratio, exit_load later
     } catch (e) {
         console.warn(`Groww detail fetch failed for slug ${slug}:`, e);
