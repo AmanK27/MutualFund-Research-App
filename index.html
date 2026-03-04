@@ -3536,7 +3536,77 @@
             document.querySelectorAll('.cat-sub-item').forEach(el => el.classList.remove('active'));
         }
 
+        /* ── UI State Reset Helpers ──────────────────────────────── */
+        function resetDashboardState() {
+            // Hide and clear the async-loaded sections so they don't
+            // show stale data if the user loads a different fund later.
+            const analysisCard = document.getElementById('analysisCard');
+            if (analysisCard) {
+                analysisCard.style.display = 'none';
+                const aum = document.getElementById('fundAUM');
+                const exp = document.getElementById('fundExpense');
+                const exit = document.getElementById('fundExit');
+                const tbody = document.getElementById('holdingsBody');
+                if (aum) aum.textContent = '—';
+                if (exp) exp.textContent = '—';
+                if (exit) exit.textContent = '—';
+                if (tbody) tbody.innerHTML = '';
+            }
+
+            const peerCard = document.getElementById('peerRankingCard');
+            if (peerCard) {
+                peerCard.style.display = 'none';
+                const list = document.getElementById('peerRankingList');
+                if (list) list.innerHTML = '';
+            }
+
+            // Destroy the NAV chart to avoid memory leaks / stale renders
+            if (navChart) {
+                navChart.destroy();
+                navChart = null;
+            }
+        }
+
+        function resetCompareState() {
+            // Clear all compare inputs and hidden code fields
+            const inputA = document.getElementById('compareInputA');
+            const inputB = document.getElementById('compareInputB');
+            const codeA = document.getElementById('compareCodeA');
+            const codeB = document.getElementById('compareCodeB');
+            const listA = document.getElementById('compareResultsA');
+            const listB = document.getElementById('compareResultsB');
+
+            if (inputA) inputA.value = '';
+            if (inputB) inputB.value = '';
+            if (codeA) codeA.value = '';
+            if (codeB) codeB.value = '';
+            if (listA) listA.innerHTML = '';
+            if (listB) listB.innerHTML = '';
+
+            // Hide results and loading indicator
+            const results = document.getElementById('compareResults');
+            const loading = document.getElementById('compareLoadingState');
+            if (results) results.style.display = 'none';
+            if (loading) loading.style.display = 'none';
+
+            // Destroy the compare chart instance
+            if (compareChartInstance) {
+                compareChartInstance.destroy();
+                compareChartInstance = null;
+            }
+
+            // Reset compare data
+            compareDataA = [];
+            compareDataB = [];
+        }
+
         function showState(state) {
+            // When navigating away from the fund dashboard, clear stale async data
+            const currentlyOnDashboard = document.getElementById('fundDashboard').style.display === 'block';
+            if (currentlyOnDashboard && state !== 'dashboard') {
+                resetDashboardState();
+            }
+
             document.getElementById('welcomeState').style.display = state === 'welcome' ? 'block' : 'none';
             document.getElementById('loadingState').style.display = state === 'loading' ? 'block' : 'none';
             document.getElementById('fundDashboard').style.display = state === 'dashboard' ? 'block' : 'none';
@@ -5362,6 +5432,7 @@
         let currentCompareRange = 'MAX';
 
         function loadCompareView() {
+            resetCompareState();
             showState('compare');
         }
 
