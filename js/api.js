@@ -338,3 +338,81 @@ async function getPeerRanking(categoryString, currentSchemeCode) {
     validRankings.sort((a, b) => b.cagr1y - a.cagr1y);
     return validRankings;
 }
+
+/* ═══════════════════════════════════════════════════════════════════
+   API Waterfall: Platform ID Resolvers & Deep Data Fetchers
+   ═══════════════════════════════════════════════════════════════════ */
+
+/**
+ * Hits Kuvera's search API via proxy to resolve a clean fund name to an ISIN.
+ * Defaults to the top matching result.
+ */
+async function resolveKuveraName(cleanFundName) {
+    try {
+        const query = encodeURIComponent(cleanFundName);
+        const proxyUrl = `https://corsproxy.io/?url=${encodeURIComponent('https://api.kuvera.in/api/v3/funds/search.json?q=' + query)}`;
+
+        const res = await fetch(proxyUrl);
+        if (!res.ok) return null;
+
+        const data = await res.json();
+        if (data && data.length > 0 && data[0].isin) {
+            return data[0].isin;
+        }
+        return null;
+    } catch (e) {
+        console.warn(`Kuvera ISIN resolution failed for ${cleanFundName}:`, e);
+        return null;
+    }
+}
+
+/**
+ * Standardizes a mutual fund name into the Groww slug format.
+ * (e.g., "Axis Midcap Fund Direct Growth" -> "axis-midcap-fund-direct-growth")
+ */
+async function resolveGrowwSlug(cleanFundName) {
+    if (!cleanFundName) return null;
+
+    // Groww's slug builder typically lowers case, replaces spaces/special chars with hyphens, 
+    // and collapses multiple hyphens.
+    const slug = cleanFundName
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/(^-|-$)/g, '');
+
+    return slug;
+}
+
+/**
+ * Fetches deep metrics from Kuvera using ISIN.
+ */
+async function fetchKuveraDetails(isin) {
+    if (!isin) return null;
+    try {
+        const proxyUrl = `https://corsproxy.io/?url=${encodeURIComponent('https://api.kuvera.in/api/v3/funds/' + isin + '.json')}`;
+        const res = await fetch(proxyUrl);
+        if (!res.ok) return null;
+        const data = await res.json();
+        return data; // Extract holdings, sectors, volatility, sharpe, sortino, alpha, beta later
+    } catch (e) {
+        console.warn(`Kuvera detail fetch failed for ISIN ${isin}:`, e);
+        return null;
+    }
+}
+
+/**
+ * Fetches deep metrics from Groww using Slug.
+ */
+async function fetchGrowwDetails(slug) {
+    if (!slug) return null;
+    try {
+        const proxyUrl = `https://corsproxy.io/?url=${encodeURIComponent('https://groww.in/v1/api/data/mf/web/v3/scheme/search/' + slug)}`;
+        const res = await fetch(proxyUrl);
+        if (!res.ok) return null;
+        const data = await res.json();
+        return data; // Extract aum, expense_ratio, exit_load later
+    } catch (e) {
+        console.warn(`Groww detail fetch failed for slug ${slug}:`, e);
+        return null;
+    }
+}
