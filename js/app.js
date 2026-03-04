@@ -54,6 +54,14 @@ const COMPARE_ROWS = {
         { label: 'Cash Equivalent', key: 'Cash Equivalent' },
         { label: 'Unrated / Others', key: 'Unrated' }
     ],
+    holdings: [
+        { label: 'Number of Securities', key: 'holdings_count' },
+        { label: 'Top 5 Concentration (%)', key: 'top_5_concentration' },
+        { label: 'Top 10 Concentration (%)', key: 'top_10_concentration' },
+        { label: 'Modified Duration (Yrs)', key: 'modified_duration' },
+        { label: 'Average Maturity (Yrs)', key: 'avg_maturity' },
+        { label: 'Yield to Maturity (%)', key: 'ytm' }
+    ],
     details: [
         { label: 'Minimum Investment', key: 'minInvestment' },
         { label: 'Min Addl Investment', key: 'minAdditionalInvestment' },
@@ -2182,6 +2190,11 @@ function renderCompareTable() {
             const findRating = (list, key) => list.find(r => r.rating === key)?.allocation;
             valA = formatCompareData(findRating(ratingsA, row.key), '%');
             valB = formatCompareData(findRating(ratingsB, row.key), '%');
+        } else if (compareState.activeTab === 'holdings') {
+            const statsA = compareState.fundA.advanced?.details?.portfolio_stats || {};
+            const statsB = compareState.fundB.advanced?.details?.portfolio_stats || {};
+            valA = formatCompareData(statsA[row.key] || compareState.fundA.advanced?.details?.[row.key]);
+            valB = formatCompareData(statsB[row.key] || compareState.fundB.advanced?.details?.[row.key]);
         } else if (compareState.activeTab === 'details') {
             valA = formatCompareData(compareState.fundA.advanced?.[row.key]);
             valB = formatCompareData(compareState.fundB.advanced?.[row.key]);
@@ -2193,6 +2206,32 @@ function renderCompareTable() {
             <td class="${classB}">${valB}</td>
         </tr>`;
     }).join('');
+
+    // Special Case: Top 10 Holdings Section
+    if (compareState.activeTab === 'holdings') {
+        const holdingsA = (compareState.fundA.advanced?.holdings || []).slice(0, 10);
+        const holdingsB = (compareState.fundB.advanced?.holdings || []).slice(0, 10);
+
+        tbody.innerHTML += `
+            <tr class="sub-header">
+                <td colspan="3">Top 10 Holdings</td>
+            </tr>
+        `;
+
+        for (let i = 0; i < 10; i++) {
+            const hA = holdingsA[i];
+            const hB = holdingsB[i];
+            if (!hA && !hB) break;
+
+            tbody.innerHTML += `
+                <tr>
+                    <td>Asset #${i + 1}</td>
+                    <td>${hA ? `${hA.company_name} <br><small style="color:var(--text-muted)">${hA.corpus_per}%</small>` : '-'}</td>
+                    <td>${hB ? `${hB.company_name} <br><small style="color:var(--text-muted)">${hB.corpus_per}%</small>` : '-'}</td>
+                </tr>
+            `;
+        }
+    }
 }
 
 function calculateTrailingReturn(data, period) {
