@@ -34,7 +34,7 @@ This application is designed to be a **personal mutual fund research workbench**
 │                                                        │
 │  ┌────────────┐  ┌───────────┐  ┌─────────────────┐    │
 │  │ index.html │  │ Chart.js  │  │ Firebase SDK    │    │
-│  │ (Dashboard)│  │ (Visuals) │  │ (Auth & Store)  │    │
+│  │ (JS/CSS)   │  │ (Visuals) │  │ (Auth & Store)  │    │
 │  └──────┬─────┘  └─────┬─────┘  └───────┬─────────┘    │
 │         │              │                │              │
 └─────────┼──────────────┼────────────────┼──────────────┘
@@ -83,11 +83,15 @@ Simply open the live URL on any modern desktop or mobile browser.
 
 ```
 MutualFund Research App/
-├── index.html          # The single complete application logic, styles, and view
+├── index.html          # Main HTML entrypoint
+├── css/
+│   └── styles.css      # Extracted styling and glassmorphism UI variables
+├── js/
+│   ├── app.js          # Core logic, state management, and orchestration
+│   ├── api.js          # Network requests (AMFI, Groww, etc.)
+│   └── utils.js        # Math and formatting helper functions
 ├── README.md           # This architecture summary
 ├── package.json        # Dependencies tracking (Metadata mapping)
-├── groww_search.json   # Base search matrix for autocomplete mapping
-├── groww_sample.json   # Secondary structural references
 └── changelog/          # Iterative version notes and history
 ```
 

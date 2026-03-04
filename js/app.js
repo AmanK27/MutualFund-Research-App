@@ -650,15 +650,28 @@ async function loadFund(code) {
                 </td></tr>`;
             _analysisCard.style.display = 'block';
         }
-        (async () => {
+        // Store these in global state or data attributes so the retry button can use them
+        window._currentFundForRetry = data.meta.scheme_name;
+
+        // Extract advanced data fetch into a reusable function attached to the window
+        // so the inline onclick handler can call it.
+        window.retryHoldingsFetch = async function () {
             const MAX_ATTEMPTS = 3;
             const RETRY_DELAY_MS = 1500;
             let advancedData = null;
+
+            if (_holdingsBody) {
+                _holdingsBody.innerHTML = `
+                    <tr><td colspan="3" style="text-align:center; color: var(--text-muted); padding: 24px;">
+                        <span style="display:inline-block; animation: spin 1s linear infinite; margin-right:8px;">⟳</span>
+                        Fetching data...
+                    </td></tr>`;
+            }
+
             for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-                advancedData = await fetchAdvancedFundData(data.meta.scheme_name);
+                advancedData = await fetchAdvancedFundData(window._currentFundForRetry);
                 if (advancedData) break;
                 if (attempt < MAX_ATTEMPTS) {
-                    // Progressive back-off before retry
                     if (_holdingsBody) {
                         _holdingsBody.innerHTML = `
                             <tr><td colspan="3" style="text-align:center; color: var(--text-muted); padding: 24px;">
@@ -669,8 +682,29 @@ async function loadFund(code) {
                     await new Promise(resolve => setTimeout(resolve, RETRY_DELAY_MS * attempt));
                 }
             }
-            renderAdvancedData(advancedData);
-        })();
+
+            if (advancedData) {
+                renderAdvancedData(advancedData);
+            } else {
+                if (_holdingsBody) {
+                    _holdingsBody.innerHTML = `
+                        <tr><td colspan="3" style="text-align:center; padding: 24px;">
+                            <div style="color:var(--text-muted);font-size:13px;margin-bottom:8px;">Failed to load holdings.</div>
+                            <button onclick="window.retryHoldingsFetch()" 
+                                style="padding:4px 12px; font-size:12px; background:transparent; border:1px solid var(--border); color:var(--text-secondary); border-radius:4px; cursor:pointer;">
+                                Retry
+                            </button>
+                        </td></tr>`;
+                }
+                const elAum = document.getElementById('fundAUM');
+                const elExp = document.getElementById('fundExpense');
+                if (elAum) elAum.textContent = '—';
+                if (elExp) elExp.textContent = '—';
+            }
+        };
+
+        // Initiate the first fetch
+        window.retryHoldingsFetch();
 
     } catch (err) {
         showState('welcome');
@@ -1145,10 +1179,10 @@ async function refreshLiveData(btn) {
             // with freshly fetched LIVE_FUNDS data
             currentTableData = (window.LIVE_FUNDS[currentSubcategory] || []).map(f => ({ ...f }));
             renderTable();
-        } else if (welcomeState && welcomeState.style.display !== 'none') {
-            // Re-run top performers on the welcome screen
-            loadTopPerformers(topFundsCategory, topFundsHorizon);
         }
+        // If on welcomeState, we intentionally do NOT call loadTopPerformers here 
+        // because the user reported it causes the UI to unintentionally jump to Equity Funds 
+        // when they just meant to refresh Live AMFI data. There is a separate refresh button for Top Funds.
     } catch (error) {
         console.error(error);
         btn.innerHTML = '✕ Error';
@@ -1633,7 +1667,32 @@ function handleGoogleSignIn() {
 }
 
 /* ── Sign Out ──────────────────────────────────────────────────── */
-function handleSignOut() {
+
+/* ── Guest Sign-In (Dev Bypass) ────────────────────────────────── */
+function handleGuestSignIn() {
+    console.log("Entering Guest Mode");
+    currentUser = {
+        uid: "guest-user-123",
+        displayName: "Guest Tester",
+        email: "guest@localhost",
+        photoURL: ""
+    };
+
+    document.getElementById('loginScreen').style.display = 'none';
+    document.getElementById('app').style.display = 'flex';
+
+    // Update sidebar profile
+    document.getElementById('userAvatar').src = '';
+    document.getElementById('userName').textContent = 'Guest Tester';
+    document.getElementById('userEmail').textContent = 'guest@localhost';
+    document.getElementById('userProfile').style.display = 'flex';
+
+    showToast("Signed in as Guest (Dev Mode)", "success");
+
+    // Mock db transactions block to let portfolio view work locally without crashing
+    window.isGuestMode = true;
+}
+\nfunction handleSignOut() {
     auth.signOut().then(function () {
         showToast('Signed out successfully', 'success');
     }).catch(function (error) {
@@ -1680,6 +1739,9 @@ auth.onAuthStateChanged(function (user) {
     }
 });
 
+
+let guestTxns = [];
+
 /* ── Firestore Transaction Helpers ─────────────────────────────── */
 /**
  * Add a portfolio transaction
@@ -1687,7 +1749,27 @@ auth.onAuthStateChanged(function (user) {
  */
 function addTransaction(txn) {
     if (!currentUser) return Promise.reject(new Error('Not authenticated'));
+
+    if (currentUser.uid === "guest-user-123") {
+        return new Promise(resolve => {
+            const newTxn = {
+                id: "guest-txn-" + Date.now(),
+                type: txn.type,
+                schemeCode: txn.schemeCode,
+                schemeName: txn.schemeName || '',
+                amount: Number(txn.amount),
+                units: Number(txn.units),
+                navAtDate: Number(txn.navAtDate) || 0,
+                date: { toDate: () => new Date(txn.date) },
+                createdAt: { toDate: () => new Date() }
+            };
+            guestTxns.push(newTxn);
+            setTimeout(resolve, 300);
+        });
+    }
+
     return db.collection('users').doc(currentUser.uid)
+
         .collection('transactions').add({
             type: txn.type,              // 'buy' | 'sell' | 'sip'
             schemeCode: txn.schemeCode,
@@ -1700,13 +1782,20 @@ function addTransaction(txn) {
         });
 }
 
+
 /**
  * Get all transactions for the current user
  * @returns {Promise<Array>}
  */
 function getTransactions() {
     if (!currentUser) return Promise.reject(new Error('Not authenticated'));
+
+    if (currentUser.uid === "guest-user-123") {
+        return Promise.resolve([...guestTxns].reverse());
+    }
+
     return db.collection('users').doc(currentUser.uid)
+
         .collection('transactions')
         .orderBy('date', 'desc')
         .get()
@@ -1717,13 +1806,21 @@ function getTransactions() {
         });
 }
 
+
 /**
  * Delete a transaction
  * @param {string} txnId
  */
 function deleteTransaction(txnId) {
     if (!currentUser) return Promise.reject(new Error('Not authenticated'));
+
+    if (currentUser.uid === "guest-user-123") {
+        guestTxns = guestTxns.filter(t => t.id !== txnId);
+        return Promise.resolve();
+    }
+
     return db.collection('users').doc(currentUser.uid)
+
         .collection('transactions').doc(txnId).delete();
 }
 
