@@ -433,21 +433,10 @@ async function aggregateFundDetails(schemeCode, cleanFundName) {
         return null; // Fatal error, can't proceed without core data
     }
 
-    // Fallback if name isn't provided (try to get from metadata)
-    const searchName = cleanFundName || (baseData && baseData.meta ? baseData.meta.scheme_name : "");
-
-    // Step B & C: Concurrently resolve IDs and fetch deep data
-    const [kuveraData, growwData] = await Promise.all([
-        resolveKuveraName(searchName).then(isin => fetchKuveraDetails(isin)),
-        resolveGrowwSlug(searchName).then(slug => fetchGrowwDetails(slug))
-    ]);
-
     // Standardized Schema Definition
     const fund = {
         meta: baseData.meta || {},
         data: baseData.data ? prepareNavData(baseData.data) : [],
-
-        // Deep Metrics (Coalesced and strict null defaults)
         portfolio: {
             aum: null,
             expense_ratio: null,
@@ -467,7 +456,12 @@ async function aggregateFundDetails(schemeCode, cleanFundName) {
         }
     };
 
-    // Step D: Map Kuvera Data
+    const searchName = cleanFundName || (baseData && baseData.meta ? baseData.meta.scheme_name : "");
+
+    // Step 1: primary Fetch (Kuvera)
+    const isin = await resolveKuveraName(searchName);
+    const kuveraData = await fetchKuveraDetails(isin);
+
     if (kuveraData && kuveraData.length > 0) {
         const kFund = kuveraData[0];
 
@@ -479,39 +473,43 @@ async function aggregateFundDetails(schemeCode, cleanFundName) {
         if (kFund.beta !== undefined) fund.risk.beta = kFund.beta;
 
         // Portfolio Arrays
-        if (kFund.portfolio) {
-            fund.portfolio.holdings = kFund.portfolio || [];
-        }
-        if (kFund.sectors) {
-            fund.portfolio.sectors = kFund.sectors || [];
-        }
+        if (kFund.portfolio) fund.portfolio.holdings = kFund.portfolio || [];
+        if (kFund.sectors) fund.portfolio.sectors = kFund.sectors || [];
 
-        // Asset Allocation (Kuvera often holds this in asset_allocations array or similar)
+        // Asset Allocation
         if (kFund.asset_allocation) {
             fund.portfolio.equity_percentage = kFund.asset_allocation.equity || null;
             fund.portfolio.debt_percentage = kFund.asset_allocation.debt || null;
             fund.portfolio.cash_percentage = kFund.asset_allocation.cash || null;
         }
+
+        // Extract AUM and Expense Ratio if Kuvera provides them (sometimes at root)
+        if (kFund.aum !== undefined) fund.portfolio.aum = kFund.aum;
+        if (kFund.expense_ratio !== undefined) fund.portfolio.expense_ratio = kFund.expense_ratio;
     }
 
-    // Step D: Map Groww Data
-    if (growwData && growwData.aum_details) {
-        fund.portfolio.aum = growwData.aum_details.aum || null;
-    }
-    if (growwData && growwData.expense_ratio !== undefined) {
-        fund.portfolio.expense_ratio = growwData.expense_ratio || null;
-    }
-    if (growwData && growwData.exit_load_text) {
-        fund.portfolio.exit_load = growwData.exit_load_text || null;
-    }
+    // Step 2: Conditional Groww Fallback
+    // Only query Groww if Kuvera missed critical core stats (AUM or Expense Ratio)
+    const needsGrowwAum = (fund.portfolio.aum === null || fund.portfolio.aum === undefined || fund.portfolio.aum === "-");
+    const needsGrowwExpense = (fund.portfolio.expense_ratio === null || fund.portfolio.expense_ratio === undefined || fund.portfolio.expense_ratio === "-");
 
-    // In case Groww proxy has asset allocation where Kuvera failed
-    if (growwData && growwData.asset_allocation) {
-        if (!fund.portfolio.equity_percentage && growwData.asset_allocation.equity) {
-            fund.portfolio.equity_percentage = growwData.asset_allocation.equity;
-        }
-        if (!fund.portfolio.debt_percentage && growwData.asset_allocation.debt) {
-            fund.portfolio.debt_percentage = growwData.asset_allocation.debt;
+    if (needsGrowwAum || needsGrowwExpense) {
+        console.log(`Kuvera missing AUM or Expense Ratio for ${searchName}. Triggering Groww fallback fetch.`);
+        const slug = await resolveGrowwSlug(searchName);
+        const growwData = await fetchGrowwDetails(slug);
+
+        if (growwData) {
+            // Patch ONLY missing fields
+            if (needsGrowwAum && growwData.aum_details) {
+                fund.portfolio.aum = growwData.aum_details.aum || null;
+            }
+            if (needsGrowwExpense && growwData.expense_ratio !== undefined) {
+                fund.portfolio.expense_ratio = growwData.expense_ratio || null;
+            }
+            // Exit load is usually unique to Groww in this setup, so grab it while we're here
+            if (growwData.exit_load_text) {
+                fund.portfolio.exit_load = growwData.exit_load_text || null;
+            }
         }
     }
 
