@@ -12,6 +12,60 @@ let navChart = null;
 
 const STORAGE_KEY = 'mf_watchlist';
 
+/* --- Compare State --- */
+let compareState = {
+    fundA: { meta: null, data: [], advanced: null },
+    fundB: { meta: null, data: [], advanced: null },
+    activeTab: 'returns'
+};
+
+const COMPARE_ROWS = {
+    returns: [
+        { label: 'YTD', period: 'ytd' },
+        { label: '1 Day', period: '1d' },
+        { label: '1 Week', period: '1w' },
+        { label: '1 Month', period: '1m' },
+        { label: '3 Months', period: '3m' },
+        { label: '6 Months', period: '6m' },
+        { label: '1 Year', period: 1 },
+        { label: '2 Years', period: 2 },
+        { label: '3 Years', period: 3 },
+        { label: '5 Years', period: 5 },
+        { label: '7 Years', period: 7 },
+        { label: '10 Years', period: 10 }
+    ],
+    risk: [
+        { label: 'Mean (%)', key: 'mean' },
+        { label: 'Std Dev (%)', key: 'standard_deviation' },
+        { label: 'Sharpe', key: 'sharpe' },
+        { label: 'Sortino', key: 'sortino' },
+        { label: 'Beta', key: 'beta' },
+        { label: 'Alpha', key: 'alpha' }
+    ],
+    assets: [
+        { label: 'Equity', key: 'EQUITY' },
+        { label: 'Debt', key: 'DEBT' },
+        { label: 'Cash & Cash Eq.', key: 'CASH' },
+        { label: 'Commodities', key: 'COMMODITY' }
+    ],
+    ratings: [
+        { label: 'AAA', key: 'AAA' },
+        { label: 'SOV', key: 'SOV' },
+        { label: 'Cash Equivalent', key: 'Cash Equivalent' },
+        { label: 'Unrated / Others', key: 'Unrated' }
+    ],
+    details: [
+        { label: 'Minimum Investment', key: 'minInvestment' },
+        { label: 'Min Addl Investment', key: 'minAdditionalInvestment' },
+        { label: 'Min SIP', key: 'minSipInvestment' },
+        { label: 'Min Withdrawal', key: 'minWithdrawal' },
+        { label: 'Fund House', key: 'fundHouse' },
+        { label: 'Type', key: 'schemeType' },
+        { label: 'Risk Grade', key: 'riskGrade' },
+        { label: 'Return Grade', key: 'returnGrade' }
+    ]
+};
+
 /* ═══════════════════════════════════════════════════════════════════
    1 ─ LOCAL STORAGE WATCHLIST
    ═══════════════════════════════════════════════════════════════════ */
@@ -2029,27 +2083,8 @@ document.getElementById('runCompareBtn').addEventListener('click', async () => {
     const inputA = document.getElementById('compareInputA').value.trim();
     const inputB = document.getElementById('compareInputB').value.trim();
 
-    // Fallback: If user types raw code in input, use it if hidden field is empty
     if (!codeA && /^\\d+$/.test(inputA)) codeA = inputA;
     if (!codeB && /^\\d+$/.test(inputB)) codeB = inputB;
-
-    // Advanced Fallback: If user typed text but didn't click dropdown
-    if ((!codeA && inputA) || (!codeB && inputB)) {
-        if (window.allMfFunds.length === 0) {
-            await fetchGlobalFundList();
-        }
-    }
-
-    if (!codeA && inputA && window.allMfFunds.length > 0) {
-        const q = inputA.toLowerCase().trim();
-        const m = window.allMfFunds.find(f => f.schemeName.toLowerCase() === q) || window.allMfFunds.find(f => f.schemeName.toLowerCase().includes(q));
-        if (m) codeA = m.schemeCode;
-    }
-    if (!codeB && inputB && window.allMfFunds.length > 0) {
-        const q = inputB.toLowerCase().trim();
-        const m = window.allMfFunds.find(f => f.schemeName.toLowerCase() === q) || window.allMfFunds.find(f => f.schemeName.toLowerCase().includes(q));
-        if (m) codeB = m.schemeCode;
-    }
 
     if (!codeA || !codeB) {
         showToast("Please select two funds from the search dropdown.", "error");
@@ -2060,102 +2095,152 @@ document.getElementById('runCompareBtn').addEventListener('click', async () => {
     document.getElementById('compareLoadingState').style.display = 'block';
 
     try {
-        // Fetch standard NAV data in parallel
-        const [resA, resB] = await Promise.all([
-            fetch(`https://api.mfapi.in/mf/${codeA}`).then(res => res.json()),
-            fetch(`https://api.mfapi.in/mf/${codeB}`).then(res => res.json())
+        const [rawA, rawB] = await Promise.all([
+            fetchFundData(codeA),
+            fetchFundData(codeB)
         ]);
 
-        if (!resA.data || !resB.data) throw new Error("Invalid Scheme Codes or missing data");
+        compareState.fundA.meta = rawA.meta;
+        compareState.fundA.data = prepareNavData(rawA.data);
+        compareState.fundB.meta = rawB.meta;
+        compareState.fundB.data = prepareNavData(rawB.data);
 
-        // Prepare standard Data
-        compareDataA = prepareNavData(resA.data);
-        compareDataB = prepareNavData(resB.data);
-        const metaA = resA.meta;
-        const metaB = resB.meta;
+        // Fetch advanced Groww data in parallel
+        const [advA, advB] = await Promise.all([
+            fetchAdvancedFundData(rawA.meta.scheme_name),
+            fetchAdvancedFundData(rawB.meta.scheme_name)
+        ]);
 
-        // Process Advanced Stats
-        let statsA = { expense_ratio: '-', aum: '-' };
-        let statsB = { expense_ratio: '-', aum: '-' };
-
-        // Fetch Advanced for A
-        try {
-            const searchUrlA = 'https://corsproxy.io/?url=' + encodeURIComponent('https://groww.in/v1/api/search/v3/query/global/st_p_query?page=0&query=' + encodeURIComponent(metaA.scheme_name));
-            const searchResA = await fetch(searchUrlA).then(r => r.json());
-            if (searchResA && searchResA.data && searchResA.data.content && searchResA.data.content.length > 0) {
-                const searchIdA = searchResA.data.content[0].search_id;
-                const detailUrlA = 'https://corsproxy.io/?url=' + encodeURIComponent('https://groww.in/v1/api/data/mf/web/v2/scheme/search/' + searchIdA);
-                const schemeObjA = await fetch(detailUrlA).then(r => r.json());
-                if (schemeObjA && schemeObjA.scheme_details) {
-                    statsA.expense_ratio = schemeObjA.scheme_details.expense_ratio != null ? schemeObjA.scheme_details.expense_ratio + '%' : '-';
-                    statsA.aum = schemeObjA.scheme_details.aum != null ? '₹' + schemeObjA.scheme_details.aum + ' Cr' : '-';
-                }
-            }
-        } catch (e) {
-            console.warn("Could not fetch advanced stats for Fund A", e);
-        }
-
-        // Fetch Advanced for B
-        try {
-            const searchUrlB = 'https://corsproxy.io/?url=' + encodeURIComponent('https://groww.in/v1/api/search/v3/query/global/st_p_query?page=0&query=' + encodeURIComponent(metaB.scheme_name));
-            const searchResB = await fetch(searchUrlB).then(r => r.json());
-            if (searchResB && searchResB.data && searchResB.data.content && searchResB.data.content.length > 0) {
-                const searchIdB = searchResB.data.content[0].search_id;
-                const detailUrlB = 'https://corsproxy.io/?url=' + encodeURIComponent('https://groww.in/v1/api/data/mf/web/v2/scheme/search/' + searchIdB);
-                const schemeObjB = await fetch(detailUrlB).then(r => r.json());
-                if (schemeObjB && schemeObjB.scheme_details) {
-                    statsB.expense_ratio = schemeObjB.scheme_details.expense_ratio != null ? schemeObjB.scheme_details.expense_ratio + '%' : '-';
-                    statsB.aum = schemeObjB.scheme_details.aum != null ? '₹' + schemeObjB.scheme_details.aum + ' Cr' : '-';
-                }
-            }
-        } catch (e) {
-            console.warn("Could not fetch advanced stats for Fund B", e);
-        }
-
-        populateCompareStats(metaA, compareDataA, statsA, 'A');
-        populateCompareStats(metaB, compareDataB, statsB, 'B');
+        compareState.fundA.advanced = advA;
+        compareState.fundB.advanced = advB;
 
         renderCompareChart();
+        renderCompareTable(); // Initial render for active tab (defaults to returns)
 
         document.getElementById('compareLoadingState').style.display = 'none';
         document.getElementById('compareResults').style.display = 'block';
 
     } catch (e) {
         console.error("Compare fetch error:", e);
-        showToast("Error loading comparison data. Check scheme codes.", "error");
+        showToast("Error loading comparison data.", "error");
         document.getElementById('compareLoadingState').style.display = 'none';
     }
 });
 
 function populateCompareStats(meta, data, advStats, prefix) {
-    if (data.length === 0) return;
+    // Legacy support for any existing UI elements that haven't been removed yet
+    if (!data || data.length === 0) return;
     const latest = data[data.length - 1];
-
-    document.getElementById(`compName${prefix}`).textContent = meta.scheme_name || 'Unknown Scheme';
-    document.getElementById(`compNav${prefix}`).textContent = '₹' + latest.nav.toFixed(4);
-
-    const cagr1 = getCagrForYears(data, 1);
-    const cagr3 = getCagrForYears(data, 3);
-    const cagr5 = getCagrForYears(data, 5);
-    const vol = calcVolatility(data);
-
-    const dec1 = document.getElementById(`comp1y${prefix}`);
-    const dec3 = document.getElementById(`comp3y${prefix}`);
-    const dec5 = document.getElementById(`comp5y${prefix}`);
-
-    dec1.textContent = cagr1 !== null ? formatPercent(cagr1) : '—';
-    dec1.className = 'compare-stat-value ' + (cagr1 !== null ? getPercentClass(cagr1) : '');
-
-    dec3.textContent = cagr3 !== null ? formatPercent(cagr3) : '—';
-    dec3.className = 'compare-stat-value ' + (cagr3 !== null ? getPercentClass(cagr3) : '');
-
-    dec5.textContent = cagr5 !== null ? formatPercent(cagr5) : '—';
-    dec5.className = 'compare-stat-value ' + (cagr5 !== null ? getPercentClass(cagr5) : '');
-
-    document.getElementById(`compVol${prefix}`).textContent = vol !== null ? (vol * 100).toFixed(2) + '%' : '—';
-    document.getElementById(`compExp${prefix}`).textContent = advStats.expense_ratio;
-    document.getElementById(`compAum${prefix}`).textContent = advStats.aum;
+    const nameEl = document.getElementById(`compName${prefix}`);
+    if (nameEl) nameEl.textContent = meta.scheme_name || 'Unknown Scheme';
 }
+
+/* --- Compare Table Rendering --- */
+function renderCompareTable() {
+    if (!compareState.fundA.meta || !compareState.fundB.meta) return;
+
+    const headerHeader = document.getElementById('compareTableHeader');
+    const tbody = document.getElementById('compareTableBody');
+    const tabs = document.querySelectorAll('.compare-tab');
+
+    // Update Tab UI
+    tabs.forEach(tab => {
+        tab.classList.toggle('active', tab.dataset.tab === compareState.activeTab);
+    });
+
+    // Render Headers
+    headerHeader.innerHTML = '<th></th>' +
+        `<th style="color: var(--accent);">${formatFundName(compareState.fundA.meta.scheme_name)}</th>` +
+        `<th style="color: #ec4899;">${formatFundName(compareState.fundB.meta.scheme_name)}</th>`;
+
+    const rows = COMPARE_ROWS[compareState.activeTab] || [];
+    tbody.innerHTML = rows.map(row => {
+        let valA = '-', valB = '-';
+        let classA = '', classB = '';
+
+        if (compareState.activeTab === 'returns') {
+            valA = calculateTrailingReturn(compareState.fundA.data, row.period);
+            valB = calculateTrailingReturn(compareState.fundB.data, row.period);
+            classA = getPercentClass(valA);
+            classB = getPercentClass(valB);
+            valA = formatPercent(valA);
+            valB = formatPercent(valB);
+        } else if (compareState.activeTab === 'risk') {
+            const riskA = compareState.fundA.advanced?.riskStats || {};
+            const riskB = compareState.fundB.advanced?.riskStats || {};
+            valA = formatCompareData(riskA[row.key]);
+            valB = formatCompareData(riskB[row.key]);
+        } else if (compareState.activeTab === 'assets') {
+            const assetsA = compareState.fundA.advanced?.assetAllocation || [];
+            const assetsB = compareState.fundB.advanced?.assetAllocation || [];
+            const findAsset = (list, key) => list.find(a => a.asset_class === key)?.allocation;
+            valA = formatCompareData(findAsset(assetsA, row.key), '%');
+            valB = formatCompareData(findAsset(assetsB, row.key), '%');
+        } else if (compareState.activeTab === 'ratings') {
+            const ratingsA = compareState.fundA.advanced?.ratingDistribution || [];
+            const ratingsB = compareState.fundB.advanced?.ratingDistribution || [];
+            const findRating = (list, key) => list.find(r => r.rating === key)?.allocation;
+            valA = formatCompareData(findRating(ratingsA, row.key), '%');
+            valB = formatCompareData(findRating(ratingsB, row.key), '%');
+        } else if (compareState.activeTab === 'details') {
+            valA = formatCompareData(compareState.fundA.advanced?.[row.key]);
+            valB = formatCompareData(compareState.fundB.advanced?.[row.key]);
+        }
+
+        return `<tr>
+            <td>${row.label}</td>
+            <td class="${classA}">${valA}</td>
+            <td class="${classB}">${valB}</td>
+        </tr>`;
+    }).join('');
+}
+
+function calculateTrailingReturn(data, period) {
+    if (!data || data.length < 2) return null;
+    const latest = data[data.length - 1];
+    let past = null;
+
+    if (typeof period === 'number') {
+        return getCagrForYears(data, period);
+    }
+
+    const latestDate = new Date(latest.date);
+    const targetDate = new Date(latestDate);
+
+    if (period === 'ytd') {
+        targetDate.setMonth(0, 1);
+        targetDate.setHours(0, 0, 0, 0);
+    } else if (period === '1d') {
+        targetDate.setDate(latestDate.getDate() - 1);
+    } else if (period === '1w') {
+        targetDate.setDate(latestDate.getDate() - 7);
+    } else if (period === '1m') {
+        targetDate.setMonth(latestDate.getMonth() - 1);
+    } else if (period === '3m') {
+        targetDate.setMonth(latestDate.getMonth() - 3);
+    } else if (period === '6m') {
+        targetDate.setMonth(latestDate.getMonth() - 6);
+    }
+
+    // Find closest date <= targetDate
+    for (let i = data.length - 1; i >= 0; i--) {
+        if (data[i].date <= targetDate) {
+            past = data[i];
+            break;
+        }
+    }
+
+    if (!past || past === latest) return null;
+    return (latest.nav / past.nav) - 1;
+}
+
+// Tab Switching Listener
+document.getElementById('compareTabs').addEventListener('click', (e) => {
+    const tabEl = e.target.closest('.compare-tab');
+    if (!tabEl) return;
+    compareState.activeTab = tabEl.dataset.tab;
+    renderCompareTable();
+});
 
 // Compare Range Selector
 document.querySelectorAll('#compareRangeBtns .range-btn').forEach(btn => {
