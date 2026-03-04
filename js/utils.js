@@ -300,12 +300,12 @@ async function generateSipLedger(schemeCode, monthlyAmount, startDate, endDate, 
     const {
         isStepUp = false,
         stepUpAmount = 0,
-        stepUpStartDate = null,
         stepUpFrequency = 'annually'
     } = stepUpConfig;
 
     const stepUpMonths = stepUpFrequency === 'half-yearly' ? 6 : 12; // interval in months
-    const stepUpStart = isStepUp && stepUpStartDate ? new Date(stepUpStartDate) : null;
+    const sipStartOrigin = new Date(startDate);
+    sipStartOrigin.setDate(1);
 
     // 5. Month-by-month loop
     const instalments = [];
@@ -317,11 +317,11 @@ async function generateSipLedger(schemeCode, monthlyAmount, startDate, endDate, 
         // ── Compute this month's SIP amount ─────────────────────────
         let currentMonthlyAmount = monthlyAmount;
 
-        if (isStepUp && stepUpAmount > 0 && stepUpStart && current >= stepUpStart) {
-            // How many complete step-up intervals have elapsed since stepUpStart?
+        if (isStepUp && stepUpAmount > 0 && current >= sipStartOrigin) {
+            // How many complete step-up intervals have elapsed since sip start?
             const monthsElapsed =
-                (current.getFullYear() - stepUpStart.getFullYear()) * 12 +
-                (current.getMonth() - stepUpStart.getMonth());
+                (current.getFullYear() - sipStartOrigin.getFullYear()) * 12 +
+                (current.getMonth() - sipStartOrigin.getMonth());
             const intervalsElapsed = Math.floor(monthsElapsed / stepUpMonths);
             currentMonthlyAmount = monthlyAmount + intervalsElapsed * stepUpAmount;
         }

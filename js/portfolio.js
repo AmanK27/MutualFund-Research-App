@@ -45,7 +45,6 @@ function openPortfolioTxnModal() {
     document.getElementById('pfStepUpNo').checked = true;
     document.getElementById('pfStepUpFieldsRow').style.display = 'none';
     document.getElementById('pfStepUpAmount').value = '';
-    document.getElementById('pfStepUpStartDate').value = '';
     document.getElementById('pfStepUpFrequency').value = 'annually';
 
     // Reset dynamic UI to Lump Sum state
@@ -87,7 +86,6 @@ function onTxnTypeChange() {
     document.getElementById('pfSipStatus').value = 'active';
     document.getElementById('pfStepUpNo').checked = true;
     document.getElementById('pfStepUpAmount').value = '';
-    document.getElementById('pfStepUpStartDate').value = '';
     document.getElementById('pfStepUpFrequency').value = 'annually';
 }
 
@@ -101,7 +99,6 @@ function onStepUpToggleChange() {
     document.getElementById('pfStepUpFieldsRow').style.display = isYes ? 'block' : 'none';
     if (!isYes) {
         document.getElementById('pfStepUpAmount').value = '';
-        document.getElementById('pfStepUpStartDate').value = '';
         document.getElementById('pfStepUpFrequency').value = 'annually';
     }
 }
@@ -260,7 +257,6 @@ async function saveNewTransaction() {
         // ── Read step-up config from form ────────────────────────────
         const isStepUp = document.getElementById('pfStepUpYes').checked;
         const stepUpAmount = isStepUp ? parseFloat(document.getElementById('pfStepUpAmount').value) || 0 : 0;
-        const stepUpStartDate = isStepUp ? document.getElementById('pfStepUpStartDate').value : null;
         const stepUpFrequency = isStepUp ? document.getElementById('pfStepUpFrequency').value : 'annually';
 
         if (isStepUp) {
@@ -268,13 +264,9 @@ async function saveNewTransaction() {
                 showToast('Please enter a valid Step-Up Amount.', 'error');
                 btn.disabled = false; return;
             }
-            if (!stepUpStartDate) {
-                showToast('Please enter a Step-Up Start Date.', 'error');
-                btn.disabled = false; return;
-            }
         }
 
-        const stepUpConfig = { isStepUp, stepUpAmount, stepUpStartDate, stepUpFrequency };
+        const stepUpConfig = { isStepUp, stepUpAmount, stepUpFrequency };
 
         btn.textContent = '⏳ Simulating SIP history…';
 
@@ -299,7 +291,6 @@ async function saveNewTransaction() {
                 endDate: lastSipDate || null,
                 isStepUp,
                 stepUpAmount,
-                stepUpStartDate: stepUpStartDate || null,
                 stepUpFrequency
             });
 
