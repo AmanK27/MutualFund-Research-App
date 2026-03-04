@@ -351,3 +351,7 @@ function toIsoDateString(date) {
     const d = String(date.getDate()).padStart(2, '0');
     return `${y}-${m}-${d}`;
 }
+
+/* ── Expose to global scope ─────────────────────────────────────── */
+window.generateSipLedger = generateSipLedger;
+window.toIsoDateString = toIsoDateString;
