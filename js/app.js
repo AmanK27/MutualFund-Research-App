@@ -1805,28 +1805,57 @@ let guestTxns = [];
 function addTransaction(txn) {
     if (!currentUser) return Promise.reject(new Error('Not authenticated'));
 
+    /* ── Guest Mode ─────────────────────────────────────────────── */
     if (currentUser.uid === "guest-user-123") {
         return new Promise(resolve => {
-            const newTxn = {
-                id: "guest-txn-" + Date.now(),
-                type: txn.type,
-                schemeCode: txn.schemeCode,
-                schemeName: txn.schemeName || '',
-                amount: Number(txn.amount),
-                units: Number(txn.units),
-                navAtDate: Number(txn.navAtDate) || 0,
-                date: { toDate: () => new Date(txn.date) },
-                createdAt: { toDate: () => new Date() }
-            };
-            guestTxns.push(newTxn);
+            if (txn.type === 'sip_config') {
+                // Store SIP config as-is (no Firestore Timestamp conversion needed)
+                guestTxns.push({
+                    id: "guest-txn-" + Date.now(),
+                    type: 'sip_config',
+                    schemeCode: txn.schemeCode,
+                    schemeName: txn.schemeName || '',
+                    amount: Number(txn.amount),
+                    startDate: txn.startDate,
+                    sipStatus: txn.sipStatus || 'active',
+                    endDate: txn.endDate || null
+                });
+            } else {
+                guestTxns.push({
+                    id: "guest-txn-" + Date.now(),
+                    type: txn.type,
+                    schemeCode: txn.schemeCode,
+                    schemeName: txn.schemeName || '',
+                    amount: Number(txn.amount),
+                    units: Number(txn.units),
+                    navAtDate: Number(txn.navAtDate) || 0,
+                    date: { toDate: () => new Date(txn.date) },
+                    createdAt: { toDate: () => new Date() }
+                });
+            }
             setTimeout(resolve, 300);
         });
     }
 
-    return db.collection('users').doc(currentUser.uid)
+    /* ── Firestore: SIP Config ──────────────────────────────────── */
+    if (txn.type === 'sip_config') {
+        return db.collection('users').doc(currentUser.uid)
+            .collection('transactions').add({
+                type: 'sip_config',
+                schemeCode: txn.schemeCode,
+                schemeName: txn.schemeName || '',
+                amount: Number(txn.amount),
+                startDate: txn.startDate,                   // 'YYYY-MM-DD' string
+                sipStatus: txn.sipStatus || 'active',       // 'active' | 'paused'
+                endDate: txn.endDate || null,               // 'YYYY-MM-DD' string or null
+                createdAt: firebase.firestore.FieldValue.serverTimestamp()
+            });
+    }
 
+    /* ── Firestore: Lump Sum / Sell ─────────────────────────────── */
+    return db.collection('users').doc(currentUser.uid)
         .collection('transactions').add({
-            type: txn.type,              // 'buy' | 'sell' | 'sip'
+            type: txn.type,              // 'buy' | 'sell'
             schemeCode: txn.schemeCode,
             schemeName: txn.schemeName || '',
             amount: Number(txn.amount),
@@ -1836,6 +1865,7 @@ function addTransaction(txn) {
             createdAt: firebase.firestore.FieldValue.serverTimestamp()
         });
 }
+
 
 
 /**
@@ -1850,9 +1880,8 @@ function getTransactions() {
     }
 
     return db.collection('users').doc(currentUser.uid)
-
         .collection('transactions')
-        .orderBy('date', 'desc')
+        .orderBy('createdAt', 'desc')   // all docs have createdAt; sip_config has no 'date' field
         .get()
         .then(function (snapshot) {
             return snapshot.docs.map(function (doc) {
