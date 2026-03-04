@@ -908,7 +908,7 @@
             display: grid;
             grid-template-columns: 2fr 1fr;
             gap: 24px;
-            align-items: stretch;
+            align-items: start;
         }
 
         .dashboard-main-col {
@@ -1956,8 +1956,6 @@
             display: flex;
             flex-direction: column;
             gap: 24px;
-            height: 100%;
-            /* Fill available grid height */
         }
 
         .sip-title {
@@ -2004,10 +2002,7 @@
         .sip-results {
             display: flex;
             flex-direction: column;
-            justify-content: flex-end;
             gap: 20px;
-            flex: 1;
-            /* Push to bottom if container is tall */
         }
 
         .sip-res-item {
