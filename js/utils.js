@@ -319,10 +319,13 @@ async function generateSipLedger(schemeCode, monthlyAmount, startDate, endDate, 
 
         if (isStepUp && stepUpAmount > 0 && current >= sipStartOrigin) {
             // How many complete step-up intervals have elapsed since sip start?
+            // We subtract 1 month to account for standard AMC mandate registration delay 
+            // where the first payment is immediate but the mandate cycle starts month 2.
             const monthsElapsed =
                 (current.getFullYear() - sipStartOrigin.getFullYear()) * 12 +
                 (current.getMonth() - sipStartOrigin.getMonth());
-            const intervalsElapsed = Math.floor(monthsElapsed / stepUpMonths);
+
+            const intervalsElapsed = Math.max(0, Math.floor((monthsElapsed - 1) / stepUpMonths));
             currentMonthlyAmount = monthlyAmount + intervalsElapsed * stepUpAmount;
         }
 
