@@ -3615,15 +3615,20 @@
             document.getElementById('compareView').style.display = state === 'compare' ? 'block' : 'none';
             document.getElementById('searchResultsState').style.display = state === 'searchResults' ? 'block' : 'none';
 
-            // Feature Toggle based on State for Dashboard layout
+            // Feature Toggle: show topFunds panel only on welcome screen,
+            // hide it on ALL other states (table, dashboard, portfolio, compare, etc.)
             const topFunds = document.querySelector('.top-funds-panel');
             const sipCard = document.querySelector('.sip-card');
 
-            if (state === 'dashboard') {
+            if (state === 'welcome') {
+                if (topFunds) topFunds.style.display = 'block';
+                if (sipCard) sipCard.style.display = 'none';
+            } else if (state === 'dashboard') {
                 if (topFunds) topFunds.style.display = 'none';
                 if (sipCard) sipCard.style.display = 'flex';
-            } else if (state === 'welcome') {
-                if (topFunds) topFunds.style.display = 'block';
+            } else {
+                // table, portfolio, compare, searchResults, loading
+                if (topFunds) topFunds.style.display = 'none';
                 if (sipCard) sipCard.style.display = 'none';
             }
 
@@ -3939,9 +3944,39 @@
                 currentFund = data;
                 displayFundData();
 
-                // Fetch advanced data in background
-                document.getElementById('analysisCard').style.display = 'none';
-                fetchAdvancedFundData(data.meta.scheme_name).then(renderAdvancedData);
+                // Fetch advanced data (holdings/AUM/expense) in background with retry.
+                // Show a loading skeleton so users see feedback during the attempt.
+                const _analysisCard = document.getElementById('analysisCard');
+                const _holdingsBody = document.getElementById('holdingsBody');
+                if (_analysisCard && _holdingsBody) {
+                    _holdingsBody.innerHTML = `
+                        <tr><td colspan="3" style="text-align:center; color: var(--text-muted); padding: 24px;">
+                            <span style="display:inline-block; animation: spin 1s linear infinite; margin-right:8px;">⟳</span>
+                            Loading fund fundamentals…
+                        </td></tr>`;
+                    _analysisCard.style.display = 'block';
+                }
+                (async () => {
+                    const MAX_ATTEMPTS = 3;
+                    const RETRY_DELAY_MS = 1500;
+                    let advancedData = null;
+                    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+                        advancedData = await fetchAdvancedFundData(data.meta.scheme_name);
+                        if (advancedData) break;
+                        if (attempt < MAX_ATTEMPTS) {
+                            // Progressive back-off before retry
+                            if (_holdingsBody) {
+                                _holdingsBody.innerHTML = `
+                                    <tr><td colspan="3" style="text-align:center; color: var(--text-muted); padding: 24px;">
+                                        <span style="display:inline-block; animation: spin 1s linear infinite; margin-right:8px;">⟳</span>
+                                        Retrying… (attempt ${attempt + 1}/${MAX_ATTEMPTS})
+                                    </td></tr>`;
+                            }
+                            await new Promise(resolve => setTimeout(resolve, RETRY_DELAY_MS * attempt));
+                        }
+                    }
+                    renderAdvancedData(advancedData);
+                })();
 
             } catch (err) {
                 showState('welcome');
