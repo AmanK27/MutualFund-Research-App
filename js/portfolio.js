@@ -41,6 +41,12 @@ function openPortfolioTxnModal() {
     document.getElementById('pfSipStatus').value = 'active';
     document.getElementById('pfLastSipDate').value = '';
     document.getElementById('pfSelectedFundLabel').textContent = 'No fund selected';
+    // Reset step-up state
+    document.getElementById('pfStepUpNo').checked = true;
+    document.getElementById('pfStepUpFieldsRow').style.display = 'none';
+    document.getElementById('pfStepUpAmount').value = '';
+    document.getElementById('pfStepUpStartDate').value = '';
+    document.getElementById('pfStepUpFrequency').value = 'annually';
 
     // Reset dynamic UI to Lump Sum state
     onTxnTypeChange();
@@ -64,6 +70,7 @@ function onTxnTypeChange() {
     // SIP-specific rows
     document.getElementById('pfSipStatusRow').style.display = isSip ? 'block' : 'none';
     document.getElementById('pfSipPreviewRow').style.display = isSip ? 'block' : 'none';
+    document.getElementById('pfStepUpToggleRow').style.display = isSip ? 'block' : 'none';
 
     // NAV + Units only shown for Lump Sum / Sell
     document.getElementById('pfNavUnitsRow').style.display = isSip ? 'none' : 'grid';
@@ -74,9 +81,14 @@ function onTxnTypeChange() {
     document.getElementById('pfDateLabel').textContent =
         isSip ? 'SIP Start Date' : (type === 'sell' ? 'Sell Date' : 'Transaction Date');
 
-    // Reset last SIP date row whenever type changes
+    // Reset SIP sub-fields whenever type changes
     document.getElementById('pfLastSipDateRow').style.display = 'none';
+    document.getElementById('pfStepUpFieldsRow').style.display = 'none';
     document.getElementById('pfSipStatus').value = 'active';
+    document.getElementById('pfStepUpNo').checked = true;
+    document.getElementById('pfStepUpAmount').value = '';
+    document.getElementById('pfStepUpStartDate').value = '';
+    document.getElementById('pfStepUpFrequency').value = 'annually';
 }
 
 function onSipStatusChange() {
@@ -84,6 +96,15 @@ function onSipStatusChange() {
     document.getElementById('pfLastSipDateRow').style.display = status === 'paused' ? 'block' : 'none';
 }
 
+function onStepUpToggleChange() {
+    const isYes = document.getElementById('pfStepUpYes').checked;
+    document.getElementById('pfStepUpFieldsRow').style.display = isYes ? 'block' : 'none';
+    if (!isYes) {
+        document.getElementById('pfStepUpAmount').value = '';
+        document.getElementById('pfStepUpStartDate').value = '';
+        document.getElementById('pfStepUpFrequency').value = 'annually';
+    }
+}
 
 function closePortfolioTxnModal() {
     const modal = document.getElementById('portfolioTxnModal');
@@ -502,6 +523,7 @@ window.openPortfolioTxnModal = openPortfolioTxnModal;
 window.closePortfolioTxnModal = closePortfolioTxnModal;
 window.onTxnTypeChange = onTxnTypeChange;
 window.onSipStatusChange = onSipStatusChange;
+window.onStepUpToggleChange = onStepUpToggleChange;
 window.handlePfFundSearch = handlePfFundSearch;
 window.selectPfFund = selectPfFund;
 window.autofetchPfNav = autofetchPfNav;

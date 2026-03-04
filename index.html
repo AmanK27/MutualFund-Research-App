@@ -681,6 +681,72 @@
                             onblur="this.style.borderColor='var(--border-glass)'">
                     </div>
 
+                    <!-- Step-Up Toggle (SIP only) -->
+                    <div id="pfStepUpToggleRow" style="display:none;margin-bottom:16px;">
+                        <label
+                            style="font-size:12px;color:var(--text-secondary);font-weight:500;display:block;margin-bottom:8px;">Step-Up
+                            Performed?
+                            <span style="color:var(--text-muted);font-weight:400;">(did you increase your SIP amount
+                                over time?)</span>
+                        </label>
+                        <div style="display:flex;gap:16px;">
+                            <label
+                                style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;color:var(--text-primary);">
+                                <input type="radio" id="pfStepUpNo" name="pfStepUp" value="no" checked
+                                    onchange="onStepUpToggleChange()"
+                                    style="accent-color:var(--accent);width:14px;height:14px;cursor:pointer;">
+                                No
+                            </label>
+                            <label
+                                style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;color:var(--text-primary);">
+                                <input type="radio" id="pfStepUpYes" name="pfStepUp" value="yes"
+                                    onchange="onStepUpToggleChange()"
+                                    style="accent-color:var(--accent);width:14px;height:14px;cursor:pointer;">
+                                Yes
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Step-Up Fields (SIP + Step-Up Yes only) -->
+                    <div id="pfStepUpFieldsRow"
+                        style="display:none;margin-bottom:16px;padding:14px;background:rgba(99,102,241,0.06);border:1px solid rgba(99,102,241,0.18);border-radius:var(--radius-sm);">
+                        <div
+                            style="font-size:11px;font-weight:600;color:var(--accent);letter-spacing:0.05em;text-transform:uppercase;margin-bottom:12px;">
+                            📈 Step-Up Configuration</div>
+                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
+                            <div>
+                                <label
+                                    style="font-size:12px;color:var(--text-secondary);font-weight:500;display:block;margin-bottom:6px;">Step-Up
+                                    Amount (₹)
+                                    <span style="color:var(--text-muted);font-weight:400;">per interval</span>
+                                </label>
+                                <input type="number" id="pfStepUpAmount" placeholder="e.g. 1000" min="0"
+                                    style="width:100%;box-sizing:border-box;padding:10px 14px;background:rgba(0,0,0,0.3);border:1px solid var(--border-glass);border-radius:var(--radius-sm);color:var(--text-primary);font-size:13px;font-family:inherit;outline:none;"
+                                    onfocus="this.style.borderColor='var(--accent)'"
+                                    onblur="this.style.borderColor='var(--border-glass)'">
+                            </div>
+                            <div>
+                                <label
+                                    style="font-size:12px;color:var(--text-secondary);font-weight:500;display:block;margin-bottom:6px;">Step-Up
+                                    Start Date</label>
+                                <input type="date" id="pfStepUpStartDate"
+                                    style="width:100%;box-sizing:border-box;padding:10px 14px;background:rgba(0,0,0,0.3);border:1px solid var(--border-glass);border-radius:var(--radius-sm);color:var(--text-primary);font-size:13px;font-family:inherit;outline:none;"
+                                    onfocus="this.style.borderColor='var(--accent)'"
+                                    onblur="this.style.borderColor='var(--border-glass)'">
+                            </div>
+                        </div>
+                        <div>
+                            <label
+                                style="font-size:12px;color:var(--text-secondary);font-weight:500;display:block;margin-bottom:6px;">Step-Up
+                                Frequency</label>
+                            <select id="pfStepUpFrequency"
+                                style="width:100%;padding:10px 14px;background:rgba(0,0,0,0.3);border:1px solid var(--border-glass);border-radius:var(--radius-sm);color:var(--text-primary);font-size:13px;font-family:inherit;outline:none;">
+                                <option value="annually">📅 Annually (every 12 months)</option>
+                                <option value="half-yearly">📅 Half-Yearly (every 6 months)</option>
+                            </select>
+                        </div>
+                    </div>
+
                     <!-- NAV + Units Row (Lumpsum/Sell only) -->
                     <div id="pfNavUnitsRow"
                         style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:24px;">
