@@ -344,93 +344,55 @@ async function getPeerRanking(categoryString, currentSchemeCode) {
    ═══════════════════════════════════════════════════════════════════ */
 
 /**
- * Hits Kuvera's search API via proxy to resolve a clean fund name to an ISIN.
- * Defaults to the top matching result.
+ * Helper to fetch and parse AMFI CSV data from InertExpert2911 Github.
+ * Extracts the latest Average_AUM_Cr.
  */
-async function resolveKuveraName(cleanFundName) {
+async function fetchAUMFromGithub(schemeCode) {
+    if (!schemeCode) return null;
     try {
-        const query = encodeURIComponent(cleanFundName);
-        console.log(`[Diagnostic] resolveKuveraName: Searching Kuvera for "${cleanFundName}"`);
-        const proxyUrl = `https://corsproxy.io/?url=${encodeURIComponent('https://api.kuvera.in/api/v3/funds/search.json?q=' + query)}`;
+        const url = 'https://raw.githubusercontent.com/InertExpert2911/Mutual_Fund_Data/main/mutual_fund_data.csv';
+        const res = await fetch(url);
+        if (!res.ok) return null;
+        const csvText = await res.text();
 
-        const res = await fetch(proxyUrl);
-        if (!res.ok) {
-            console.error(`[Diagnostic] resolveKuveraName: Kuvera search failed with status ${res.status}`);
-            return null;
+        // Simple manual CSV line search for the scheme code
+        const lines = csvText.split('\n');
+        for (let i = 1; i < lines.length; i++) {
+            const line = lines[i];
+            if (line.startsWith(`${schemeCode},`)) {
+                // Format: Scheme_Code,Scheme_Name,AMC,Scheme_Type,Scheme_Category,Scheme_NAV_Name,Scheme_Min_Amt,NAV,Latest_NAV_Date,Average_AUM_Cr,...
+                const cols = line.split(',');
+                if (cols.length >= 10) {
+                    const aum = parseFloat(cols[9]);
+                    return isNaN(aum) ? null : `${aum.toFixed(2)} Cr`;
+                }
+            }
         }
-
-        const data = await res.json();
-        console.log(`[Diagnostic] resolveKuveraName: Kuvera search response length: ${data ? data.length : 0}`);
-        if (data && data.length > 0 && data[0].isin) {
-            console.log(`[Diagnostic] resolveKuveraName: Resolved to ISIN: ${data[0].isin}`);
-            return data[0].isin;
-        }
-        console.warn(`[Diagnostic] resolveKuveraName: No ISIN found for "${cleanFundName}"`);
         return null;
     } catch (e) {
-        console.warn(`Kuvera ISIN resolution failed for ${cleanFundName}:`, e);
+        console.warn(`AUM Github fetch failed for ${schemeCode}:`, e);
         return null;
     }
 }
 
 /**
- * Standardizes a mutual fund name into the Groww slug format.
- * (e.g., "Axis Midcap Fund Direct Growth" -> "axis-midcap-fund-direct-growth")
+ * Helper to fetch and parse TER (Total Expense Ratio) CSV data from captn3m0 Github.
+ * Matches on the ISIN since this dataset uses ISINs primarily, or string matching.
  */
-async function resolveGrowwSlug(cleanFundName) {
-    if (!cleanFundName) return null;
-
-    // Groww's slug builder typically lowers case, replaces spaces/special chars with hyphens, 
-    // and collapses multiple hyphens.
-    const slug = cleanFundName
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, '-')
-        .replace(/(^-|-$)/g, '');
-
-    console.log(`[Diagnostic] resolveGrowwSlug: Generated slug "${slug}" for "${cleanFundName}"`);
-    return slug;
-}
-
-/**
- * Fetches deep metrics from Kuvera using ISIN.
- */
-async function fetchKuveraDetails(isin) {
+async function fetchTERFromGithub(isin) {
     if (!isin) return null;
     try {
-        console.log(`[Diagnostic] fetchKuveraDetails: Fetching profile for ISIN: ${isin}`);
-        const proxyUrl = `https://corsproxy.io/?url=${encodeURIComponent('https://api.kuvera.in/api/v3/funds/' + isin + '.json')}`;
-        const res = await fetch(proxyUrl);
-        if (!res.ok) {
-            console.error(`[Diagnostic] fetchKuveraDetails: Request failed with status ${res.status}`);
-            return null;
-        }
-        const data = await res.json();
-        console.log(`[Diagnostic] fetchKuveraDetails: Raw Payload for ${isin}:`, data);
-        return data; // Extract holdings, sectors, volatility, sharpe, sortino, alpha, beta later
-    } catch (e) {
-        console.warn(`Kuvera detail fetch failed for ISIN ${isin}:`, e);
-        return null;
-    }
-}
+        const url = 'https://raw.githubusercontent.com/captn3m0/india-mutual-fund-ter-tracker/master/data.csv';
+        const res = await fetch(url);
+        if (!res.ok) return null;
+        const csvText = await res.text();
 
-/**
- * Fetches deep metrics from Groww using Slug.
- */
-async function fetchGrowwDetails(slug) {
-    if (!slug) return null;
-    try {
-        console.log(`[Diagnostic] fetchGrowwDetails: Fetching data for slug: ${slug}`);
-        const proxyUrl = `https://corsproxy.io/?url=${encodeURIComponent('https://groww.in/v1/api/data/mf/web/v3/scheme/search/' + slug)}`;
-        const res = await fetch(proxyUrl);
-        if (!res.ok) {
-            console.error(`[Diagnostic] fetchGrowwDetails: Request failed with status ${res.status}`);
-            return null;
-        }
-        const data = await res.json();
-        console.log(`[Diagnostic] fetchGrowwDetails: Raw Payload for ${slug}:`, data);
-        return data; // Extract aum, expense_ratio, exit_load later
+        // Since we don't have ISIN from MFAPI by default, we will do a rough regex/string match 
+        // against the scheme name if ISIN isn't passed, or look for the ISIN if we extract it.
+        // For simplicity, we'll return null here if we can't reliably map it, but we can try string matching.
+        return null; // Implementation pending precise string mapping
     } catch (e) {
-        console.warn(`Groww detail fetch failed for slug ${slug}:`, e);
+        console.warn(`TER Github fetch failed:`, e);
         return null;
     }
 }
@@ -476,59 +438,43 @@ async function aggregateFundDetails(schemeCode, cleanFundName) {
 
     const searchName = cleanFundName || (baseData && baseData.meta ? baseData.meta.scheme_name : "");
 
-    // Step 1: primary Fetch (Kuvera)
-    const isin = await resolveKuveraName(searchName);
-    const kuveraData = await fetchKuveraDetails(isin);
-
-    if (kuveraData && kuveraData.length > 0) {
-        const kFund = kuveraData[0];
-
-        // Risk Ratios
-        if (kFund.volatility !== undefined) fund.risk.volatility = kFund.volatility;
-        if (kFund.sharpe !== undefined) fund.risk.sharpe = kFund.sharpe;
-        if (kFund.sortino !== undefined) fund.risk.sortino = kFund.sortino;
-        if (kFund.alpha !== undefined) fund.risk.alpha = kFund.alpha;
-        if (kFund.beta !== undefined) fund.risk.beta = kFund.beta;
-
-        // Portfolio Arrays
-        if (kFund.portfolio) fund.portfolio.holdings = kFund.portfolio || [];
-        if (kFund.sectors) fund.portfolio.sectors = kFund.sectors || [];
-
-        // Asset Allocation
-        if (kFund.asset_allocation) {
-            fund.portfolio.equity_percentage = kFund.asset_allocation.equity || null;
-            fund.portfolio.debt_percentage = kFund.asset_allocation.debt || null;
-            fund.portfolio.cash_percentage = kFund.asset_allocation.cash || null;
-        }
-
-        // Extract AUM and Expense Ratio if Kuvera provides them (sometimes at root)
-        if (kFund.aum !== undefined) fund.portfolio.aum = kFund.aum;
-        if (kFund.expense_ratio !== undefined) fund.portfolio.expense_ratio = kFund.expense_ratio;
+    // Fetch AUM directly from Github CSV dataset matching the schemeCode
+    const aumValue = await fetchAUMFromGithub(schemeCode);
+    if (aumValue) {
+        fund.portfolio.aum = aumValue;
     }
 
-    // Step 2: Conditional Groww Fallback
-    // Only query Groww if Kuvera missed critical core stats (AUM or Expense Ratio)
-    const needsGrowwAum = (fund.portfolio.aum === null || fund.portfolio.aum === undefined || fund.portfolio.aum === "-");
-    const needsGrowwExpense = (fund.portfolio.expense_ratio === null || fund.portfolio.expense_ratio === undefined || fund.portfolio.expense_ratio === "-");
+    // TER string matching logic
+    try {
+        const terUrl = 'https://raw.githubusercontent.com/captn3m0/india-mutual-fund-ter-tracker/master/data.csv';
+        const terRes = await fetch(terUrl);
+        if (terRes.ok) {
+            const csvText = await terRes.text();
+            const lines = csvText.split('\n');
 
-    if (needsGrowwAum || needsGrowwExpense) {
-        console.log(`Kuvera missing AUM or Expense Ratio for ${searchName}. Triggering Groww fallback fetch.`);
-        const slug = await resolveGrowwSlug(searchName);
-        const growwData = await fetchGrowwDetails(slug);
+            // Clean names for better matching
+            let normalizedTarget = searchName.toLowerCase().replace(/[^a-z0-9]/g, '');
+            // Some basic replacements to maximize match chances
+            normalizedTarget = normalizedTarget.replace('fund', '').replace('direct', '').replace('growth', '').replace('plan', '');
 
-        if (growwData) {
-            // Patch ONLY missing fields
-            if (needsGrowwAum && growwData.aum_details) {
-                fund.portfolio.aum = growwData.aum_details.aum || null;
-            }
-            if (needsGrowwExpense && growwData.expense_ratio !== undefined) {
-                fund.portfolio.expense_ratio = growwData.expense_ratio || null;
-            }
-            // Exit load is usually unique to Groww in this setup, so grab it while we're here
-            if (growwData.exit_load_text) {
-                fund.portfolio.exit_load = growwData.exit_load_text || null;
+            for (let i = 1; i < lines.length; i++) {
+                const line = lines[i];
+                const cols = line.split(',');
+                if (cols.length > 10) {
+                    const rowName = cols[0].toLowerCase().replace(/[^a-z0-9]/g, '');
+                    // Example regex to find overlap. If the Github row contains our targeted keyword sequence:
+                    if (rowName.includes(normalizedTarget) && rowName.includes("direct")) {
+                        const directTer = parseFloat(cols[10]); // "Direct Plan - Total TER (%)"
+                        if (!isNaN(directTer)) {
+                            fund.portfolio.expense_ratio = directTer;
+                            break;
+                        }
+                    }
+                }
             }
         }
+    } catch (e) {
+        console.warn("Expense Ratio fetch failed:", e);
     }
 
     return fund;
