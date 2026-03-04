@@ -51,8 +51,15 @@ function handlePfFundSearch() {
     if (query.length < 2) { resultsEl.innerHTML = ''; return; }
 
     pfFundSearchDebounceTimer = setTimeout(() => {
-        const master = window.masterFundList || [];
-        const matches = master.filter(f =>
+        const allFunds = window.allMfFunds || [];
+        // Filter to Direct Growth funds only (same pool as main search)
+        const pool = allFunds.filter(f => {
+            const n = f.schemeName.toUpperCase();
+            return n.includes('DIRECT') && n.includes('GROWTH') &&
+                !n.includes('IDCW') && !n.includes('DIVIDEND');
+        });
+
+        const matches = pool.filter(f =>
             f.schemeName.toLowerCase().includes(query) ||
             String(f.schemeCode).includes(query)
         ).slice(0, 8);
@@ -61,14 +68,17 @@ function handlePfFundSearch() {
             resultsEl.innerHTML = '<li style="padding:10px 14px;color:var(--text-muted);font-size:13px;">No funds found</li>';
             return;
         }
-        resultsEl.innerHTML = matches.map(f => `
-            <li style="padding:10px 14px;cursor:pointer;font-size:13px;color:var(--text-primary);border-bottom:1px solid var(--border-glass);transition:background 0.15s;"
+        resultsEl.innerHTML = matches.map(f => {
+            const display = formatFundName(f.schemeName);
+            const safeCode = f.schemeCode;
+            return `<li style="padding:10px 14px;cursor:pointer;font-size:13px;color:var(--text-primary);border-bottom:1px solid var(--border-glass);transition:background 0.15s;"
                 onmouseover="this.style.background='rgba(56,189,248,0.08)'"
                 onmouseout="this.style.background=''"
-                onclick="selectPfFund('${f.schemeCode}', '${f.schemeName.replace(/'/g, "\\'")}')">
-                <div style="font-weight:500;">${f.schemeName}</div>
-                <div style="font-size:11px;color:var(--text-muted);">Code: ${f.schemeCode}</div>
-            </li>`).join('');
+                onmousedown="selectPfFund('${safeCode}', '${display.replace(/'/g, "\\'").replace(/"/g, '&quot;')}')">
+                <div style="font-weight:500;">${display}</div>
+                <div style="font-size:11px;color:var(--text-muted);">Code: ${safeCode}</div>
+            </li>`;
+        }).join('');
     }, 280);
 }
 
