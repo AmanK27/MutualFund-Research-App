@@ -248,3 +248,106 @@ function formatCompareData(value, suffix = '') {
     }
     return String(value) + suffix;
 }
+
+/* ═══════════════════════════════════════════════════════════════════
+   SIP LEDGER GENERATOR
+   Simulates a monthly SIP from startDate → endDate using historical
+   NAVs from mfapi.in. Skips holidays by advancing to the next
+   available trading day.
+   ═══════════════════════════════════════════════════════════════════ */
+
+/**
+ * Generates a full SIP transaction ledger from historical NAVs.
+ *
+ * @param {string} schemeCode   - mfapi.in scheme code
+ * @param {number} monthlyAmount - Monthly SIP amount in ₹
+ * @param {string} startDate    - ISO date string 'YYYY-MM-DD' (first SIP month)
+ * @param {string|null} endDate - ISO date string (last month). Pass null for "today".
+ * @returns {Promise<{ instalments: Array, totalUnits: number, totalInvested: number }>}
+ */
+async function generateSipLedger(schemeCode, monthlyAmount, startDate, endDate) {
+    // 1. Fetch full NAV history
+    const res = await fetch(`https://api.mfapi.in/mf/${schemeCode}`);
+    if (!res.ok) throw new Error(`Failed to fetch NAVs for scheme ${schemeCode}`);
+    const json = await res.json();
+
+    if (!json.data || json.data.length === 0) {
+        throw new Error(`No NAV data available for scheme ${schemeCode}`);
+    }
+
+    // mfapi returns newest-first; build a Map of "YYYY-MM-DD" → nav for O(1) lookup
+    // and an ascending sorted array for forward-scan holiday skipping
+    const navMap = new Map();
+    const navDates = []; // ascending Date objects
+
+    json.data.forEach(entry => {
+        // entry.date is "DD-MM-YYYY"
+        const [dd, mm, yyyy] = entry.date.split('-');
+        const isoKey = `${yyyy}-${mm}-${dd}`;
+        const navVal = parseFloat(entry.nav);
+        if (!isNaN(navVal) && navVal > 0) {
+            navMap.set(isoKey, navVal);
+        }
+    });
+
+    // Build sorted ascending date list from the map keys
+    const sortedKeys = Array.from(navMap.keys()).sort(); // lexicographic sort works for YYYY-MM-DD
+
+    // 2. Determine iteration bounds
+    const start = new Date(startDate);
+    start.setDate(1); // always start on 1st of the selected month
+    const end = endDate ? new Date(endDate) : new Date(); // today if In Progress
+
+    // 3. Month-by-month loop
+    const instalments = [];
+    let totalUnits = 0;
+    let totalInvested = 0;
+
+    let current = new Date(start);
+
+    while (current <= end) {
+        // Find the closest valid trading day on or after current (1st of month)
+        let targetIso = toIsoDateString(current);
+        let foundKey = null;
+
+        // Forward scan: find the first navMap key >= targetIso within the same month (+10 days buffer)
+        for (const key of sortedKeys) {
+            if (key >= targetIso) {
+                // Make sure we don't overshoot into next month by more than 10 days
+                const keyDate = new Date(key);
+                const daysDiff = (keyDate - current) / (1000 * 60 * 60 * 24);
+                if (daysDiff <= 10) {
+                    foundKey = key;
+                }
+                break;
+            }
+        }
+
+        if (foundKey) {
+            const nav = navMap.get(foundKey);
+            const units = monthlyAmount / nav;
+            totalUnits += units;
+            totalInvested += monthlyAmount;
+            instalments.push({
+                date: foundKey,          // YYYY-MM-DD of actual execution
+                nav,
+                units,
+                amount: monthlyAmount
+            });
+        }
+
+        // Advance to 1st of next month
+        current.setMonth(current.getMonth() + 1);
+        current.setDate(1);
+    }
+
+    return { instalments, totalUnits, totalInvested };
+}
+
+/** Helper: format a Date as 'YYYY-MM-DD' */
+function toIsoDateString(date) {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+}
