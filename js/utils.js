@@ -257,15 +257,21 @@ function formatCompareData(value, suffix = '') {
    ═══════════════════════════════════════════════════════════════════ */
 
 /**
- * Generates a full SIP transaction ledger from historical NAVs.
+ * Generates a full SIP transaction ledger from historical NAVs,
+ * with optional Step-Up support.
  *
- * @param {string} schemeCode   - mfapi.in scheme code
- * @param {number} monthlyAmount - Monthly SIP amount in ₹
- * @param {string} startDate    - ISO date string 'YYYY-MM-DD' (first SIP month)
- * @param {string|null} endDate - ISO date string (last month). Pass null for "today".
+ * @param {string}      schemeCode     - mfapi.in scheme code
+ * @param {number}      monthlyAmount  - Base monthly SIP amount (₹)
+ * @param {string}      startDate      - 'YYYY-MM-DD' — first SIP month
+ * @param {string|null} endDate        - 'YYYY-MM-DD' last month, or null for today
+ * @param {object}      [stepUpConfig] - Optional step-up parameters:
+ *   @param {boolean} stepUpConfig.isStepUp          - Whether step-up is enabled
+ *   @param {number}  stepUpConfig.stepUpAmount       - Amount to add per interval (₹)
+ *   @param {string}  stepUpConfig.stepUpStartDate    - 'YYYY-MM-DD' when step-ups begin
+ *   @param {string}  stepUpConfig.stepUpFrequency    - 'annually' | 'half-yearly'
  * @returns {Promise<{ instalments: Array, totalUnits: number, totalInvested: number }>}
  */
-async function generateSipLedger(schemeCode, monthlyAmount, startDate, endDate) {
+async function generateSipLedger(schemeCode, monthlyAmount, startDate, endDate, stepUpConfig = {}) {
     // 1. Fetch full NAV history
     const res = await fetch(`https://api.mfapi.in/mf/${schemeCode}`);
     if (!res.ok) throw new Error(`Failed to fetch NAVs for scheme ${schemeCode}`);
@@ -275,74 +281,84 @@ async function generateSipLedger(schemeCode, monthlyAmount, startDate, endDate) 
         throw new Error(`No NAV data available for scheme ${schemeCode}`);
     }
 
-    // mfapi returns newest-first; build a Map of "YYYY-MM-DD" → nav for O(1) lookup
-    // and an ascending sorted array for forward-scan holiday skipping
+    // 2. Build YYYY-MM-DD → nav lookup map + sorted ascending key list
     const navMap = new Map();
-    const navDates = []; // ascending Date objects
-
     json.data.forEach(entry => {
-        // entry.date is "DD-MM-YYYY"
         const [dd, mm, yyyy] = entry.date.split('-');
         const isoKey = `${yyyy}-${mm}-${dd}`;
         const navVal = parseFloat(entry.nav);
-        if (!isNaN(navVal) && navVal > 0) {
-            navMap.set(isoKey, navVal);
-        }
+        if (!isNaN(navVal) && navVal > 0) navMap.set(isoKey, navVal);
     });
+    const sortedKeys = Array.from(navMap.keys()).sort();
 
-    // Build sorted ascending date list from the map keys
-    const sortedKeys = Array.from(navMap.keys()).sort(); // lexicographic sort works for YYYY-MM-DD
-
-    // 2. Determine iteration bounds
+    // 3. Determine iteration bounds (always snap to 1st of month)
     const start = new Date(startDate);
-    start.setDate(1); // always start on 1st of the selected month
-    const end = endDate ? new Date(endDate) : new Date(); // today if In Progress
+    start.setDate(1);
+    const end = endDate ? new Date(endDate) : new Date();
 
-    // 3. Month-by-month loop
+    // 4. Step-up pre-computation
+    const {
+        isStepUp = false,
+        stepUpAmount = 0,
+        stepUpStartDate = null,
+        stepUpFrequency = 'annually'
+    } = stepUpConfig;
+
+    const stepUpMonths = stepUpFrequency === 'half-yearly' ? 6 : 12; // interval in months
+    const stepUpStart = isStepUp && stepUpStartDate ? new Date(stepUpStartDate) : null;
+
+    // 5. Month-by-month loop
     const instalments = [];
     let totalUnits = 0;
     let totalInvested = 0;
-
     let current = new Date(start);
 
     while (current <= end) {
-        // Find the closest valid trading day on or after current (1st of month)
-        let targetIso = toIsoDateString(current);
+        // ── Compute this month's SIP amount ─────────────────────────
+        let currentMonthlyAmount = monthlyAmount;
+
+        if (isStepUp && stepUpAmount > 0 && stepUpStart && current >= stepUpStart) {
+            // How many complete step-up intervals have elapsed since stepUpStart?
+            const monthsElapsed =
+                (current.getFullYear() - stepUpStart.getFullYear()) * 12 +
+                (current.getMonth() - stepUpStart.getMonth());
+            const intervalsElapsed = Math.floor(monthsElapsed / stepUpMonths);
+            currentMonthlyAmount = monthlyAmount + intervalsElapsed * stepUpAmount;
+        }
+
+        // ── Find nearest valid trading day (holiday-aware) ───────────
+        const targetIso = toIsoDateString(current);
         let foundKey = null;
 
-        // Forward scan: find the first navMap key >= targetIso within the same month (+10 days buffer)
         for (const key of sortedKeys) {
             if (key >= targetIso) {
-                // Make sure we don't overshoot into next month by more than 10 days
-                const keyDate = new Date(key);
-                const daysDiff = (keyDate - current) / (1000 * 60 * 60 * 24);
-                if (daysDiff <= 10) {
-                    foundKey = key;
-                }
+                const daysDiff = (new Date(key) - current) / (1000 * 60 * 60 * 24);
+                if (daysDiff <= 10) foundKey = key;
                 break;
             }
         }
 
         if (foundKey) {
             const nav = navMap.get(foundKey);
-            const units = monthlyAmount / nav;
+            const units = currentMonthlyAmount / nav;
             totalUnits += units;
-            totalInvested += monthlyAmount;
+            totalInvested += currentMonthlyAmount;
             instalments.push({
                 date: foundKey,          // YYYY-MM-DD of actual execution
                 nav,
                 units,
-                amount: monthlyAmount
+                amount: currentMonthlyAmount,
+                baseAmount: monthlyAmount  // for traceability
             });
         }
 
-        // Advance to 1st of next month
-        current.setMonth(current.getMonth() + 1);
-        current.setDate(1);
+        // Advance to 1st of next month (safe: set day=1 first, then month++)
+        current = new Date(current.getFullYear(), current.getMonth() + 1, 1);
     }
 
     return { instalments, totalUnits, totalInvested };
 }
+
 
 /** Helper: format a Date as 'YYYY-MM-DD' */
 function toIsoDateString(date) {
