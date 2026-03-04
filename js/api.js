@@ -416,3 +416,104 @@ async function fetchGrowwDetails(slug) {
         return null;
     }
 }
+
+/**
+ * Master Aggregator: Fetches core NAV data and concurrently resolves/fetches deep metrics
+ * from Kuvera and Groww. Merges all into a rigid standardized schema.
+ */
+async function aggregateFundDetails(schemeCode, cleanFundName) {
+    if (!schemeCode) return null;
+
+    // Step A: Fetch base data
+    let baseData = null;
+    try {
+        baseData = await fetchFundData(schemeCode);
+    } catch (e) {
+        console.error("Master Aggregator failed at base NAV fetch:", e);
+        return null; // Fatal error, can't proceed without core data
+    }
+
+    // Fallback if name isn't provided (try to get from metadata)
+    const searchName = cleanFundName || (baseData && baseData.meta ? baseData.meta.scheme_name : "");
+
+    // Step B & C: Concurrently resolve IDs and fetch deep data
+    const [kuveraData, growwData] = await Promise.all([
+        resolveKuveraName(searchName).then(isin => fetchKuveraDetails(isin)),
+        resolveGrowwSlug(searchName).then(slug => fetchGrowwDetails(slug))
+    ]);
+
+    // Standardized Schema Definition
+    const fund = {
+        meta: baseData.meta || {},
+        data: baseData.data ? prepareNavData(baseData.data) : [],
+
+        // Deep Metrics (Coalesced and strict null defaults)
+        portfolio: {
+            aum: null,
+            expense_ratio: null,
+            exit_load: null,
+            holdings: [],
+            sectors: [],
+            equity_percentage: null,
+            debt_percentage: null,
+            cash_percentage: null
+        },
+        risk: {
+            volatility: null,
+            sharpe: null,
+            sortino: null,
+            alpha: null,
+            beta: null
+        }
+    };
+
+    // Step D: Map Kuvera Data
+    if (kuveraData && kuveraData.length > 0) {
+        const kFund = kuveraData[0];
+
+        // Risk Ratios
+        if (kFund.volatility !== undefined) fund.risk.volatility = kFund.volatility;
+        if (kFund.sharpe !== undefined) fund.risk.sharpe = kFund.sharpe;
+        if (kFund.sortino !== undefined) fund.risk.sortino = kFund.sortino;
+        if (kFund.alpha !== undefined) fund.risk.alpha = kFund.alpha;
+        if (kFund.beta !== undefined) fund.risk.beta = kFund.beta;
+
+        // Portfolio Arrays
+        if (kFund.portfolio) {
+            fund.portfolio.holdings = kFund.portfolio || [];
+        }
+        if (kFund.sectors) {
+            fund.portfolio.sectors = kFund.sectors || [];
+        }
+
+        // Asset Allocation (Kuvera often holds this in asset_allocations array or similar)
+        if (kFund.asset_allocation) {
+            fund.portfolio.equity_percentage = kFund.asset_allocation.equity || null;
+            fund.portfolio.debt_percentage = kFund.asset_allocation.debt || null;
+            fund.portfolio.cash_percentage = kFund.asset_allocation.cash || null;
+        }
+    }
+
+    // Step D: Map Groww Data
+    if (growwData && growwData.aum_details) {
+        fund.portfolio.aum = growwData.aum_details.aum || null;
+    }
+    if (growwData && growwData.expense_ratio !== undefined) {
+        fund.portfolio.expense_ratio = growwData.expense_ratio || null;
+    }
+    if (growwData && growwData.exit_load_text) {
+        fund.portfolio.exit_load = growwData.exit_load_text || null;
+    }
+
+    // In case Groww proxy has asset allocation where Kuvera failed
+    if (growwData && growwData.asset_allocation) {
+        if (!fund.portfolio.equity_percentage && growwData.asset_allocation.equity) {
+            fund.portfolio.equity_percentage = growwData.asset_allocation.equity;
+        }
+        if (!fund.portfolio.debt_percentage && growwData.asset_allocation.debt) {
+            fund.portfolio.debt_percentage = growwData.asset_allocation.debt;
+        }
+    }
+
+    return fund;
+}
