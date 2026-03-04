@@ -1959,22 +1959,61 @@ async function loadPortfolioView() {
             return;
         }
 
-        // 2. Group by Scheme — handle buy + sip as inflows, sell reduces units
+        // 2. Expand sip_config records → synthetic buy transactions; keep the rest as-is
+        document.getElementById('portfolioEmptyState').textContent = 'Expanding SIP history…';
+
+        let expandedTxns = []; // used for XIRR and holdings math
+
+        // Process sip_configs first (they need NAV fetches)
+        const sipConfigs = txns.filter(t => t.type === 'sip_config');
+        const normalTxns = txns.filter(t => t.type !== 'sip_config');
+
+        // Expand each SIP config into instalment rows
+        for (const cfg of sipConfigs) {
+            try {
+                const endDate = cfg.sipStatus === 'paused' ? cfg.endDate : null;
+                const ledger = await generateSipLedger(
+                    cfg.schemeCode,
+                    Number(cfg.amount),
+                    cfg.startDate,
+                    endDate
+                );
+                // Convert instalments into synthetic buy transactions
+                ledger.instalments.forEach(inst => {
+                    expandedTxns.push({
+                        type: 'buy',
+                        schemeCode: cfg.schemeCode,
+                        schemeName: cfg.schemeName,
+                        amount: inst.amount,
+                        units: inst.units,
+                        navAtDate: inst.nav,
+                        date: inst.date,
+                        _synthetic: true // flag: not a real Firestore doc
+                    });
+                });
+            } catch (e) {
+                console.warn(`SIP ledger expansion failed for ${cfg.schemeCode}:`, e);
+            }
+        }
+
+        // Merge with normal transactions
+        expandedTxns = [...expandedTxns, ...normalTxns];
+
+        // 3. Group by Scheme — handle buy as inflows, sell reduces units
         const holdings = {};
         let globalInvested = 0;
 
-        txns.forEach(t => {
+        expandedTxns.forEach(t => {
             const code = t.schemeCode;
             if (!holdings[code]) {
                 holdings[code] = { name: t.schemeName, code, totalUnits: 0, totalInvested: 0, txns: [] };
             }
-            if (t.type === 'buy' || t.type === 'sip') {
+            if (t.type === 'buy') {
                 holdings[code].totalUnits += Number(t.units);
                 holdings[code].totalInvested += Number(t.amount);
                 globalInvested += Number(t.amount);
             } else if (t.type === 'sell') {
                 holdings[code].totalUnits -= Number(t.units);
-                // Reduce invested proportionally (approximation)
                 const avgCost = holdings[code].totalInvested / (holdings[code].totalUnits + Number(t.units));
                 holdings[code].totalInvested -= avgCost * Number(t.units);
                 globalInvested -= avgCost * Number(t.units);
@@ -1986,6 +2025,7 @@ async function loadPortfolioView() {
         Object.keys(holdings).forEach(code => {
             if (holdings[code].totalUnits <= 0) delete holdings[code];
         });
+
 
         // 3. Fetch latest NAV for each holding in parallel
         await Promise.all(Object.keys(holdings).map(async code => {
@@ -2039,8 +2079,8 @@ async function loadPortfolioView() {
         returnEl.textContent = (totalAbsReturn >= 0 ? '+' : '') + totalAbsReturn.toFixed(2) + '%';
         returnEl.className = 'stat-value ' + getPercentClass(totalAbsReturn / 100);
 
-        // 6. XIRR — build cash flows across all transactions
-        const allBuyTxns = txns.filter(t => t.type === 'buy' || t.type === 'sip');
+        // 6. XIRR — build cash flows across all expanded transactions (includes synthetic SIP rows)
+        const allBuyTxns = expandedTxns.filter(t => t.type === 'buy');
         const cashFlows = buildCashFlows(allBuyTxns, globalCurrentValue);
         const xirrEl = document.getElementById('pfXirr');
         if (cashFlows && cashFlows.length >= 2 && globalCurrentValue > 0) {

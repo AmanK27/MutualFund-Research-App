@@ -215,19 +215,71 @@ async function saveNewTransaction() {
 
     const type = document.getElementById('pfTxnType').value;
     const amount = parseFloat(document.getElementById('pfTxnAmount').value);
-    const nav = parseFloat(document.getElementById('pfTxnNav').value);
-    const units = parseFloat(document.getElementById('pfTxnUnits').value);
     const dateStr = document.getElementById('pfTxnDate').value;
 
     if (!dateStr || isNaN(amount) || amount <= 0) {
         showToast('Please fill Amount and Date correctly.', 'error'); return;
     }
-    if (isNaN(nav) || nav <= 0 || isNaN(units) || units <= 0) {
-        showToast('NAV and Units are required. Fetch or enter NAV manually.', 'error'); return;
-    }
 
     const btn = document.getElementById('pfSaveTxnBtn');
-    btn.textContent = 'Saving…'; btn.disabled = true;
+    btn.disabled = true;
+
+    /* ── SIP Config path ────────────────────────────────────────── */
+    if (type === 'sip') {
+        const sipStatus = document.getElementById('pfSipStatus').value;   // 'active' | 'paused'
+        const lastSipDate = sipStatus === 'paused'
+            ? document.getElementById('pfLastSipDate').value
+            : null;
+
+        if (sipStatus === 'paused' && !lastSipDate) {
+            showToast('Please enter the Last SIP Date for a paused SIP.', 'error');
+            btn.disabled = false; return;
+        }
+
+        btn.textContent = '⏳ Simulating SIP history…';
+
+        try {
+            // Validate the ledger can be generated before saving
+            await generateSipLedger(
+                pfModalSelectedCode,
+                amount,
+                dateStr,
+                lastSipDate || null
+            );
+
+            // Save only the compact config — NOT the individual instalments
+            await addTransaction({
+                type: 'sip_config',
+                schemeCode: pfModalSelectedCode,
+                schemeName: pfModalSelectedName,
+                amount,                          // monthly amount
+                startDate: dateStr,
+                sipStatus,                       // 'active' | 'paused'
+                endDate: lastSipDate || null
+            });
+
+            showToast('SIP added to portfolio ✓', 'success');
+            closePortfolioTxnModal();
+            loadPortfolioView();
+        } catch (err) {
+            console.error('Save SIP error:', err);
+            showToast('Failed to save SIP: ' + err.message, 'error');
+        } finally {
+            btn.textContent = 'Save Transaction'; btn.disabled = false;
+        }
+        return;
+    }
+
+    /* ── Lump Sum / Sell path ───────────────────────────────────── */
+    const nav = parseFloat(document.getElementById('pfTxnNav').value);
+    const units = parseFloat(document.getElementById('pfTxnUnits').value);
+
+    if (isNaN(nav) || nav <= 0 || isNaN(units) || units <= 0) {
+        showToast('NAV and Units are required. Fetch or enter NAV manually.', 'error');
+        btn.disabled = false; return;
+    }
+
+    btn.textContent = 'Saving…';
 
     try {
         await addTransaction({
@@ -249,6 +301,7 @@ async function saveNewTransaction() {
         btn.textContent = 'Save Transaction'; btn.disabled = false;
     }
 }
+
 
 /* ── XIRR Engine ────────────────────────────────────────────────── */
 /**
