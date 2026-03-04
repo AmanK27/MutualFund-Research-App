@@ -237,3 +237,14 @@ function getPercentClass(value) {
     if (value === null || value === undefined) return '';
     return value >= 0 ? 'stat-positive' : 'stat-negative';
 }
+
+/**
+ * Strict data formatting for the Compare UI
+ * Returns "-" for null, undefined, NaN, or empty strings.
+ */
+function formatCompareData(value, suffix = '') {
+    if (value === null || value === undefined || String(value).trim() === '' || (typeof value === 'number' && isNaN(value))) {
+        return '-';
+    }
+    return String(value) + suffix;
+}

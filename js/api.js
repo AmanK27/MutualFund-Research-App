@@ -213,7 +213,19 @@ async function fetchAdvancedFundData(schemeName) {
             aum: detailJson.aum,
             expenseRatio: detailJson.expense_ratio,
             exitLoad: detailJson.exit_load,
-            holdings: detailJson.holdings || []
+            holdings: detailJson.holdings || [],
+            assetAllocation: detailJson.asset_allocation || [],
+            riskStats: detailJson.risk_stats || {},
+            ratingDistribution: detailJson.rating_distribution || [],
+            minInvestment: detailJson.min_investment,
+            minAdditionalInvestment: detailJson.min_additional_investment,
+            minSipInvestment: detailJson.min_sip_investment,
+            minWithdrawal: detailJson.min_withdrawal,
+            fundHouse: detailJson.fund_house,
+            schemeType: detailJson.scheme_type,
+            riskGrade: detailJson.risk_grade,
+            returnGrade: detailJson.return_grade,
+            details: detailJson // Keep full object for any extra fields
         };
     } catch (err) {
         console.warn('Advanced fetch failed:', err);
