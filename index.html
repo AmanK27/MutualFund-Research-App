@@ -598,46 +598,31 @@
                         </div>
                     </div>
 
-                    <div class="compare-stats-container">
-                        <!-- Fund A Stats -->
-                        <div class="compare-stat-box" id="compareBoxA">
-                            <div class="compare-fund-title" id="compNameA">—</div>
-                            <div class="compare-stat-row"><span class="compare-stat-label">Latest NAV</span><span
-                                    class="compare-stat-value" id="compNavA">—</span></div>
-                            <div class="compare-stat-row"><span class="compare-stat-label">1Y Return</span><span
-                                    class="compare-stat-value" id="comp1yA">—</span></div>
-                            <div class="compare-stat-row"><span class="compare-stat-label">3Y Return</span><span
-                                    class="compare-stat-value" id="comp3yA">—</span></div>
-                            <div class="compare-stat-row"><span class="compare-stat-label">5Y Return</span><span
-                                    class="compare-stat-value" id="comp5yA">—</span></div>
-                            <div class="compare-stat-row"><span class="compare-stat-label">Volatility</span><span
-                                    class="compare-stat-value" id="compVolA">—</span></div>
-                            <div class="compare-stat-row"><span class="compare-stat-label">Expense Ratio</span><span
-                                    class="compare-stat-value" id="compExpA">—</span></div>
-                            <div class="compare-stat-row"><span class="compare-stat-label">Fund Size (AUM)</span><span
-                                    class="compare-stat-value" id="compAumA">—</span></div>
-                        </div>
-
-                        <!-- Fund B Stats -->
-                        <div class="compare-stat-box" id="compareBoxB">
-                            <div class="compare-fund-title" id="compNameB" style="color: #ec4899;">—</div>
-                            <div class="compare-stat-row"><span class="compare-stat-label">Latest NAV</span><span
-                                    class="compare-stat-value" id="compNavB">—</span></div>
-                            <div class="compare-stat-row"><span class="compare-stat-label">1Y Return</span><span
-                                    class="compare-stat-value" id="comp1yB">—</span></div>
-                            <div class="compare-stat-row"><span class="compare-stat-label">3Y Return</span><span
-                                    class="compare-stat-value" id="comp3yB">—</span></div>
-                            <div class="compare-stat-row"><span class="compare-stat-label">5Y Return</span><span
-                                    class="compare-stat-value" id="comp5yB">—</span></div>
-                            <div class="compare-stat-row"><span class="compare-stat-label">Volatility</span><span
-                                    class="compare-stat-value" id="compVolB">—</span></div>
-                            <div class="compare-stat-row"><span class="compare-stat-label">Expense Ratio</span><span
-                                    class="compare-stat-value" id="compExpB">—</span></div>
-                            <div class="compare-stat-row"><span class="compare-stat-label">Fund Size (AUM)</span><span
-                                    class="compare-stat-value" id="compAumB">—</span></div>
-                        </div>
+                    <!-- New Tabbed Interface Shell -->
+                    <div class="compare-tabs-container">
+                        <ul class="compare-tabs" id="compareTabs">
+                            <li class="compare-tab active" data-tab="returns">Trailing Returns (%)</li>
+                            <li class="compare-tab" data-tab="risk">Risk Ratios</li>
+                            <li class="compare-tab" data-tab="assets">Asset Allocation (%)</li>
+                            <li class="compare-tab" data-tab="ratings">Rating Distribution</li>
+                            <li class="compare-tab" data-tab="holdings">Holdings</li>
+                            <li class="compare-tab" data-tab="details">Other details</li>
+                        </ul>
                     </div>
-                </div>
+
+                    <div class="compare-table-wrapper">
+                        <table class="compare-table" id="compareTable">
+                            <thead>
+                                <tr id="compareTableHeader">
+                                    <th></th>
+                                    <!-- Dynamic headers will be injected here -->
+                                </tr>
+                            </thead>
+                            <tbody id="compareTableBody">
+                                <!-- Dynamic rows will be injected here -->
+                            </tbody>
+                        </table>
+                    </div>
 
                 <div id="compareLoadingState" style="text-align: center; margin-top: 48px; display: none;">
                     <div class="spinner"></div>
