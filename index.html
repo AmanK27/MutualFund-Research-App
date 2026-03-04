@@ -3845,23 +3845,44 @@
 
         async function fetchAdvancedFundData(schemeName) {
             try {
-                // 1. Search Groww for the fund via corsproxy
                 const cleanName = sanitizeForGroww(schemeName);
-                const searchUrl = 'https://groww.in/v1/api/search/v3/query/global/st_p_query?page=0&query=' + encodeURIComponent(cleanName);
-                const proxySearchUrl = 'https://api.allorigins.win/get?url=' + encodeURIComponent(searchUrl);
 
-                const res = await fetch(proxySearchUrl);
-                if (!res.ok) return null;
+                // Helper function to perform the Groww search
+                const performGrowwSearch = async (query) => {
+                    const searchUrl = 'https://groww.in/v1/api/search/v3/query/global/st_p_query?page=0&query=' + encodeURIComponent(query);
+                    const proxySearchUrl = 'https://api.allorigins.win/get?url=' + encodeURIComponent(searchUrl);
 
-                const wrapperJson = await res.json();
-                if (!wrapperJson.contents) return null;
-                const json = JSON.parse(wrapperJson.contents);
+                    const res = await fetch(proxySearchUrl);
+                    if (!res.ok) return null;
 
-                const contentArr = json.data && json.data.content ? json.data.content.filter(x => x.entity_type === 'Scheme') : [];
-                if (contentArr.length === 0) return null;
+                    const wrapperJson = await res.json();
+                    if (!wrapperJson.contents) return null;
+                    const json = JSON.parse(wrapperJson.contents);
 
-                // Extract search ID from first valid Scheme hit
-                const searchId = contentArr[0].search_id;
+                    return json.data && json.data.content ? json.data.content.filter(x => x.entity_type === 'Scheme') : [];
+                };
+
+                // 1. Search Groww for the fund via corsproxy
+                let contentArr = await performGrowwSearch(cleanName);
+
+                // Retry with simplified query if no results
+                if (!contentArr || contentArr.length === 0) {
+                    const simplifiedName = cleanName.replace(/\s*fund\s*/gi, '').replace(/\s*mf\s*/gi, '');
+                    if (simplifiedName !== cleanName) { // Only retry if simplification actually changed the name
+                        contentArr = await performGrowwSearch(simplifiedName);
+                    }
+                }
+
+                if (!contentArr || contentArr.length === 0) return null;
+
+                // Prefer Direct Plan: find an item where search_id contains 'direct'
+                let selectedScheme = contentArr.find(x => x.search_id && x.search_id.toLowerCase().includes('direct'));
+                if (!selectedScheme) {
+                    selectedScheme = contentArr[0]; // Fallback to the first scheme if no direct plan is explicitly found
+                }
+
+                // Extract search ID from selected scheme
+                const searchId = selectedScheme.search_id;
                 if (!searchId) return null;
 
                 // 2. Fetch Scheme Details via proxy
@@ -3874,6 +3895,12 @@
                 const detailWrapper = await detailRes.json();
                 if (!detailWrapper.contents) return null;
                 const detailJson = JSON.parse(detailWrapper.contents);
+
+                // 3. Validate that the fetched plan_type is 'Direct'
+                if (detailJson.plan_type !== 'Direct') {
+                    console.warn(`Fetched scheme for "${schemeName}" is not a Direct plan (${detailJson.plan_type}). Skipping advanced data.`);
+                    return null;
+                }
 
                 return {
                     aum: detailJson.aum,
