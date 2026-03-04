@@ -1742,6 +1742,16 @@ auth.onAuthStateChanged(function (user) {
         userProfile.style.display = 'none';
         console.log('Auth: Signed out');
     }
+
+    // Expose inner UI and Event functions to global scope for HTML inline standard handlers
+    window.handleGoogleSignIn = handleGoogleSignIn;
+    window.handleSignOut = handleSignOut;
+    window.handleGuestSignIn = handleGuestSignIn;
+    window.refreshLiveData = refreshLiveData;
+    window.loadFund = loadFund;
+    window.refreshTopFunds = refreshTopFunds;
+    window.setTopFundsHorizon = setTopFundsHorizon;
+    window.toggleWatchlist = toggleWatchlist;
 });
 
 
