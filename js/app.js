@@ -1934,6 +1934,13 @@ async function loadPortfolioView() {
         return;
     }
 
+    // Initialise alert settings inputs from localStorage
+    const alertSettings = loadAlertSettings();
+    const stopLossEl = document.getElementById('alertStopLoss');
+    const takeProfitEl = document.getElementById('alertTakeProfit');
+    if (stopLossEl) stopLossEl.value = alertSettings.stopLoss;
+    if (takeProfitEl) takeProfitEl.value = alertSettings.takeProfit;
+
     document.getElementById('portfolioEmptyState').textContent = 'Loading your portfolio data...';
     document.getElementById('portfolioEmptyState').style.display = 'block';
     document.getElementById('portfolioStatsGrid').style.display = 'none';
@@ -1943,35 +1950,45 @@ async function loadPortfolioView() {
         // 1. Fetch Transactions
         const txns = await getTransactions();
         if (txns.length === 0) {
-            document.getElementById('portfolioEmptyState').textContent = 'Your portfolio is empty. Add transactions from the fund dashboard.';
+            document.getElementById('portfolioEmptyState').textContent = 'Your portfolio is empty. Click "+ Add Transaction" above to get started.';
+            document.getElementById('portfolioEmptyState').style.display = 'block';
+            const insightsWrapper = document.getElementById('portfolioInsightsWrapper');
+            const txnDetails = document.getElementById('txnHistoryDetails');
+            if (insightsWrapper) insightsWrapper.style.display = 'none';
+            if (txnDetails) txnDetails.style.display = 'none';
             return;
         }
 
-        // 2. Group by Scheme
-        const holdings = {}; // code -> { name, totalUnits, totalInvested, txns: [] }
+        // 2. Group by Scheme — handle buy + sip as inflows, sell reduces units
+        const holdings = {};
         let globalInvested = 0;
 
         txns.forEach(t => {
             const code = t.schemeCode;
             if (!holdings[code]) {
-                holdings[code] = {
-                    name: t.schemeName,
-                    code: t.schemeCode,
-                    totalUnits: 0,
-                    totalInvested: 0,
-                    txns: []
-                };
+                holdings[code] = { name: t.schemeName, code, totalUnits: 0, totalInvested: 0, txns: [] };
             }
-            if (t.type === 'buy') {
-                holdings[code].totalUnits += t.units;
-                holdings[code].totalInvested += t.amount;
-                globalInvested += t.amount;
-                holdings[code].txns.push(t);
+            if (t.type === 'buy' || t.type === 'sip') {
+                holdings[code].totalUnits += Number(t.units);
+                holdings[code].totalInvested += Number(t.amount);
+                globalInvested += Number(t.amount);
+            } else if (t.type === 'sell') {
+                holdings[code].totalUnits -= Number(t.units);
+                // Reduce invested proportionally (approximation)
+                const avgCost = holdings[code].totalInvested / (holdings[code].totalUnits + Number(t.units));
+                holdings[code].totalInvested -= avgCost * Number(t.units);
+                globalInvested -= avgCost * Number(t.units);
             }
+            holdings[code].txns.push(t);
+        });
+
+        // Remove fully-sold holdings
+        Object.keys(holdings).forEach(code => {
+            if (holdings[code].totalUnits <= 0) delete holdings[code];
         });
 
         // 3. Fetch latest NAV for each holding in parallel
-        const fetchPromises = Object.keys(holdings).map(async code => {
+        await Promise.all(Object.keys(holdings).map(async code => {
             try {
                 const res = await fetch(`https://api.mfapi.in/mf/${code}`);
                 if (!res.ok) throw new Error('API failed');
@@ -1980,33 +1997,26 @@ async function loadPortfolioView() {
                     holdings[code].currentNav = parseFloat(data.data[0].nav);
                     holdings[code].currentValue = holdings[code].currentNav * holdings[code].totalUnits;
                 } else {
-                    holdings[code].currentNav = 0;
-                    holdings[code].currentValue = 0;
+                    holdings[code].currentNav = 0; holdings[code].currentValue = 0;
                 }
             } catch (e) {
-                console.warn("Failed to fetch NAV for", code);
-                holdings[code].currentNav = 0;
-                holdings[code].currentValue = 0;
+                holdings[code].currentNav = 0; holdings[code].currentValue = 0;
             }
-        });
+        }));
 
-        await Promise.all(fetchPromises);
-
-        // 4. Calculate Aggregate Metrics
+        // 4. Build holdings table
         let globalCurrentValue = 0;
         const tbody = document.getElementById('portfolioTableBody');
         tbody.innerHTML = '';
 
         Object.values(holdings).forEach(h => {
             globalCurrentValue += h.currentValue;
-
-            const avgNav = h.totalInvested / h.totalUnits;
-            const absReturnPct = ((h.currentValue - h.totalInvested) / h.totalInvested) * 100;
+            const avgNav = h.totalUnits > 0 ? h.totalInvested / h.totalUnits : 0;
+            const absReturnPct = h.totalInvested > 0 ? ((h.currentValue - h.totalInvested) / h.totalInvested) * 100 : 0;
 
             const tr = document.createElement('tr');
             tr.style.cursor = 'pointer';
             tr.onclick = () => loadFund(h.code);
-
             tr.innerHTML = `
                 <td style="font-weight: 500;">${escapeHtml(h.name)}</td>
                 <td>${h.totalUnits.toFixed(3)}</td>
@@ -2019,8 +2029,8 @@ async function loadPortfolioView() {
             tbody.appendChild(tr);
         });
 
-        // 5. Update UI
-        const totalAbsReturn = ((globalCurrentValue - globalInvested) / globalInvested) * 100;
+        // 5. Compute aggregate stats
+        const totalAbsReturn = globalInvested > 0 ? ((globalCurrentValue - globalInvested) / globalInvested) * 100 : 0;
 
         document.getElementById('pfTotalInvested').textContent = '₹' + globalInvested.toLocaleString('en-IN');
         document.getElementById('pfCurrentValue').textContent = '₹' + globalCurrentValue.toLocaleString('en-IN', { maximumFractionDigits: 0 });
@@ -2029,16 +2039,47 @@ async function loadPortfolioView() {
         returnEl.textContent = (totalAbsReturn >= 0 ? '+' : '') + totalAbsReturn.toFixed(2) + '%';
         returnEl.className = 'stat-value ' + getPercentClass(totalAbsReturn / 100);
 
-        // Global XIRR placeholder (complex to do purely client side rapidly across multiple funds without stalling thread)
-        document.getElementById('pfXirr').textContent = '—';
+        // 6. XIRR — build cash flows across all transactions
+        const allBuyTxns = txns.filter(t => t.type === 'buy' || t.type === 'sip');
+        const cashFlows = buildCashFlows(allBuyTxns, globalCurrentValue);
+        const xirrEl = document.getElementById('pfXirr');
+        if (cashFlows && cashFlows.length >= 2 && globalCurrentValue > 0) {
+            try {
+                const xirr = computeXIRR(cashFlows);
+                if (isFinite(xirr) && !isNaN(xirr)) {
+                    xirrEl.textContent = (xirr >= 0 ? '+' : '') + (xirr * 100).toFixed(2) + '%';
+                    xirrEl.className = 'stat-value ' + getPercentClass(xirr);
+                } else {
+                    xirrEl.textContent = '—';
+                }
+            } catch (e) {
+                xirrEl.textContent = '—';
+            }
+        } else {
+            xirrEl.textContent = '—';
+        }
 
+        // 7. Show main sections
         document.getElementById('portfolioEmptyState').style.display = 'none';
         document.getElementById('portfolioStatsGrid').style.display = 'grid';
         document.getElementById('portfolioTableCard').style.display = 'block';
 
+        // 8. Render Transaction History
+        const txnDetails = document.getElementById('txnHistoryDetails');
+        if (txnDetails) txnDetails.style.display = 'block';
+        renderTransactionHistory(txns);
+
+        // 9. Run Insights & Alerts
+        const insightsWrapper = document.getElementById('portfolioInsightsWrapper');
+        if (insightsWrapper) insightsWrapper.style.display = 'block';
+        const freshAlertSettings = loadAlertSettings();
+        const alerts = await runInsightAlerts(holdings, freshAlertSettings);
+        renderInsightAlerts(alerts);
+
     } catch (e) {
         console.error("Portfolio Load Error:", e);
         document.getElementById('portfolioEmptyState').textContent = 'Failed to load portfolio: ' + e.message;
+        document.getElementById('portfolioEmptyState').style.display = 'block';
     }
 }
 

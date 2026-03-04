@@ -460,13 +460,53 @@
 
             <!-- Portfolio View -->
             <section id="portfolioView" style="display: none;">
-                <div class="welcome-icon">💼</div>
-                <h2 class="welcome-title">My Portfolio</h2>
-                <p class="welcome-subtitle">
-                    Track your mutual fund holdings, aggregated value, and absolute returns.
-                </p>
+                <div
+                    style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:8px;">
+                    <div>
+                        <div class="welcome-icon" style="font-size:32px;margin-bottom:8px;">💼</div>
+                        <h2 class="welcome-title" style="margin-bottom:4px;">My Portfolio</h2>
+                        <p class="welcome-subtitle" style="margin-bottom:0;">Track your holdings, compute real-time
+                            value, and get smart alerts.</p>
+                    </div>
+                    <button id="addTxnBtn" onclick="openPortfolioTxnModal()"
+                        style="display:flex;align-items:center;gap:8px;padding:12px 20px;background:linear-gradient(135deg,rgba(99,102,241,0.2),rgba(139,92,246,0.2));border:1px solid rgba(99,102,241,0.5);border-radius:var(--radius);color:#a78bfa;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;transition:all var(--transition-fast);"
+                        onmouseover="this.style.background='linear-gradient(135deg,rgba(99,102,241,0.3),rgba(139,92,246,0.3))'"
+                        onmouseout="this.style.background='linear-gradient(135deg,rgba(99,102,241,0.2),rgba(139,92,246,0.2))'">
+                        ＋ Add Transaction
+                    </button>
+                </div>
 
-                <div class="stats-grid" id="portfolioStatsGrid" style="margin-top: 32px; display: none;">
+                <!-- Alert Settings Card -->
+                <details id="alertSettingsDetails" style="margin-top:16px;">
+                    <summary
+                        style="cursor:pointer;padding:12px 16px;background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.2);border-radius:var(--radius);font-size:13px;font-weight:600;color:var(--text-primary);list-style:none;display:flex;align-items:center;gap:8px;">
+                        ⚙️ Alert Settings
+                        <span id="alertsBadge"
+                            style="display:none;background:#ef4444;color:#fff;border-radius:999px;padding:2px 7px;font-size:11px;font-weight:700;">0</span>
+                    </summary>
+                    <div
+                        style="padding:16px;border:1px solid rgba(245,158,11,0.15);border-top:none;border-radius:0 0 var(--radius) var(--radius);background:rgba(0,0,0,0.2);">
+                        <div style="display:flex;gap:20px;flex-wrap:wrap;align-items:flex-end;">
+                            <div style="display:flex;flex-direction:column;gap:6px;">
+                                <label style="font-size:12px;color:var(--text-muted);">Stop-Loss Threshold (%)</label>
+                                <input type="number" id="alertStopLoss" value="-5" step="0.5"
+                                    style="width:130px;padding:8px 12px;background:rgba(0,0,0,0.3);border:1px solid var(--border-glass);border-radius:var(--radius-sm);color:var(--text-primary);font-size:13px;font-family:inherit;">
+                            </div>
+                            <div style="display:flex;flex-direction:column;gap:6px;">
+                                <label style="font-size:12px;color:var(--text-muted);">Take-Profit Target (%)</label>
+                                <input type="number" id="alertTakeProfit" value="15" step="0.5"
+                                    style="width:130px;padding:8px 12px;background:rgba(0,0,0,0.3);border:1px solid var(--border-glass);border-radius:var(--radius-sm);color:var(--text-primary);font-size:13px;font-family:inherit;">
+                            </div>
+                            <button
+                                onclick="saveAlertSettings({stopLoss: parseFloat(document.getElementById('alertStopLoss').value), takeProfit: parseFloat(document.getElementById('alertTakeProfit').value)})"
+                                style="padding:8px 18px;background:rgba(245,158,11,0.15);border:1px solid rgba(245,158,11,0.3);border-radius:var(--radius-sm);color:#fbbf24;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;">
+                                Save Alerts
+                            </button>
+                        </div>
+                    </div>
+                </details>
+
+                <div class="stats-grid" id="portfolioStatsGrid" style="margin-top: 24px; display: none;">
                     <div class="stat-card">
                         <div class="stat-label">Total Invested</div>
                         <div class="stat-value" id="pfTotalInvested">—</div>
@@ -506,11 +546,151 @@
                     </table>
                 </div>
 
+                <!-- Insights & Alerts Panel -->
+                <div id="portfolioInsightsWrapper" style="display:none;margin-top:24px;">
+                    <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
+                        <span style="font-size:18px;">🔔</span>
+                        <h3 style="font-size:15px;font-weight:700;color:var(--text-primary);margin:0;">Insights & Alerts
+                        </h3>
+                    </div>
+                    <div id="portfolioInsightsPanel"></div>
+                </div>
+
+                <!-- Transaction History Accordion -->
+                <details id="txnHistoryDetails" style="margin-top:24px;display:none;">
+                    <summary
+                        style="cursor:pointer;padding:12px 16px;background:rgba(56,189,248,0.06);border:1px solid rgba(56,189,248,0.15);border-radius:var(--radius);font-size:13px;font-weight:600;color:var(--text-primary);list-style:none;display:flex;align-items:center;gap:8px;">
+                        📋 Transaction History
+                    </summary>
+                    <div
+                        style="border:1px solid rgba(56,189,248,0.1);border-top:none;border-radius:0 0 var(--radius) var(--radius);overflow:hidden;">
+                        <table class="fund-table" style="margin:0;">
+                            <thead>
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Type</th>
+                                    <th>Fund</th>
+                                    <th>Amount</th>
+                                    <th>Units</th>
+                                    <th style="text-align:right;">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="txnHistoryBody"></tbody>
+                        </table>
+                    </div>
+                </details>
+
                 <div id="portfolioEmptyState"
                     style="text-align: center; margin-top: 64px; color: var(--text-secondary);">
                     Loading your portfolio data...
                 </div>
             </section>
+
+            <!-- Portfolio Transaction Modal -->
+            <div id="portfolioTxnModal"
+                style="display:none;position:fixed;inset:0;z-index:1200;align-items:center;justify-content:center;background:rgba(0,0,0,0.6);backdrop-filter:blur(6px);">
+                <div class="pf-modal-card"
+                    style="background:var(--bg-card);border:1px solid var(--border-glass);border-radius:var(--radius-lg);padding:28px;width:min(520px,95vw);max-height:90vh;overflow-y:auto;transform:scale(0.95);transition:transform 0.2s cubic-bezier(0.4,0,0.2,1);">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+                        <div>
+                            <h3 style="font-size:17px;font-weight:700;color:var(--text-primary);margin:0;">Add
+                                Transaction</h3>
+                            <p style="font-size:12px;color:var(--text-muted);margin:4px 0 0;">Record a Buy, Sell, or SIP
+                                transaction in your portfolio.</p>
+                        </div>
+                        <button onclick="closePortfolioTxnModal()"
+                            style="background:none;border:none;color:var(--text-muted);font-size:22px;cursor:pointer;line-height:1;padding:4px;">&times;</button>
+                    </div>
+
+                    <!-- Fund Search -->
+                    <div style="margin-bottom:16px;">
+                        <label
+                            style="font-size:12px;color:var(--text-secondary);font-weight:500;display:block;margin-bottom:6px;">Search
+                            Fund</label>
+                        <div style="position:relative;">
+                            <input type="text" id="pfFundSearch" placeholder="Type fund name or scheme code…"
+                                oninput="handlePfFundSearch()"
+                                style="width:100%;box-sizing:border-box;padding:10px 14px;background:rgba(0,0,0,0.3);border:1px solid var(--border-glass);border-radius:var(--radius-sm);color:var(--text-primary);font-size:13px;font-family:inherit;outline:none;transition:border-color var(--transition-fast);"
+                                onfocus="this.style.borderColor='var(--accent)'"
+                                onblur="this.style.borderColor='var(--border-glass)'">
+                            <ul id="pfFundResults"
+                                style="position:absolute;top:100%;left:0;right:0;background:var(--bg-card);border:1px solid var(--border-glass);border-top:none;border-radius:0 0 var(--radius-sm) var(--radius-sm);list-style:none;margin:0;padding:0;max-height:200px;overflow-y:auto;z-index:10;">
+                            </ul>
+                        </div>
+                        <div id="pfSelectedFundLabel" style="font-size:11px;color:var(--text-muted);margin-top:6px;">No
+                            fund selected</div>
+                    </div>
+
+                    <!-- Transaction Type -->
+                    <div style="margin-bottom:16px;">
+                        <label
+                            style="font-size:12px;color:var(--text-secondary);font-weight:500;display:block;margin-bottom:6px;">Transaction
+                            Type</label>
+                        <select id="pfTxnType"
+                            style="width:100%;padding:10px 14px;background:rgba(0,0,0,0.3);border:1px solid var(--border-glass);border-radius:var(--radius-sm);color:var(--text-primary);font-size:13px;font-family:inherit;outline:none;">
+                            <option value="buy">🟢 Buy (Lump Sum)</option>
+                            <option value="sip">🔵 SIP (Monthly)</option>
+                            <option value="sell">🔴 Sell</option>
+                        </select>
+                    </div>
+
+                    <!-- Amount + Date Row -->
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px;">
+                        <div>
+                            <label
+                                style="font-size:12px;color:var(--text-secondary);font-weight:500;display:block;margin-bottom:6px;">Amount
+                                Invested (₹)</label>
+                            <input type="number" id="pfTxnAmount" placeholder="e.g. 10000" oninput="recomputePfUnits()"
+                                style="width:100%;box-sizing:border-box;padding:10px 14px;background:rgba(0,0,0,0.3);border:1px solid var(--border-glass);border-radius:var(--radius-sm);color:var(--text-primary);font-size:13px;font-family:inherit;outline:none;"
+                                onfocus="this.style.borderColor='var(--accent)'"
+                                onblur="this.style.borderColor='var(--border-glass)'">
+                        </div>
+                        <div>
+                            <label
+                                style="font-size:12px;color:var(--text-secondary);font-weight:500;display:block;margin-bottom:6px;">Transaction
+                                Date</label>
+                            <input type="date" id="pfTxnDate" onchange="autofetchPfNav()"
+                                style="width:100%;box-sizing:border-box;padding:10px 14px;background:rgba(0,0,0,0.3);border:1px solid var(--border-glass);border-radius:var(--radius-sm);color:var(--text-primary);font-size:13px;font-family:inherit;outline:none;"
+                                onfocus="this.style.borderColor='var(--accent)'"
+                                onblur="this.style.borderColor='var(--border-glass)'">
+                        </div>
+                    </div>
+
+                    <!-- NAV + Units Row -->
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:24px;">
+                        <div>
+                            <label
+                                style="font-size:12px;color:var(--text-secondary);font-weight:500;display:block;margin-bottom:6px;">NAV
+                                at Purchase (₹) <span
+                                    style="color:var(--text-muted);font-weight:400;">(auto-fetched)</span></label>
+                            <input type="number" id="pfTxnNav" placeholder="Fetching…" step="0.0001"
+                                oninput="recomputePfUnits()"
+                                style="width:100%;box-sizing:border-box;padding:10px 14px;background:rgba(0,0,0,0.3);border:1px solid var(--border-glass);border-radius:var(--radius-sm);color:var(--text-primary);font-size:13px;font-family:inherit;outline:none;"
+                                onfocus="this.style.borderColor='var(--accent)'"
+                                onblur="this.style.borderColor='var(--border-glass)'">
+                        </div>
+                        <div>
+                            <label
+                                style="font-size:12px;color:var(--text-secondary);font-weight:500;display:block;margin-bottom:6px;">Units
+                                Allotted <span
+                                    style="color:var(--text-muted);font-weight:400;">(auto-computed)</span></label>
+                            <input type="number" id="pfTxnUnits" placeholder="Auto-calculated" step="0.0001" readonly
+                                style="width:100%;box-sizing:border-box;padding:10px 14px;background:rgba(0,0,0,0.15);border:1px solid var(--border-glass);border-radius:var(--radius-sm);color:var(--text-secondary);font-size:13px;font-family:inherit;outline:none;">
+                        </div>
+                    </div>
+
+                    <!-- Actions -->
+                    <div style="display:flex;gap:10px;justify-content:flex-end;">
+                        <button onclick="closePortfolioTxnModal()"
+                            style="padding:10px 20px;background:rgba(255,255,255,0.06);border:1px solid var(--border-glass);border-radius:var(--radius-sm);color:var(--text-secondary);font-size:13px;font-weight:500;cursor:pointer;font-family:inherit;">Cancel</button>
+                        <button id="pfSaveTxnBtn" onclick="saveNewTransaction()"
+                            style="padding:10px 24px;background:linear-gradient(135deg,#6366f1,#8b5cf6);border:none;border-radius:var(--radius-sm);color:#fff;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;transition:opacity 0.15s;"
+                            onmouseover="this.style.opacity='0.85'" onmouseout="this.style.opacity='1'">
+                            Save Transaction
+                        </button>
+                    </div>
+                </div>
+            </div>
 
             <!-- Compare View -->
             <!-- Search Results State -->
@@ -741,7 +921,8 @@
         </div>
     </div>
 
-    <!-- App Logic -->
+    <script src="js/utils.js"></script>
+    <script src="js/portfolio.js"></script>
     <script src="js/ui.js"></script>
     <script src="js/app.js"></script>
 </body>
