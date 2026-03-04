@@ -28,7 +28,10 @@ function openPortfolioTxnModal() {
     const modal = document.getElementById('portfolioTxnModal');
     modal.style.display = 'flex';
     setTimeout(() => modal.querySelector('.pf-modal-card').style.transform = 'scale(1)', 10);
-    document.getElementById('pfFundSearch').value = '';
+
+    const searchInput = document.getElementById('pfFundSearch');
+    searchInput.value = '';
+    searchInput.placeholder = 'Type fund name or scheme code…';
     document.getElementById('pfFundResults').innerHTML = '';
     document.getElementById('pfTxnAmount').value = '';
     document.getElementById('pfTxnNav').value = '';
@@ -36,6 +39,16 @@ function openPortfolioTxnModal() {
     document.getElementById('pfTxnDate').value = new Date().toISOString().split('T')[0];
     document.getElementById('pfTxnType').value = 'buy';
     document.getElementById('pfSelectedFundLabel').textContent = 'No fund selected';
+
+    // Eagerly load the global fund list if not already fetched
+    if (!window.allMfFunds || window.allMfFunds.length === 0) {
+        searchInput.placeholder = 'Loading fund list… please wait';
+        fetchGlobalFundList().then(() => {
+            searchInput.placeholder = 'Type fund name or scheme code…';
+        }).catch(() => {
+            searchInput.placeholder = 'Type fund name or scheme code…';
+        });
+    }
 }
 
 function closePortfolioTxnModal() {
@@ -49,6 +62,42 @@ function handlePfFundSearch() {
     const query = document.getElementById('pfFundSearch').value.trim().toLowerCase();
     const resultsEl = document.getElementById('pfFundResults');
     if (query.length < 2) { resultsEl.innerHTML = ''; return; }
+
+    // If fund list still loading, show a hint and retry shortly
+    if (!window.allMfFunds || window.allMfFunds.length === 0) {
+        resultsEl.innerHTML = '<li style="padding:10px 14px;color:var(--text-muted);font-size:13px;">⏳ Loading fund list, please try again in a moment…</li>';
+        pfFundSearchDebounceTimer = setTimeout(() => {
+            const allFunds = window.allMfFunds || [];
+            // Filter to Direct Growth funds only (same pool as main search)
+            const pool = allFunds.filter(f => {
+                const n = f.schemeName.toUpperCase();
+                return n.includes('DIRECT') && n.includes('GROWTH') &&
+                    !n.includes('IDCW') && !n.includes('DIVIDEND');
+            });
+
+            const matches = pool.filter(f =>
+                f.schemeName.toLowerCase().includes(query) ||
+                String(f.schemeCode).includes(query)
+            ).slice(0, 8);
+
+            if (matches.length === 0) {
+                resultsEl.innerHTML = '<li style="padding:10px 14px;color:var(--text-muted);font-size:13px;">No funds found</li>';
+                return;
+            }
+            resultsEl.innerHTML = matches.map(f => {
+                const display = formatFundName(f.schemeName);
+                const safeCode = f.schemeCode;
+                return `<li style="padding:10px 14px;cursor:pointer;font-size:13px;color:var(--text-primary);border-bottom:1px solid var(--border-glass);transition:background 0.15s;"
+                    onmouseover="this.style.background='rgba(56,189,248,0.08)'"
+                    onmouseout="this.style.background=''"
+                    onmousedown="selectPfFund('${safeCode}', '${display.replace(/'/g, "\\'").replace(/"/g, '&quot;')}')">
+                    <div style="font-weight:500;">${display}</div>
+                    <div style="font-size:11px;color:var(--text-muted);">Code: ${safeCode}</div>
+                </li>`;
+            }).join('');
+        }, 280);
+        return;
+    }
 
     pfFundSearchDebounceTimer = setTimeout(() => {
         const allFunds = window.allMfFunds || [];
@@ -74,10 +123,7 @@ function handlePfFundSearch() {
             return `<li style="padding:10px 14px;cursor:pointer;font-size:13px;color:var(--text-primary);border-bottom:1px solid var(--border-glass);transition:background 0.15s;"
                 onmouseover="this.style.background='rgba(56,189,248,0.08)'"
                 onmouseout="this.style.background=''"
-                onmousedown="selectPfFund('${safeCode}', '${display.replace(/'/g, "\\'").replace(/"/g, '&quot;')}')">
-                <div style="font-weight:500;">${display}</div>
-                <div style="font-size:11px;color:var(--text-muted);">Code: ${safeCode}</div>
-            </li>`;
+                onmousedown="selectPfFund('${safeCode}', '${display.replace(/'/g, "\\'").replace(/"/g, '&quot;')}')"><div style="font-weight:500;">${display}</div><div style="font-size:11px;color:var(--text-muted);">Code: ${safeCode}</div></li>`;
         }).join('');
     }, 280);
 }
@@ -234,7 +280,7 @@ function buildCashFlows(txns, totalCurrentValue) {
  */
 async function runInsightAlerts(holdings, alertSettings) {
     const alerts = [];
-    const master = window.masterFundList || [];
+    const master = window.allMfFunds || [];
 
     for (const h of Object.values(holdings)) {
         const absReturnPct = h.totalInvested > 0
