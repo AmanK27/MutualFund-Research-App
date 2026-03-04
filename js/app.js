@@ -1818,7 +1818,10 @@ function addTransaction(txn) {
                     amount: Number(txn.amount),
                     startDate: txn.startDate,
                     sipStatus: txn.sipStatus || 'active',
-                    endDate: txn.endDate || null
+                    endDate: txn.endDate || null,
+                    isStepUp: txn.isStepUp || false,
+                    stepUpAmount: Number(txn.stepUpAmount) || 0,
+                    stepUpFrequency: txn.stepUpFrequency || 'annually'
                 });
             } else {
                 guestTxns.push({
@@ -1848,6 +1851,9 @@ function addTransaction(txn) {
                 startDate: txn.startDate,                   // 'YYYY-MM-DD' string
                 sipStatus: txn.sipStatus || 'active',       // 'active' | 'paused'
                 endDate: txn.endDate || null,               // 'YYYY-MM-DD' string or null
+                isStepUp: txn.isStepUp || false,
+                stepUpAmount: Number(txn.stepUpAmount) || 0,
+                stepUpFrequency: txn.stepUpFrequency || 'annually',
                 createdAt: firebase.firestore.FieldValue.serverTimestamp()
             });
     }
