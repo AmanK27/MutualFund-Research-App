@@ -257,6 +257,25 @@ async function saveNewTransaction() {
             btn.disabled = false; return;
         }
 
+        // ── Read step-up config from form ────────────────────────────
+        const isStepUp = document.getElementById('pfStepUpYes').checked;
+        const stepUpAmount = isStepUp ? parseFloat(document.getElementById('pfStepUpAmount').value) || 0 : 0;
+        const stepUpStartDate = isStepUp ? document.getElementById('pfStepUpStartDate').value : null;
+        const stepUpFrequency = isStepUp ? document.getElementById('pfStepUpFrequency').value : 'annually';
+
+        if (isStepUp) {
+            if (!stepUpAmount || stepUpAmount <= 0) {
+                showToast('Please enter a valid Step-Up Amount.', 'error');
+                btn.disabled = false; return;
+            }
+            if (!stepUpStartDate) {
+                showToast('Please enter a Step-Up Start Date.', 'error');
+                btn.disabled = false; return;
+            }
+        }
+
+        const stepUpConfig = { isStepUp, stepUpAmount, stepUpStartDate, stepUpFrequency };
+
         btn.textContent = '⏳ Simulating SIP history…';
 
         try {
@@ -265,18 +284,23 @@ async function saveNewTransaction() {
                 pfModalSelectedCode,
                 amount,
                 dateStr,
-                lastSipDate || null
+                lastSipDate || null,
+                stepUpConfig
             );
 
-            // Save only the compact config — NOT the individual instalments
+            // Save compact config with step-up fields
             await addTransaction({
                 type: 'sip_config',
                 schemeCode: pfModalSelectedCode,
                 schemeName: pfModalSelectedName,
-                amount,                          // monthly amount
+                amount,                          // base monthly amount
                 startDate: dateStr,
                 sipStatus,                       // 'active' | 'paused'
-                endDate: lastSipDate || null
+                endDate: lastSipDate || null,
+                isStepUp,
+                stepUpAmount,
+                stepUpStartDate: stepUpStartDate || null,
+                stepUpFrequency
             });
 
             showToast('SIP added to portfolio ✓', 'success');
@@ -290,6 +314,7 @@ async function saveNewTransaction() {
         }
         return;
     }
+
 
     /* ── Lump Sum / Sell path ───────────────────────────────────── */
     const nav = parseFloat(document.getElementById('pfTxnNav').value);

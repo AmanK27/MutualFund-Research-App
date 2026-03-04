@@ -2001,11 +2001,21 @@ async function loadPortfolioView() {
         for (const cfg of sipConfigs) {
             try {
                 const endDate = cfg.sipStatus === 'paused' ? cfg.endDate : null;
+
+                // Build step-up config from stored fields (graceful fallback for older docs)
+                const stepUpConfig = {
+                    isStepUp: !!cfg.isStepUp,
+                    stepUpAmount: Number(cfg.stepUpAmount) || 0,
+                    stepUpStartDate: cfg.stepUpStartDate || null,
+                    stepUpFrequency: cfg.stepUpFrequency || 'annually'
+                };
+
                 const ledger = await generateSipLedger(
                     cfg.schemeCode,
                     Number(cfg.amount),
                     cfg.startDate,
-                    endDate
+                    endDate,
+                    stepUpConfig
                 );
                 // Convert instalments into synthetic buy transactions
                 ledger.instalments.forEach(inst => {
@@ -2024,6 +2034,7 @@ async function loadPortfolioView() {
                 console.warn(`SIP ledger expansion failed for ${cfg.schemeCode}:`, e);
             }
         }
+
 
         // Merge with normal transactions
         expandedTxns = [...expandedTxns, ...normalTxns];
