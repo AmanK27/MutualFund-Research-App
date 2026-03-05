@@ -310,9 +310,7 @@ async function getPeerRanking(categoryString, currentSchemeCode) {
             peers = window.allMfFunds.filter(f => {
                 if (!f.schemeName) return false;
                 const nameUpper = f.schemeName.toUpperCase();
-                return nameUpper.includes(keyword.toUpperCase()) &&
-                    nameUpper.includes('DIRECT') &&
-                    nameUpper.includes('GROWTH');
+                return nameUpper.includes(keyword.toUpperCase());
             });
         }
     }

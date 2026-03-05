@@ -1,9 +1,20 @@
-# Debugging Advisor N/A Issue
+# Advisor Cascading Filter Refactor
 
-- [x] Step 1: Reproduce and Debug N/A Issue Locally
-    - [x] Bypass Google Login for local testing.
-    - [x] Run browser test to inspect console logs and identify why `getPeerRanking` is returning empty or failing.
-    - [x] Fix the code in `advisor.js` or `api.js`.
-    - [x] Re-test to verify the "N/A" string is replaced by a valid peer.
-    - [x] Revert the local login bypass.
-    - [x] Commit the fix.
+- [ ] Step 1: Force Numerical Sorting
+    - [ ] Locate the peer array in `advisor.js`.
+    - [ ] Map and cast `1Y_CAGR` as Float.
+    - [ ] Sort array descending mathematically.
+    - [ ] Commit and await approval.
+
+- [ ] Step 2: Implement the Cascading "3-Strike" Filter
+    - [ ] Implement Pass 1: Strict Direct/Growth + No IDCW/Bonus.
+    - [ ] Implement Pass 2: Loose Direct/Growth only.
+    - [ ] Implement Pass 3: Raw sorted block.
+    - [ ] Slice top 3 peers.
+    - [ ] Commit and await approval.
+
+- [ ] Step 3: Output the Guaranteed Best Peer
+    - [ ] Remove the old QualityScore math (`ExpenseRatio * 2`).
+    - [ ] Extract `topThreePeers[0]` as the final `targetFund` / `bestPeerReturn`.
+    - [ ] Update strategy return object for UI consumption.
+    - [ ] Commit and await approval.

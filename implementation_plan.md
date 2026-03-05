@@ -1,25 +1,19 @@
-# GitHub Actions Runner Feature
+# Advisor Cascading Filter Refactor
 
-Implement a feature allowing the user to trigger their repository's GitHub Actions workflows (e.g., the AMFI Data Sync pipeline) directly from the client-side Mutual Fund Research App.
+Rewrite the peer-extraction logic in `/js/advisor.js` for the Multi-Layer Loss Recovery Advisor. Replace the old "Quality Score" formula with a resilient 3-tier cascading filter to guarantee the absolute best historical performer is selected regardless of data naming anomalies.
 
 ## Proposed Changes
 
 ### [js]
-#### [NEW] [github.js](file:///Users/Haither/Desktop/MutualFund%20Research%20App/js/github.js)
-- Implement `triggerWorkflow(repoOwner, repoName, workflowId, token)`.
-- Use `fetch` with the `POST /repos/{owner}/{repo}/actions/workflows/{workflow_id}/dispatches` endpoint.
-- Handle API authentication securely via headers (`Authorization: Bearer <TOKEN>`).
-
-#### [MODIFY] [app.js](file:///Users/Haither/Desktop/MutualFund%20Research%20App/js/app.js) or [ui.js](file:///Users/Haither/Desktop/MutualFund%20Research%20App/js/ui.js)
-- Bind a new UI element to the `triggerWorkflow` function.
-- Manage localStorage for the GitHub Personal Access Token (PAT) so the user does not need to enter it every time.
-
-### [html]
-#### [MODIFY] [index.html](file:///Users/Haither/Desktop/MutualFund%20Research%20App/index.html)
-- Add a dedicated button (e.g., "⚡ Run Sync Workflow" inside the sidebar or header).
-- Create a configuration modal to securely prompt the user for their GitHub PAT if it is not found in `localStorage`.
+#### [MODIFY] [advisor.js](file:///Users/Haither/Desktop/MutualFund%20Research%20App/js/advisor.js)
+- **Step 1:** Modify the list returned by `getPeerRanking` to actively ensure `cagr1y` values are parsed as Floats (treating nulls as `-999`) and sort the global pool descending.
+- **Step 2:** Implement a cascading selection lock:
+  - `Pass 1`: Filter for `.includes('DIRECT') && .includes('GROWTH') && !.includes('IDCW') && !.includes('BONUS') && !.includes('DIVIDEND')`
+  - `Pass 2`: Fallback to `.includes('DIRECT') && .includes('GROWTH')` if Pass 1 is empty.
+  - `Pass 3`: Fallback to the raw top of the sorted list if Pass 2 is empty.
+  - Capture `topThreePeers`.
+- **Step 3:** Strip out the old `(fund1yCAGR * 100) - (targetER * 2)` math. Simply assign `topThreePeers[0]` as the `topPeer` object to be passed down into the `strategy` string and modal logic.
 
 ## Verification Plan
-1. Ensure the UI gracefully prompts for a PAT on the first click.
-2. Verify the HTTP POST request is formatted correctly according to GitHub REST API documentation.
-3. Observe the GitHub Actions tab on the `AmanK27/MutualFund-Research-App` repository to confirm the workflow is successfully enqueued and executes.
+1. Ensure the code commits strictly adhere to the 3-step CI/CD protocol.
+2. In the browser, verify that funds with complex variant names correctly hit Pass 1 or Pass 2 and surface a guaranteed positive return as the Top Peer.

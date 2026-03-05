@@ -68,62 +68,71 @@ async function analyzeLoss(schemeCode, currentReturn, userTransactions = []) {
     try {
         const peers = await getPeerRanking(fundCategory, schemeCode);
         if (peers && peers.length > 0) {
-            // First pass: Filter for standard Direct-Growth funds, excluding IDCW/Bonus variants
-            const cleanPeers = peers.filter(p => {
+
+            // STEP 1: Force Numerical Sorting
+            // Ensure every CAGR is treated as a Float. If null, map to -999 to throw it to the bottom.
+            const parsedPeers = peers.map(p => ({
+                ...p,
+                cagr1y: p.cagr1y !== null && !isNaN(p.cagr1y) ? parseFloat(p.cagr1y) : -999
+            }));
+
+            // Sort descending mathematically
+            parsedPeers.sort((a, b) => b.cagr1y - a.cagr1y);
+
+            // STEP 2: The Cascading 3-Tier Filter
+            let filteredPeers = [];
+
+            // Pass 1: Strict (Needs Direct & Growth, Rejects IDCW & Bonus)
+            const pass1 = parsedPeers.filter(p => {
                 const n = p.schemeName.toUpperCase();
-                // We prefer explicit Direct and Growth, but getPeerRanking might have already filtered.
-                // We absolutely MUST exclude structural variants to avoid weird recommendations.
-                return !n.includes('IDCW') && !n.includes('DIVIDEND') && !n.includes('BONUS');
+                return n.includes('DIRECT') && n.includes('GROWTH') &&
+                    !n.includes('IDCW') && !n.includes('DIVIDEND') && !n.includes('BONUS');
             });
 
-            cleanPeers.sort((a, b) => b.cagr1y - a.cagr1y);
-            const topCandidates = cleanPeers.slice(0, 10); // Take the top 10 by raw CAGR
+            if (pass1.length > 0) {
+                filteredPeers = pass1;
+                console.log("[Advisor Engine] Pass 1 (Strict) Success");
+            } else {
+                // Pass 2: Loose (Just Needs Direct & Growth)
+                const pass2 = parsedPeers.filter(p => {
+                    const n = p.schemeName.toUpperCase();
+                    return n.includes('DIRECT') && n.includes('GROWTH');
+                });
 
-            // Second pass: Deep Comparison Engine
-            // Fetch detailed stats (Expense Ratio) for the candidates and the target fund
-            for (const candidate of topCandidates) {
-                const details = await aggregateFundDetails(candidate.schemeCode);
-                if (details) {
-                    const expenseRatio = details.portfolio?.expense_ratio || 0.75; // assume high if unknown
-                    const baseScore = candidate.cagr1y * 100;
-                    // Penalty: Subtract (ExpenseRatio * 2) from base CAGR score
-                    const qualityScore = baseScore - (expenseRatio * 2);
-
-                    candidatePool.push({
-                        code: candidate.schemeCode,
-                        name: candidate.schemeName,
-                        cagr1Y: baseScore,
-                        expenseRatio: expenseRatio,
-                        drawdown: calculate52WeekDrawdown(details.data) || 0,
-                        score: qualityScore
-                    });
+                if (pass2.length > 0) {
+                    filteredPeers = pass2;
+                    console.log("[Advisor Engine] Pass 2 (Loose) Success");
+                } else {
+                    // Pass 3: Raw
+                    filteredPeers = parsedPeers;
+                    console.log("[Advisor Engine] Pass 3 (Raw Fallback) Success");
                 }
             }
 
-            // Also score the current fund for apples-to-apples comparison
-            const targetER = fundDetails.portfolio?.expense_ratio || 0.75;
-            targetFundScore = (fund1yCAGR * 100) - (targetER * 2);
+            // Exclude the current fund from being recommended to itself
+            filteredPeers = filteredPeers.filter(p => String(p.schemeCode) !== String(schemeCode));
 
-            if (candidatePool.length > 0) {
-                // Sort by the newly minted QualityScore descending
-                candidatePool.sort((a, b) => b.score - a.score);
+            const topThreePeers = filteredPeers.slice(0, 3);
 
-                // Select the single highest qualified candidate
-                const absoluteBest = candidatePool[0];
+            // STEP 3: Output Guaranteed Best Peer
+            if (topThreePeers.length > 0) {
+                const winner = topThreePeers[0];
 
-                if (String(absoluteBest.code) !== String(schemeCode)) {
-                    topPeer = absoluteBest;
-                } else if (candidatePool.length > 1) {
-                    // If the absolute best IS the current fund, topPeer stays null or we take the runner up
-                    // For the sake of matching logic, topPeer is meant to be the *alternative* best peer.
-                    // We'll leave topPeer as null if the current fund is natively the #1 scoring fund.
-                    // Or we could assign the runner-up for comparison. Let's assign the runner-up.
-                    topPeer = candidatePool[1];
-                }
+                // Fetch the drawdown for the winner to satisfy the UI requirement
+                const details = await aggregateFundDetails(winner.schemeCode);
+                const drawdown = details ? (calculate52WeekDrawdown(details.data) || 0) : 0;
+
+                topPeer = {
+                    code: winner.schemeCode,
+                    name: winner.schemeName,
+                    cagr1Y: winner.cagr1y * 100, // Format for UI scaling
+                    drawdown: drawdown,
+                    score: winner.cagr1y * 100 // Legacy compat for the strategy engine
+                };
             }
         }
     } catch (err) {
-        console.error("Failed to execute Two-Pass Scoring Engine:", err);
+        console.error("Failed to execute Cascading Filter Engine:", err);
     }
 
     const diagnosis = {
@@ -135,7 +144,7 @@ async function analyzeLoss(schemeCode, currentReturn, userTransactions = []) {
         marketDrawdown,
         category: fundCategory,
         topPeer,
-        targetFundScore
+        targetFundScore: fund1yCAGR !== null ? (fund1yCAGR * 100) : 0 // Fallback for UI
     };
 
     console.log("[Advisor Engine] Diagnosis Generated:", diagnosis);
