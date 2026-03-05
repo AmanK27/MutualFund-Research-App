@@ -43,22 +43,20 @@ The Portfolio Analytics panel has been upgraded with advisory intelligence.
 - **Reliable Analytics Toggling:** Fixed the "Show Details / Analytics" button which was intermittently failing to reveal the panel.
 - **Momentum-First Scoring:** Re-centered the health scoring engine around 1-year performance to provide users with more current advisory signals.
 
-## 5. Multi-Layer Loss Recovery Advisor
-We have successfully implemented a decoupled rules engine (`advisor.js`) that analyzes underperforming investments and visually prescribes recovery strategies.
-- **Layer 1-3 (Diagnosis):** Calculates the specific fund's 52-week drawdown, measures it against the broader market drop (Nifty 50), and fetches the best-performing peer within the exact same category dynamically using `getPeerRanking`.
-- **Layer 4-5 (Strategy Engine):** Uses a sophisticated decision tree to recommend:
-  - `COST_AVERAGE`: Buy the dip during broader market corrections.
-  - `HOLD_CATEGORY_CYCLE`: Hold during sector-wide downturns.
-  - `SWITCH_FUND`: Actively switch to the top peer if the current fund is severely underperforming an upwards market.
-  - The engine also computes a 3-year projection array comparing a "Do Nothing" scenario against the recommended strategy.
+## 5. Multi-Layer Loss Recovery Advisor (Two-Pass Scoring Engine)
+We have successfully implemented a decoupled rules engine (`advisor.js`) that analyzes underperforming investments and visually prescribes recovery strategies using a mathematically sound Two-Pass Scoring system.
+- **Layer 1-3 (Filtering & Scoring):** 
+  - **Pass 1:** It actively fetches the specific fund's category via `getPeerRanking` and applies strict string matching to exclusively retrieve standard "Direct" and "Growth" plans, entirely excluding abstract "IDCW" or "Bonus" variants. The engine grabs the Top 10 funds by 1Y CAGR.
+  - **Pass 2:** A Deep Comparison loop assesses each candidate calculating a `Quality Score = Raw 1y CAGR - (ExpenseRatio * 2)`. It runs the user's current fund through the identical formula.
+- **Layer 4-5 (Strategy Engine):** Uses a sophisticated decision tree to recommend strategies, benchmarking against the true `Quality Score` of the absolute best candidate rather than raw return.
 - **Layer 6 (UI Visualizer):** Any fund with a negative return automatically displays an "🤖 Analyze Loss" button. Clicking it opens a premium Glassmorphic modal rendering the diagnosis and a `Chart.js` future projection graph.
 
 ## 6. Dynamic Chart Time-Range Navigation
 The primary Fund Dashboard chart has been overhauled for deeper historical analysis.
-- **Exhaustive Timeframes:** Users can now toggle between 1D, 1W, 1M, 3M, 6M, 1Y, 3Y, 5Y, 10Y, and MAX directly above the main NAV Chart.
+- **Exhaustive Timeframes:** Users can toggle between 1W, 1M, 3M, 6M, 1Y, 3Y, 5Y, 10Y, and MAX directly above the main NAV Chart. The UI was cleaned up to remove the unactionable "1D" graph state.
 - **Zero-Latency Slicing:** Selecting a timeframe executes instant JavaScript Date math on the already-fetched master array, filtering it without triggering a new network request.
 - **Fluid Animation:** The timeframe upgrades leverage the Chart.js `.update()` functionality to mutate dataset boundaries smoothly, maintaining performance and aesthetics instead of resorting to heavy canvas re-renders.
 
 ---
-**The Robo-Advisor suite & Enhanced Charting features are now fully operational and ready for deployment.**
+**The Advanced Robo-Advisor suite & Enhanced Charting features are fully operational and ready for deployment.**
 
