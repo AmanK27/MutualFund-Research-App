@@ -139,49 +139,51 @@ async function findReplacementFund(diagnosis) {
 /* ── Portfolio Value Projector ──────────────────────────────────── */
 function projectPortfolioValue(holdings, diagnosis, replacement, years = 5) {
     const labels = Array.from({ length: years + 1 }, (_, i) => i === 0 ? 'Now' : `Y${i}`);
-    let baselineNow = 0;
-    let swappedNow = 0;
 
-    const fundGrowths = []; // { currentValue, baseCAGR, swapCAGR }
+    let totalPortfolioValue = 0;
+    let weakFundValue = 0;
+    let remainingValue = 0;
 
+    let sumRemainingWeightedCAGR = 0;
+
+    // 1. Calculate values and weighted CAGRs
     for (const h of Object.values(holdings)) {
         const cv = h.currentValue || 0;
-
-        let cagr = 0.12; // fallback 12%
-        let swapCAGR = cagr;
+        totalPortfolioValue += cv;
 
         const isWeak = diagnosis && String(h.code) === String(diagnosis.holding.code);
 
-        if (isWeak && diagnosis) {
-            cagr = (diagnosis.returns3Y ?? diagnosis.returns1Y ?? 12) / 100;
-            if (replacement) {
-                swapCAGR = (replacement.returns3Y ?? replacement.returns1Y ?? 14) / 100;
-            } else {
-                swapCAGR = cagr;
-            }
+        if (isWeak) {
+            weakFundValue = cv;
         } else {
-            // For other holdings we don't have their historical CAGRs explicitly stored right now unless we passed them all down.
-            // But we can approximate them as 12% for the baseline.
-            cagr = 0.12;
-            swapCAGR = cagr;
+            // For other holdngs, assume a fallback 12% if we don't have exact historicals loaded for them here
+            const cagr = 0.12;
+            remainingValue += cv;
+            sumRemainingWeightedCAGR += (cv * cagr);
         }
-
-        fundGrowths.push({ cv, baseCAGR: cagr, swapCAGR });
-        baselineNow += cv;
-        swappedNow += cv;
     }
 
-    const baseline = [baselineNow];
-    const swapped = [swappedNow];
+    // 2. Average CAGR of the remaining portfolio
+    const avgRemainingCAGR = remainingValue > 0 ? (sumRemainingWeightedCAGR / remainingValue) : 0;
 
+    // 3. CAGR of the weak fund (for baseline) and replacement (for swap)
+    const weakCAGR = diagnosis ? (diagnosis.returns3Y ?? diagnosis.returns1Y ?? 0.12) : 0.12;
+    const replacementCAGR = replacement ? (replacement.returns3Y ?? replacement.returns1Y ?? 0.14) : weakCAGR;
+
+    const baseline = [totalPortfolioValue];
+    const swapped = [totalPortfolioValue];
+
+    // 4. Compound year over year
     for (let y = 1; y <= years; y++) {
-        let bVal = 0, sVal = 0;
-        fundGrowths.forEach(fg => {
-            bVal += fg.cv * Math.pow(1 + fg.baseCAGR, y);
-            sVal += fg.cv * Math.pow(1 + fg.swapCAGR, y);
-        });
-        baseline.push(Math.round(bVal));
-        swapped.push(Math.round(sVal));
+        // Baseline: Remaining Portfolio grows + Weak Fund grows
+        const bRemaining = remainingValue * Math.pow(1 + avgRemainingCAGR, y);
+        const bWeak = weakFundValue * Math.pow(1 + weakCAGR, y);
+        baseline.push(Math.round(bRemaining + bWeak));
+
+        // Swapped: Remaining Portfolio grows + Swapped Capital grows at New Rate
+        const sRemaining = remainingValue * Math.pow(1 + avgRemainingCAGR, y);
+        const sNew = weakFundValue * Math.pow(1 + replacementCAGR, y);
+        swapped.push(Math.round(sRemaining + sNew));
     }
 
     return { labels, baseline, swapped };
