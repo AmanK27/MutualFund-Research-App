@@ -399,18 +399,32 @@ async function fetchTERFromGithub(isin) {
 
 /**
  * Master Aggregator: Fetches core NAV data and concurrently resolves/fetches deep metrics
- * from Kuvera and Groww. Merges all into a rigid standardized schema.
+ * from external sources. Merges all into a rigid standardized schema.
+ * Now integrated with IndexedDB CacheManager for ultra-fast subsequent loads.
  */
 async function aggregateFundDetails(schemeCode, cleanFundName) {
     if (!schemeCode) return null;
 
-    // Step A: Fetch base data
+    // 1. Check local IndexedDB cache first
+    try {
+        const cached = await CacheManager.get(schemeCode);
+        if (CacheManager.isCacheValid(cached)) {
+            console.log(`[Cache Hit] Serving ${schemeCode} from IndexedDB`);
+            return cached;
+        }
+    } catch (e) {
+        console.warn("Cache retrieval failed, falling back to network:", e);
+    }
+
+    // 2. Cache Miss or Stale — Execute standard fetch sequence
+    console.log(`[Cache Miss] Fetching ${schemeCode} from remote APIs...`);
+
     let baseData = null;
     try {
         baseData = await fetchFundData(schemeCode);
     } catch (e) {
         console.error("Master Aggregator failed at base NAV fetch:", e);
-        return null; // Fatal error, can't proceed without core data
+        return null;
     }
 
     // Standardized Schema Definition
@@ -451,10 +465,7 @@ async function aggregateFundDetails(schemeCode, cleanFundName) {
         if (terRes.ok) {
             const csvText = await terRes.text();
             const lines = csvText.split('\n');
-
-            // Clean names for better matching
             let normalizedTarget = searchName.toLowerCase().replace(/[^a-z0-9]/g, '');
-            // Some basic replacements to maximize match chances
             normalizedTarget = normalizedTarget.replace('fund', '').replace('direct', '').replace('growth', '').replace('plan', '');
 
             for (let i = 1; i < lines.length; i++) {
@@ -462,9 +473,8 @@ async function aggregateFundDetails(schemeCode, cleanFundName) {
                 const cols = line.split(',');
                 if (cols.length > 10) {
                     const rowName = cols[0].toLowerCase().replace(/[^a-z0-9]/g, '');
-                    // Example regex to find overlap. If the Github row contains our targeted keyword sequence:
                     if (rowName.includes(normalizedTarget) && rowName.includes("direct")) {
-                        const directTer = parseFloat(cols[10]); // "Direct Plan - Total TER (%)"
+                        const directTer = parseFloat(cols[10]);
                         if (!isNaN(directTer)) {
                             fund.portfolio.expense_ratio = directTer;
                             break;
@@ -475,6 +485,13 @@ async function aggregateFundDetails(schemeCode, cleanFundName) {
         }
     } catch (e) {
         console.warn("Expense Ratio fetch failed:", e);
+    }
+
+    // 3. Store the merged result in local cache for next time
+    try {
+        await CacheManager.set(schemeCode, fund);
+    } catch (e) {
+        console.error("Failed to update cache:", e);
     }
 
     return fund;
