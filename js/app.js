@@ -753,7 +753,6 @@ function filterDataByRange(range) {
     const cutoff = new Date(latest);
 
     switch (range) {
-        case '1D': cutoff.setDate(cutoff.getDate() - 1); break;
         case '1W': cutoff.setDate(cutoff.getDate() - 7); break;
         case '1M': cutoff.setMonth(cutoff.getMonth() - 1); break;
         case '3M': cutoff.setMonth(cutoff.getMonth() - 3); break;
