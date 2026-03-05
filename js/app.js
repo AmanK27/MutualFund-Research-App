@@ -2245,22 +2245,26 @@ async function loadPortfolioView() {
 
             const avgNav = h.totalUnits > 0 ? h.totalInvested / h.totalUnits : 0;
             const absReturnPct = (!hasError && h.totalInvested > 0) ? ((h.currentValue - h.totalInvested) / h.totalInvested) * 100 : 0;
+            const isLoss = absReturnPct < 0;
 
             const tr = document.createElement('tr');
-            tr.style.cursor = 'pointer';
-            tr.onclick = () => loadFund(h.code);
             tr.innerHTML = `
-                <td style="font-weight: 500;">
+                <td style="font-weight: 500; cursor: pointer;" onclick="loadFund('${h.code}')">
                     ${escapeHtml(h.name)} 
                     ${hasError ? '<span title="Fetch failed" style="color:var(--error); cursor:help;">⚠️</span>' : ''}
                 </td>
-                <td>${h.totalUnits.toFixed(3)}</td>
-                <td>₹${avgNav.toFixed(2)}</td>
-                <td>${hasError ? '<span style="color:var(--error);">---</span>' : '₹' + h.currentNav.toFixed(2)}</td>
-                <td>₹${h.totalInvested.toLocaleString('en-IN')}</td>
-                <td>${hasError ? '<span style="color:var(--error);">---</span>' : '₹' + h.currentValue.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</td>
-                <td style="text-align: right;" class="${hasError ? '' : getPercentClass(absReturnPct / 100)}">
-                    ${hasError ? 'Error' : (absReturnPct >= 0 ? '+' : '') + absReturnPct.toFixed(2) + '%'}
+                <td style="cursor: pointer;" onclick="loadFund('${h.code}')">${h.totalUnits.toFixed(3)}</td>
+                <td style="cursor: pointer;" onclick="loadFund('${h.code}')">₹${avgNav.toFixed(2)}</td>
+                <td style="cursor: pointer;" onclick="loadFund('${h.code}')">${hasError ? '<span style="color:var(--error);">---</span>' : '₹' + h.currentNav.toFixed(2)}</td>
+                <td style="cursor: pointer;" onclick="loadFund('${h.code}')">₹${h.totalInvested.toLocaleString('en-IN')}</td>
+                <td style="cursor: pointer;" onclick="loadFund('${h.code}')">${hasError ? '<span style="color:var(--error);">---</span>' : '₹' + h.currentValue.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</td>
+                <td style="text-align: right; display: flex; align-items: center; justify-content: flex-end; gap: 8px;" class="${hasError ? '' : getPercentClass(absReturnPct / 100)}">
+                    ${isLoss ? `
+                        <button onclick="openLossAdvisor('${h.code}', ${absReturnPct})" style="background: rgba(var(--error-rgb), 0.1); border: 1px solid var(--error); color: var(--error); padding: 4px 8px; border-radius: var(--radius-sm); font-size: 11px; cursor: pointer; transition: all 0.2s; white-space: nowrap;">
+                            🤖 Analyze Loss
+                        </button>
+                    ` : ''}
+                    <span style="min-width: 60px;">${hasError ? 'Error' : (absReturnPct >= 0 ? '+' : '') + absReturnPct.toFixed(2) + '%'}</span>
                 </td>
             `;
             tbody.appendChild(tr);
