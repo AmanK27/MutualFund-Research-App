@@ -532,53 +532,24 @@ function displayFundData() {
 }
 
 /* ── Fund Health Score Algorithm ────────────────────────────────── */
-function renderFundHealthScore() {
-    const { meta = {} } = currentFund;
-    const cagr3 = getCAGR(fullNavData, 3);
-    const cagr1 = getCAGR(fullNavData, 1);
-    const vol = calcVolatility(fullNavData);
+function getFundHealthScore(data, expenseRatio) {
+    if (!data || data.length < 2) return 0;
 
-    // We'll need a way to get Sharpe & Expense; 
-    // these come from advanced data which might still be loading.
-    // We'll call this again once advanced data is rendered.
+    const cagr3 = getCAGR(data, 3);
+    const cagr1 = getCAGR(data, 1);
+    const vol = calcVolatility(data);
 
-    const elValue = document.getElementById('healthScoreValue');
-    const elCircle = document.querySelector('.health-score-circle');
-    const elLabel = document.getElementById('healthScoreLabel');
-
-    // Weights
     let weights = { cagr: 40, vol: 20, sharpe: 20, efficiency: 20 };
-
-    // Values (normalized 0-1)
     const healthyCAGR = 0.15;
-    const normCAGR = Math.min(Math.max((cagr3 ?? cagr1 ?? 0) / healthyCAGR, 0), 1.25); // cap at 1.25x (50pts)
-
-    // Volatility (inverse: 0% is 1, 25% is 0)
+    const normCAGR = Math.min(Math.max((cagr3 ?? cagr1 ?? 0) / healthyCAGR, 0), 1.25);
     const normVol = vol !== null ? Math.max(0, 1 - (vol / 0.25)) : null;
-
-    // Sharpe (scaled: 1.0 is 1) -> approximated as CAGR/Vol if not yet available
     let sharpe = (vol > 0) ? (cagr3 ?? cagr1 ?? 0) / vol : null;
     const normSharpe = sharpe !== null ? Math.min(Math.max(sharpe / 1.0, 0), 1) : null;
+    const normEfficiency = (expenseRatio !== null && !isNaN(expenseRatio)) ? Math.max(0, 1 - (expenseRatio / 2.5)) : null;
 
-    // Efficiency (Expense ratio - inverse: 0% is 1, 2.5% is 0)
-    // We'll try to get it from the UI if already rendered by renderAdvancedData
-    const expText = document.getElementById('fundExpense')?.textContent || '';
-    const expVal = parseFloat(expText) / 100;
-    const normEfficiency = !isNaN(expVal) ? Math.max(0, 1 - (expVal / 0.025)) : null;
-
-    // Dynamic Re-weighting
-    if (normVol === null) {
-        weights.cagr += 10;
-        weights.efficiency += 10;
-        weights.vol = 0;
-    }
-    if (normSharpe === null) {
-        weights.cagr += 10;
-        weights.efficiency += 10;
-        weights.sharpe = 0;
-    }
+    if (normVol === null) { weights.cagr += 10; weights.efficiency += 10; weights.vol = 0; }
+    if (normSharpe === null) { weights.cagr += 10; weights.efficiency += 10; weights.sharpe = 0; }
     if (normEfficiency === null) {
-        // distribute efficiency to others if not available yet
         const share = weights.efficiency / ((weights.cagr > 0 ? 1 : 0) + (weights.vol > 0 ? 1 : 0) + (weights.sharpe > 0 ? 1 : 0));
         if (weights.cagr > 0) weights.cagr += share;
         if (weights.vol > 0) weights.vol += share;
@@ -586,17 +557,21 @@ function renderFundHealthScore() {
         weights.efficiency = 0;
     }
 
-    let finalScore = ((normCAGR * weights.cagr) +
-        ((normVol ?? 0) * weights.vol) +
-        ((normSharpe ?? 0) * weights.sharpe) +
-        ((normEfficiency ?? 0) * weights.efficiency));
+    return Math.round(Math.min(((normCAGR * weights.cagr) + ((normVol ?? 0) * weights.vol) + ((normSharpe ?? 0) * weights.sharpe) + ((normEfficiency ?? 0) * weights.efficiency)), 100));
+}
 
-    finalScore = Math.round(Math.min(finalScore, 100));
+function renderFundHealthScore() {
+    const expText = document.getElementById('fundExpense')?.textContent || '';
+    const expVal = parseFloat(expText);
 
-    // Update UI
+    const finalScore = getFundHealthScore(fullNavData, isNaN(expVal) ? null : expVal);
+
+    const elValue = document.getElementById('healthScoreValue');
+    const elCircle = document.querySelector('.health-score-circle');
+    const elLabel = document.getElementById('healthScoreLabel');
+
     if (elValue) elValue.textContent = finalScore;
     if (elCircle) elCircle.style.background = `conic-gradient(var(--accent) ${finalScore}%, rgba(255,255,255,0.05) ${finalScore}%)`;
-
     if (elLabel) {
         if (finalScore >= 80) { elLabel.textContent = 'Excellent'; elLabel.style.color = '#10b981'; }
         else if (finalScore >= 60) { elLabel.textContent = 'Good / Healthy'; elLabel.style.color = '#34d399'; }
@@ -2134,6 +2109,9 @@ async function loadPortfolioView() {
         // 2. Expand sip_config records → synthetic buy transactions; keep the rest as-is
         document.getElementById('portfolioEmptyState').textContent = 'Expanding SIP history…';
 
+        // Reset to Holdings tab by default
+        switchPortfolioTab('holdings');
+
         let expandedTxns = []; // used for XIRR and holdings math
 
         // Process sip_configs first (they need NAV fetches)
@@ -2341,6 +2319,25 @@ async function loadPortfolioView() {
         const ltcgEl = document.getElementById('pfLtcgValue');
         if (stcgEl) stcgEl.textContent = '₹' + stcgValue.toLocaleString('en-IN', { maximumFractionDigits: 0 });
         if (ltcgEl) ltcgEl.textContent = '₹' + ltcgValue.toLocaleString('en-IN', { maximumFractionDigits: 0 });
+
+        // Step 4: Tax Liability Calculation
+        // Formula: STCG * 0.20, (LTCG - 1.25L) * 0.125
+        const stcgTax = stcgValue * 0.20;
+        const ltcgTaxable = Math.max(0, ltcgValue - 125000);
+        const ltcgTax = ltcgTaxable * 0.125;
+        const totalTax = stcgTax + ltcgTax;
+
+        const stcgTaxEl = document.getElementById('pfStcgTax');
+        const ltcgTaxEl = document.getElementById('pfLtcgTax');
+        const totalTaxEl = document.getElementById('pfTotalTax');
+
+        if (stcgTaxEl) stcgTaxEl.textContent = '₹' + Math.round(stcgTax).toLocaleString('en-IN');
+        if (ltcgTaxEl) ltcgTaxEl.textContent = '₹' + Math.round(ltcgTax).toLocaleString('en-IN');
+        if (totalTaxEl) totalTaxEl.textContent = '₹' + Math.round(totalTax).toLocaleString('en-IN');
+
+        // Trigger Smart Diagnosis
+        window.currentUserPortfolio = Object.values(holdings); // store for diagnosis
+        runSmartPortfolioDiagnosis(Object.values(holdings));
 
         // Render allocation donut
         if (typeof renderAllocationDonut === 'function') {
@@ -3233,6 +3230,40 @@ function searchGlossary(query) {
     renderGlossary(filtered);
 }
 
+/* ── Portfolio Tab Switching ────────────────────────────────────── */
+function switchPortfolioTab(tab) {
+    const holdingsTab = document.getElementById('portfolioTableCard');
+    const suggestionsTab = document.getElementById('suggestionsTab');
+    const btnHoldings = document.getElementById('tabHoldings');
+    const btnSuggestions = document.getElementById('tabSuggestions');
+
+    if (!holdingsTab || !suggestionsTab) return;
+
+    if (tab === 'holdings') {
+        holdingsTab.style.display = 'block';
+        suggestionsTab.style.display = 'none';
+        if (btnHoldings) {
+            btnHoldings.style.color = 'var(--accent)';
+            btnHoldings.style.borderBottom = '2px solid var(--accent)';
+        }
+        if (btnSuggestions) {
+            btnSuggestions.style.color = 'var(--text-muted)';
+            btnSuggestions.style.borderBottom = '2px solid transparent';
+        }
+    } else {
+        holdingsTab.style.display = 'none';
+        suggestionsTab.style.display = 'block';
+        if (btnHoldings) {
+            btnHoldings.style.color = 'var(--text-muted)';
+            btnHoldings.style.borderBottom = '2px solid transparent';
+        }
+        if (btnSuggestions) {
+            btnSuggestions.style.color = 'var(--accent)';
+            btnSuggestions.style.borderBottom = '2px solid var(--accent)';
+        }
+    }
+}
+
 // Close on Escape key
 document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && document.getElementById('glossaryModal').style.display === 'block') {
@@ -3275,3 +3306,90 @@ window.toggleAnalyticsPanel = function (show) {
         }, 450); // 400ms transition + 50ms buffer
     }
 };
+
+/* ── Smart Portfolio Diagnosis ────────────────────────────────── */
+async function runSmartPortfolioDiagnosis(holdings) {
+    const listEl = document.getElementById('swapDiagnosisContent');
+    if (!listEl || !holdings || holdings.length === 0) return;
+
+    try {
+        const results = [];
+
+        for (const h of holdings) {
+            try {
+                const json = await fetchFundData(h.code);
+                const data = prepareNavData(json.data);
+                const score = getFundHealthScore(data, null);
+
+                if (score < 40) {
+                    const category = json.meta.scheme_category;
+                    const replacement = await findBestReplacement(category, score);
+
+                    if (replacement) {
+                        results.push({
+                            weakFund: { name: h.name, code: h.code, score },
+                            strongFund: replacement
+                        });
+                    }
+                }
+            } catch (e) { console.warn("Diag item failed:", e); }
+            await new Promise(r => setTimeout(r, 400));
+        }
+
+        if (results.length === 0) {
+            listEl.innerHTML = `
+                <div style="background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: 8px; padding: 16px; font-size: 13px; color: #10b981; text-align: center;">
+                    ✅ Your portfolio is healthy! No underperforming funds (Score < 40) detected.
+                </div>
+            `;
+            return;
+        }
+
+        listEl.innerHTML = results.map(res => `
+            <div class="stat-card" style="border: 1px solid rgba(239, 68, 68, 0.2); background: rgba(0,0,0,0.1); margin-bottom:12px;">
+                <div style="display:flex; justify-content:space-between; margin-bottom:12px; align-items:center;">
+                    <div style="font-size:11px; font-weight:700; color:#ef4444; text-transform:uppercase;">⚠️ Action Required</div>
+                    <div style="font-size:10px; padding:2px 6px; background:#ef4444; color:white; border-radius:4px; font-weight:700;">Score: ${res.weakFund.score}</div>
+                </div>
+                <div style="font-size:13px; font-weight:700; color:var(--text-primary); margin-bottom:4px;">${escapeHtml(res.weakFund.name)}</div>
+                <div style="font-size:11px; color:var(--text-muted); margin-bottom:16px;">This fund is underperforming its peers.</div>
+                
+                <div style="padding:12px; background:rgba(16,185,129,0.1); border-radius:6px; border:1px solid rgba(16,185,129,0.2);">
+                    <div style="font-size:10px; font-weight:700; color:#10b981; text-transform:uppercase; margin-bottom:6px;">🚀 Suggested Upgrade</div>
+                    <div style="font-size:12px; font-weight:700; color:var(--text-primary); margin-bottom:4px;">${escapeHtml(res.strongFund.name)}</div>
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                        <span style="font-size:10px; color:var(--text-muted);">Momentum: +${(res.strongFund.ret30 * 100).toFixed(2)}%</span>
+                        <button onclick="loadFund('${res.strongFund.code}')" style="background:var(--accent); color:white; border:none; padding:4px 10px; border-radius:4px; font-size:10px; cursor:pointer; font-weight:700;">View Fund</button>
+                    </div>
+                </div>
+            </div>
+        `).join('');
+
+    } catch (err) {
+        console.error("Diagnosis error:", err);
+        listEl.innerHTML = '<div style="font-size:12px; color:var(--text-muted); text-align:center;">Diagnosis paused. Too many requests.</div>';
+    }
+}
+
+async function findBestReplacement(category, weakScore) {
+    if (!window.FUND_UNIVERSE) return null;
+    const candidates = [];
+    for (const code of window.FUND_UNIVERSE) {
+        try {
+            const json = await fetchFundData(code);
+            if (json.meta.scheme_category === category) {
+                const data = prepareNavData(json.data);
+                const ret30 = calc30DayReturn(data);
+                const score = getFundHealthScore(data, null);
+                if (score > 60) {
+                    candidates.push({ code, name: json.meta.scheme_name, ret30, score });
+                }
+            }
+        } catch (e) { }
+        if (candidates.length >= 2) break;
+        await new Promise(r => setTimeout(r, 200));
+    }
+    if (candidates.length === 0) return null;
+    candidates.sort((a, b) => b.ret30 - a.ret30);
+    return candidates[0];
+}
