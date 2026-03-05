@@ -196,7 +196,9 @@ function calcXIRR(cashflows) {
         iteration++;
     }
 
-    return (iteration >= 100 || isNaN(rate)) ? null : rate;
+    // Final sanity check for runaway results or non-convergence
+    if (iteration >= 100 || isNaN(rate) || Math.abs(rate) > 1000) return null;
+    return rate;
 }
 
 /**

@@ -2203,10 +2203,10 @@ async function loadPortfolioView() {
 
         // 3. Fetch latest NAV & Metrics for each holding in parallel (Cache-First)
         await Promise.all(Object.keys(holdings).map(async code => {
-            const fundDetails = await aggregateFundDetails(code, holdings[code].name);
             if (fundDetails) {
                 // Map standardize schema back to portfolio view expectations
-                const latestNav = (fundDetails.data && fundDetails.data.length > 0) ? fundDetails.data[0].nav : 0;
+                // data is sorted oldest -> newest via utils.js; take last element
+                const latestNav = (fundDetails.data && fundDetails.data.length > 0) ? fundDetails.data[fundDetails.data.length - 1].nav : 0;
                 holdings[code].currentNav = latestNav;
                 holdings[code].currentValue = latestNav * holdings[code].totalUnits;
 

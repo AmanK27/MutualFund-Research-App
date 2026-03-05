@@ -106,7 +106,7 @@ const CacheManager = {
 
         // 2. Check if the latest NAV in the data array is from "today" (or "yesterday" if weekend)
         if (cached.data && cached.data.length > 0) {
-            const latestEntry = cached.data[0]; // Assuming descending sort (latest first)
+            const latestEntry = cached.data[cached.data.length - 1]; // Oldest-first sort in utils.js
             const latestNavDate = new Date(latestEntry.date);
 
             const today = new Date();
