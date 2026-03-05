@@ -200,9 +200,9 @@ function renderSuggestionCard(diagnosis, replacement) {
     }
 
     const weakName = diagnosis.fundMeta?.schemeName || diagnosis.holding.name;
-    const weakR1Y = diagnosis.returns1Y?.toFixed(2) ?? '—';
+    const weakR1Y = typeof diagnosis.returns1Y === 'number' ? (diagnosis.returns1Y * 100).toFixed(2) : '—';
     const repName = replacement?.fundMeta?.schemeName ?? '—';
-    const repR1Y = replacement?.returns1Y?.toFixed(2) ?? '—';
+    const repR1Y = typeof replacement?.returns1Y === 'number' ? (replacement.returns1Y * 100).toFixed(2) : '—';
     const repCode = replacement?.fundMeta?.schemeCode ?? '';
 
     el.innerHTML = `
