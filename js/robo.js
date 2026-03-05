@@ -246,24 +246,24 @@ function renderSwapSimulatorChart(projection) {
             {
                 label: 'Do Nothing',
                 data: projection.baseline,
-                borderColor: '#6366f1',
-                backgroundColor: 'rgba(99,102,241,0.12)',
+                borderColor: '#64748B',  // Slate color
+                backgroundColor: 'rgba(100,116,139,0.12)',
                 fill: true,
                 tension: 0.4,
                 borderWidth: 2.5,
                 pointRadius: 4,
-                pointBackgroundColor: '#6366f1'
+                pointBackgroundColor: '#64748B'
             },
             {
                 label: 'With Swap',
                 data: projection.swapped,
-                borderColor: '#10b981',
+                borderColor: '#10B981',  // Emerald Green color
                 backgroundColor: 'rgba(16,185,129,0.08)',
                 fill: true,
                 tension: 0.4,
                 borderWidth: 2.5,
                 pointRadius: 4,
-                pointBackgroundColor: '#10b981'
+                pointBackgroundColor: '#10B981'
             }
         ]
     };
@@ -275,7 +275,22 @@ function renderSwapSimulatorChart(projection) {
             legend: { display: false },
             tooltip: {
                 callbacks: {
-                    label: ctx => ` ${ctx.dataset.label}: ${fmt(ctx.parsed.y)}`
+                    label: ctx => ` ${ctx.dataset.label}: ${fmt(ctx.parsed.y)}`,
+                    afterBody: (context) => {
+                        // We need both datasets to calculate the delta
+                        if (context.length < 2) return null;
+
+                        const doNothingVal = context[0].parsed.y; // The first dataset
+                        const withSwapVal = context[1].parsed.y;  // The second dataset
+
+                        const delta = withSwapVal - doNothingVal;
+                        if (delta === 0) return null;
+
+                        const formattedDelta = '₹' + Math.abs(Math.round(delta)).toLocaleString('en-IN');
+                        const prefix = delta > 0 ? '+' : '-';
+
+                        return `\nDelta: ${prefix}${formattedDelta}`;
+                    }
                 }
             }
         },
