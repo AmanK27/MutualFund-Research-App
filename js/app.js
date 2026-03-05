@@ -2601,7 +2601,94 @@ function renderCompareChart() {
 
     // Auto-load top performers for default category
     loadTopPerformers('Equity Funds', topFundsHorizon);
+
+    // Run Robo Momentum Scanner
+    runMomentumScanner();
 })();
+
+/* ── Robo Momentum Scanner (Homepage) ────────────────────────────── */
+async function runMomentumScanner() {
+    const loadingEl = document.getElementById('momentumLoading');
+    const gridEl = document.getElementById('momentumGrid');
+    if (!loadingEl || !gridEl) return;
+
+    if (!window.FUND_UNIVERSE || window.FUND_UNIVERSE.length === 0) return;
+
+    try {
+        const momentumResults = [];
+        const batchSize = 5; // Process in batches to avoid 429s
+
+        for (let i = 0; i < window.FUND_UNIVERSE.length; i += batchSize) {
+            const batch = window.FUND_UNIVERSE.slice(i, i + batchSize);
+
+            const results = await Promise.allSettled(batch.map(async (code) => {
+                const json = await fetchFundData(code);
+                const data = prepareNavData(json.data);
+                if (data.length < 2) return null;
+
+                // Calculate 30-day return (approx)
+                const end = data[data.length - 1];
+                let startIdx = 0;
+                const thirtyDaysAgo = new Date(end.date);
+                thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+                for (let j = data.length - 1; j >= 0; j--) {
+                    if (data[j].date <= thirtyDaysAgo) {
+                        startIdx = j;
+                        break;
+                    }
+                }
+                const start = data[startIdx];
+                const returnVal = (end.nav - start.nav) / start.nav;
+
+                return {
+                    code,
+                    name: json.meta.scheme_name,
+                    category: json.meta.scheme_category,
+                    return30d: returnVal,
+                    nav: end.nav
+                };
+            }));
+
+            results.forEach(res => {
+                if (res.status === 'fulfilled' && res.value) {
+                    momentumResults.push(res.value);
+                }
+            });
+
+            // Brief delay between batches
+            if (i + batchSize < window.FUND_UNIVERSE.length) {
+                await new Promise(r => setTimeout(r, 600));
+            }
+        }
+
+        // Sort descending and take top 3
+        momentumResults.sort((a, b) => b.return30d - a.return30d);
+        const top3 = momentumResults.slice(0, 3);
+
+        if (top3.length === 0) {
+            loadingEl.innerHTML = '<div style="font-size:12px;">No breakout data found today.</div>';
+            return;
+        }
+
+        loadingEl.style.display = 'none';
+        gridEl.style.display = 'grid';
+        gridEl.innerHTML = top3.map(f => `
+            <div class="stat-card" style="cursor:pointer;" onclick="loadFund('${f.code}')">
+                <div style="font-size:10px; font-weight:700; color:var(--accent); text-transform:uppercase; margin-bottom:6px;">🔥 30D Momentum</div>
+                <div style="font-size:13px; font-weight:700; color:var(--text-primary); margin-bottom:8px; line-height:1.4; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;">${escapeHtml(f.name)}</div>
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <div style="font-size:11px; color:var(--text-muted);">${escapeHtml(f.category)}</div>
+                    <div style="font-size:14px; font-weight:700; color:#10b981;">+${(f.return30d * 100).toFixed(2)}%</div>
+                </div>
+            </div>
+        `).join('');
+
+    } catch (err) {
+        console.error("Scanner error:", err);
+        loadingEl.innerHTML = '<div style="font-size:12px;">Scanner paused. Too many requests.</div>';
+    }
+}
 
 /* ── Top 5 Performers Logic ─────────────────────────────────────── */
 let topFundsHorizon = '1Y'; // '1Y' | '3Y' | '5Y' | 'Max'

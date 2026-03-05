@@ -4,6 +4,23 @@
    ═══════════════════════════════════════════════════════════════════ */
 
 /**
+ * A curated universe of ~50 high-liquidity mutual funds used for client-side
+ * Robo-Advisor calculations (Momentum Scanner, Suggestions, etc.) without hitting rate limits.
+ */
+window.FUND_UNIVERSE = [
+    // Large Cap & Index
+    "120716", "119062", "118989", "120503", "112290", "119063", "120711", "119800", "118778", "120150",
+    // Mid Cap
+    "147703", "100119", "118834", "118832", "118991", "120300", "120163", "119033", "119034", "119438",
+    // Small Cap
+    "118825", "125354", "118776", "120272", "120803", "120516", "118995", "118671", "120256", "118826",
+    // Flexi / Multi Cap
+    "122639", "119046", "118967", "120465", "118804", "118805", "119598", "119810", "120466", "119047",
+    // Hybrid / Debt / Special
+    "118815", "118868", "118779", "120455", "120392", "119020", "119021", "119865", "120288", "118816"
+];
+
+/**
  * Parse the API date format "dd-mm-yyyy" → JS Date
  */
 function parseDate(str) {

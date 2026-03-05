@@ -138,12 +138,27 @@
                     Enter a Scheme Code above to view detailed NAV history, calculate CAGR returns,
                     and measure volatility — all running locally in your browser.
                 </p>
-                <div class="welcome-codes">
-                    <button class="welcome-code-chip" onclick="loadFund('119062')">119062</button>
-                    <button class="welcome-code-chip" onclick="loadFund('120503')">120503</button>
-                    <button class="welcome-code-chip" onclick="loadFund('100119')">100119</button>
-                    <button class="welcome-code-chip" onclick="loadFund('118989')">118989</button>
-                    <button class="welcome-code-chip" onclick="loadFund('120716')">120716</button>
+                <!-- Momentum Scanner UI -->
+                <div class="momentum-scanner-container"
+                    style="margin-top: 32px; max-width: 800px; margin-left: auto; margin-right: auto; text-align: left;">
+                    <div
+                        style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                        <h3 style="font-size: 18px; font-weight: 600; color: var(--text-primary);">🔥 Top Momentum Funds
+                            (30 Days)</h3>
+                        <span
+                            style="font-size: 11px; color: var(--text-muted); background: rgba(255,255,255,0.05); padding: 4px 8px; border-radius: 4px;">Live
+                            Universe Scan</span>
+                    </div>
+                    <div id="momentumLoading" style="text-align: center; padding: 30px; color: var(--text-muted);">
+                        <div class="spinner"
+                            style="width: 20px; height: 20px; border-width: 2px; margin: 0 auto 10px; border-top-color: var(--accent);">
+                        </div>
+                        <div style="font-size: 12px;">Scanning 50 funds for recent breakouts...</div>
+                    </div>
+                    <div id="momentumGrid"
+                        style="display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 16px; display: none;">
+                        <!-- Cards injected here -->
+                    </div>
                 </div>
 
                 <!-- Top 5 Performers UI inside Welcome State -->
