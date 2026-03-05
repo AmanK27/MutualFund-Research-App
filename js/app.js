@@ -2911,18 +2911,25 @@ document.addEventListener('keydown', (e) => {
 
 
 // ── PORTFOLIO UI TOGGLES ──────────────────────────────────────────────
-window.toggleAnalyticsPanel = function(show) {
+window.toggleAnalyticsPanel = function (show) {
     const container = document.getElementById('portfolioContainer');
+    const btn = document.getElementById('btnToggleAnalytics');
     if (!container) return;
-    
-    if (show) {
+
+    // Determine the target state: if 'show' is undefined, toggle based on current class
+    const isCurrentlyOpen = container.classList.contains('analytics-open');
+    const targetState = typeof show !== 'undefined' ? show : !isCurrentlyOpen;
+
+    if (targetState) {
         container.classList.remove('analytics-closed');
         container.classList.add('analytics-open');
+        if (btn) btn.querySelector('span').textContent = 'Hide Details / Analytics';
     } else {
         container.classList.remove('analytics-open');
         container.classList.add('analytics-closed');
+        if (btn) btn.querySelector('span').textContent = 'Show Details / Analytics';
     }
-    
+
     // The CSS grid transition takes 400ms. We trigger chart resize slightly 
     // after the CSS transition starts and again when it finishes to prevent warping.
     if (window.Chart) {
@@ -2930,7 +2937,7 @@ window.toggleAnalyticsPanel = function(show) {
         const resizeInterval = setInterval(() => {
             Chart.instances.forEach(c => c.resize());
         }, 50);
-        
+
         setTimeout(() => {
             clearInterval(resizeInterval);
             Chart.instances.forEach(c => c.resize());
