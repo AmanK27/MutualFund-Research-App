@@ -2201,43 +2201,23 @@ async function loadPortfolioView() {
         });
 
 
-        // 3. Fetch latest NAV for each holding in parallel
+        // 3. Fetch latest NAV & Metrics for each holding in parallel (Cache-First)
         await Promise.all(Object.keys(holdings).map(async code => {
-            try {
-                const res = await fetch(`https://api.mfapi.in/mf/${code}`);
-                if (!res.ok) throw new Error('API failed');
-                const data = await res.json();
-                if (data && data.data && data.data.length > 0) {
-                    holdings[code].currentNav = parseFloat(data.data[0].nav);
-                    holdings[code].currentValue = holdings[code].currentNav * holdings[code].totalUnits;
-                } else {
-                    holdings[code].currentNav = 0; holdings[code].currentValue = 0;
-                }
-            } catch (e) {
-                holdings[code].currentNav = 0; holdings[code].currentValue = 0;
-            }
-        }));
+            const fundDetails = await aggregateFundDetails(code, holdings[code].name);
+            if (fundDetails) {
+                // Map standardize schema back to portfolio view expectations
+                const latestNav = (fundDetails.data && fundDetails.data.length > 0) ? fundDetails.data[0].nav : 0;
+                holdings[code].currentNav = latestNav;
+                holdings[code].currentValue = latestNav * holdings[code].totalUnits;
 
-        // 3b. Kuvera equity/debt fetch — separate parallel pass with 3-second timeout
-        await Promise.all(Object.keys(holdings).map(async code => {
-            try {
-                const ctrl = new AbortController();
-                const timer = setTimeout(() => ctrl.abort(), 3000);
-                const kvRes = await fetch(
-                    `https://api.kuvera.in/mf/api/v4/fund_schemes/${code}.json`,
-                    { signal: ctrl.signal }
-                );
-                clearTimeout(timer);
-                if (kvRes.ok) {
-                    const kv = await kvRes.json();
-                    const alloc = kv?.asset_allocation || kv?.fund?.asset_allocation || null;
-                    if (alloc) {
-                        holdings[code].equityPct = parseFloat(alloc.equity) || 0;
-                        holdings[code].debtPct = parseFloat(alloc.debt) || 0;
-                        holdings[code].cashPct = parseFloat(alloc.cash) || parseFloat(alloc.others) || 0;
-                    }
-                }
-            } catch (_) { /* Kuvera not critical — skip on error or timeout */ }
+                // Asset allocation for donut chart
+                holdings[code].equityPct = fundDetails.portfolio.equity_percentage;
+                holdings[code].debtPct = fundDetails.portfolio.debt_percentage;
+                holdings[code].cashPct = fundDetails.portfolio.cash_percentage;
+            } else {
+                holdings[code].currentNav = 0;
+                holdings[code].currentValue = 0;
+            }
         }));
 
         // 4. Build holdings table

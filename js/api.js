@@ -487,6 +487,26 @@ async function aggregateFundDetails(schemeCode, cleanFundName) {
         console.warn("Expense Ratio fetch failed:", e);
     }
 
+    // Step D: Asset Allocation (Kuvera)
+    try {
+        const ctrl = new AbortController();
+        const timer = setTimeout(() => ctrl.abort(), 3000);
+        const kvRes = await fetch(
+            `https://api.kuvera.in/mf/api/v4/fund_schemes/${schemeCode}.json`,
+            { signal: ctrl.signal }
+        );
+        clearTimeout(timer);
+        if (kvRes.ok) {
+            const kv = await kvRes.json();
+            const alloc = kv?.asset_allocation || kv?.fund?.asset_allocation || null;
+            if (alloc) {
+                fund.portfolio.equity_percentage = parseFloat(alloc.equity) || 0;
+                fund.portfolio.debt_percentage = parseFloat(alloc.debt) || 0;
+                fund.portfolio.cash_percentage = parseFloat(alloc.cash) || parseFloat(alloc.others) || 0;
+            }
+        }
+    } catch (_) { /* Kuvera errors are not fatal */ }
+
     // 3. Store the merged result in local cache for next time
     try {
         await CacheManager.set(schemeCode, fund);
