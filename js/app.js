@@ -459,6 +459,9 @@ function displayFundData() {
     updateWatchlistBtn();
     renderWatchlist();
 
+    // Calculate Health Score
+    renderFundHealthScore();
+
     // Calculate SIP
     updateSIPCalculator();
 
@@ -466,17 +469,94 @@ function displayFundData() {
     if (meta.scheme_category) {
         initPeerRanking(meta.scheme_category, currentCode);
     } else {
-        document.getElementById('peerRankingCard').style.display = 'none';
+        const prCard = document.getElementById('peerRankingCard');
+        if (prCard) prCard.style.display = 'none';
     }
 
     // Add listeners for SIP if not added
     if (!window.sipListenersAdded) {
-        document.getElementById('sipAmount').addEventListener('input', updateSIPCalculator);
-        document.getElementById('sipDuration').addEventListener('input', updateSIPCalculator);
+        const sipAmt = document.getElementById('sipAmount');
+        const sipDur = document.getElementById('sipDuration');
+        if (sipAmt) sipAmt.addEventListener('input', updateSIPCalculator);
+        if (sipDur) sipDur.addEventListener('input', updateSIPCalculator);
         window.sipListenersAdded = true;
     }
 
     showState('dashboard');
+}
+
+/* ── Fund Health Score Algorithm ────────────────────────────────── */
+function renderFundHealthScore() {
+    const { meta = {} } = currentFund;
+    const cagr3 = getCAGR(fullNavData, 3);
+    const cagr1 = getCAGR(fullNavData, 1);
+    const vol = calcVolatility(fullNavData);
+
+    // We'll need a way to get Sharpe & Expense; 
+    // these come from advanced data which might still be loading.
+    // We'll call this again once advanced data is rendered.
+
+    const elValue = document.getElementById('healthScoreValue');
+    const elCircle = document.querySelector('.health-score-circle');
+    const elLabel = document.getElementById('healthScoreLabel');
+
+    // Weights
+    let weights = { cagr: 40, vol: 20, sharpe: 20, efficiency: 20 };
+
+    // Values (normalized 0-1)
+    const healthyCAGR = 0.15;
+    const normCAGR = Math.min(Math.max((cagr3 ?? cagr1 ?? 0) / healthyCAGR, 0), 1.25); // cap at 1.25x (50pts)
+
+    // Volatility (inverse: 0% is 1, 25% is 0)
+    const normVol = vol !== null ? Math.max(0, 1 - (vol / 0.25)) : null;
+
+    // Sharpe (scaled: 1.0 is 1) -> approximated as CAGR/Vol if not yet available
+    let sharpe = (vol > 0) ? (cagr3 ?? cagr1 ?? 0) / vol : null;
+    const normSharpe = sharpe !== null ? Math.min(Math.max(sharpe / 1.0, 0), 1) : null;
+
+    // Efficiency (Expense ratio - inverse: 0% is 1, 2.5% is 0)
+    // We'll try to get it from the UI if already rendered by renderAdvancedData
+    const expText = document.getElementById('fundExpense')?.textContent || '';
+    const expVal = parseFloat(expText) / 100;
+    const normEfficiency = !isNaN(expVal) ? Math.max(0, 1 - (expVal / 0.025)) : null;
+
+    // Dynamic Re-weighting
+    if (normVol === null) {
+        weights.cagr += 10;
+        weights.efficiency += 10;
+        weights.vol = 0;
+    }
+    if (normSharpe === null) {
+        weights.cagr += 10;
+        weights.efficiency += 10;
+        weights.sharpe = 0;
+    }
+    if (normEfficiency === null) {
+        // distribute efficiency to others if not available yet
+        const share = weights.efficiency / ((weights.cagr > 0 ? 1 : 0) + (weights.vol > 0 ? 1 : 0) + (weights.sharpe > 0 ? 1 : 0));
+        if (weights.cagr > 0) weights.cagr += share;
+        if (weights.vol > 0) weights.vol += share;
+        if (weights.sharpe > 0) weights.sharpe += share;
+        weights.efficiency = 0;
+    }
+
+    let finalScore = ((normCAGR * weights.cagr) +
+        ((normVol ?? 0) * weights.vol) +
+        ((normSharpe ?? 0) * weights.sharpe) +
+        ((normEfficiency ?? 0) * weights.efficiency));
+
+    finalScore = Math.round(Math.min(finalScore, 100));
+
+    // Update UI
+    if (elValue) elValue.textContent = finalScore;
+    if (elCircle) elCircle.style.background = `conic-gradient(var(--accent) ${finalScore}%, rgba(255,255,255,0.05) ${finalScore}%)`;
+
+    if (elLabel) {
+        if (finalScore >= 80) { elLabel.textContent = 'Excellent'; elLabel.style.color = '#10b981'; }
+        else if (finalScore >= 60) { elLabel.textContent = 'Good / Healthy'; elLabel.style.color = '#34d399'; }
+        else if (finalScore >= 40) { elLabel.textContent = 'Average'; elLabel.style.color = '#fbbf24'; }
+        else { elLabel.textContent = 'Underperformer'; elLabel.style.color = '#ef4444'; }
+    }
 }
 
 /**
@@ -543,6 +623,15 @@ async function initPeerRanking(category, schemeCode) {
         }
 
         listEl.innerHTML = html;
+
+        // Update Category Rank in UI
+        const myRank = rankedPeers.findIndex(p => p.schemeCode === String(schemeCode));
+        const rankValueEl = document.getElementById('categoryRankValue');
+        if (rankValueEl && myRank !== -1) {
+            rankValueEl.textContent = `#${myRank + 1} of ${rankedPeers.length}`;
+        } else if (rankValueEl) {
+            rankValueEl.textContent = 'Not Ranked';
+        }
 
     } catch (err) {
         console.error("Peer rendering failed", err);
@@ -729,6 +818,8 @@ async function loadFund(code) {
 
             if (advancedData) {
                 renderAdvancedData(advancedData);
+                // Recalculate health score now that we have expense ratio
+                renderFundHealthScore();
             } else {
                 if (_holdingsBody) {
                     _holdingsBody.innerHTML = `

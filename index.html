@@ -262,6 +262,45 @@
                             </div>
                         </div>
 
+                        <!-- Fund Health & Ranking Section -->
+                        <div class="health-rank-section"
+                            style="margin-bottom: 24px; display: grid; grid-template-columns: 1.5fr 1fr; gap: 16px;">
+                            <div class="stat-card"
+                                style="display: flex; align-items: center; gap: 20px; padding: 20px 24px;">
+                                <div class="health-score-circle"
+                                    style="position: relative; width: 64px; height: 64px; border-radius: 50%; background: conic-gradient(var(--accent) 0%, rgba(255,255,255,0.05) 0%); display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+                                    <div
+                                        style="position: absolute; inset: 4px; background: var(--bg-card); border-radius: 50%; display: flex; align-items: center; justify-content: center;">
+                                        <span id="healthScoreValue"
+                                            style="font-size: 18px; font-weight: 800; color: var(--text-primary);">—</span>
+                                    </div>
+                                </div>
+                                <div>
+                                    <div
+                                        style="font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px;">
+                                        Fund Health Score</div>
+                                    <div id="healthScoreLabel"
+                                        style="font-size: 15px; font-weight: 600; color: var(--text-primary); margin-bottom: 2px;">
+                                        Analyzing...</div>
+                                    <div id="healthScoreDesc"
+                                        style="font-size: 11px; color: var(--text-muted); line-height: 1.4;">Based on
+                                        returns, risk, and efficiency.</div>
+                                </div>
+                            </div>
+                            <div class="stat-card"
+                                style="display: flex; align-items: center; gap: 16px; padding: 20px 24px;">
+                                <div style="font-size: 28px;">🏆</div>
+                                <div>
+                                    <div
+                                        style="font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px;">
+                                        Category Rank</div>
+                                    <div id="categoryRankValue"
+                                        style="font-size: 18px; font-weight: 700; color: var(--accent);">—</div>
+                                    <div style="font-size: 11px; color: var(--text-muted);">Within peer group</div>
+                                </div>
+                            </div>
+                        </div>
+
                         <div class="stats-grid">
                             <div class="stat-card">
                                 <div>
