@@ -527,19 +527,100 @@ function renderAllocationDonut(equityPct, debtPct, cashPct) {
 
 /* ── Insights & Alerts Engine ───────────────────────────────────── */
 /**
- * Rule 1: Stop-Loss and Take-Profit
- * Rule 2: Peer underperformance (>3% lag vs top fund in category by 1Y return)
+ * Rule A: Asset Drift   (enableDriftAlert)
+ * Rule B: Market Timing (enableMarketTimingAlert) — UTI Nifty 50 52-week drop
+ * Rule C: Tax Harvest   (enableTaxHarvestAlert)   — LTCG holdings with unrealised loss
+ * Rule D: Peer Lag      (enablePeerAlert)          — now uses rules.peerTolerance
+ * Rule E: Stop-Loss / Take-Profit (always active)
  */
-async function runInsightAlerts(holdings, alertSettings) {
+async function runInsightAlerts(holdings, alertSettings, analyticsData = {}) {
     const alerts = [];
     const master = window.allMfFunds || [];
+    const rules = loadAutomationRules(); // always read from localStorage
 
+    // ── Rule A: Asset Drift ──────────────────────────────────────
+    if (rules.enableDriftAlert) {
+        const actualEquity = analyticsData.portfolioEquityPct;
+        if (typeof actualEquity === 'number' && isFinite(actualEquity)) {
+            const drift = Math.abs(actualEquity - rules.targetEquity);
+            if (drift > 5) {
+                const direction = actualEquity > rules.targetEquity ? 'overweight' : 'underweight';
+                alerts.push({
+                    type: 'asset_drift',
+                    severity: 'warning',
+                    icon: '⚖️',
+                    title: `Asset Allocation Drift`,
+                    message: `Your equity exposure is <strong>${actualEquity.toFixed(1)}%</strong> — ${drift.toFixed(1)}% ${direction} vs your target of <strong>${rules.targetEquity}%</strong>. Consider rebalancing.`
+                });
+            }
+        }
+    }
+
+    // ── Rule B: Market Timing ────────────────────────────────────
+    if (rules.enableMarketTimingAlert) {
+        try {
+            const ctrl = new AbortController();
+            const t = setTimeout(() => ctrl.abort(), 4000);
+            // UTI Nifty 50 Index Fund Direct Growth (scheme 120716)
+            const res = await fetch('https://api.mfapi.in/mf/120716', { signal: ctrl.signal });
+            clearTimeout(t);
+            if (res.ok) {
+                const data = await res.json();
+                const navs = (data.data || []).slice(0, 365).map(d => parseFloat(d.nav)).filter(n => isFinite(n));
+                if (navs.length >= 2) {
+                    const currentNav = navs[0];
+                    const peakNav = Math.max(...navs);
+                    const dropPct = ((peakNav - currentNav) / peakNav) * 100;
+                    if (dropPct >= rules.marketDropThreshold) {
+                        alerts.push({
+                            type: 'market_timing',
+                            severity: 'info',
+                            icon: '📉',
+                            title: `Market Dip Opportunity`,
+                            message: `Nifty 50 is <strong>${dropPct.toFixed(1)}%</strong> below its 52-week peak of <strong>₹${peakNav.toFixed(0)}</strong>. Consider deploying idle capital to take advantage of lower NAVs.`
+                        });
+                    }
+                }
+            }
+        } catch (_) { /* network error or timeout — skip silently */ }
+    }
+
+    // ── Rule C: Tax Loss Harvest ─────────────────────────────────
+    if (rules.enableTaxHarvestAlert) {
+        const harvestable = [];
+        for (const h of Object.values(holdings)) {
+            if (!h.taxBuckets || !h.currentNav) continue;
+            const ltcgUnits = h.taxBuckets.LTCG.units;
+            const ltcgCost = h.taxBuckets.LTCG.cost;
+            if (ltcgUnits > 0) {
+                const ltcgCurrentValue = ltcgUnits * h.currentNav;
+                if (ltcgCurrentValue < ltcgCost) {
+                    const loss = ltcgCost - ltcgCurrentValue;
+                    harvestable.push({ name: h.name, loss });
+                }
+            }
+        }
+        if (harvestable.length > 0) {
+            const list = harvestable.map(f =>
+                `<em>${f.name}</em> (₹${f.loss.toLocaleString('en-IN', { maximumFractionDigits: 0 })} unrealised loss)`
+            ).join(', ');
+            alerts.push({
+                type: 'tax_harvest',
+                severity: 'info',
+                icon: '🏦',
+                title: `Tax Loss Harvesting Opportunity`,
+                message: `The following LTCG holdings have unrealised losses you could harvest to offset gains: ${list}.`
+            });
+        }
+    }
+
+    // ── Rule D & E: Per-holding rules ────────────────────────────
     for (const h of Object.values(holdings)) {
         const absReturnPct = h.totalInvested > 0
             ? ((h.currentValue - h.totalInvested) / h.totalInvested) * 100
             : 0;
 
-        // Rule 1 — Stop-Loss
+        // E — Stop-Loss
         if (absReturnPct <= alertSettings.stopLoss) {
             alerts.push({
                 type: 'stop_loss',
@@ -549,7 +630,7 @@ async function runInsightAlerts(holdings, alertSettings) {
                 message: `Return of <strong>${absReturnPct.toFixed(2)}%</strong> is below your stop-loss threshold of <strong>${alertSettings.stopLoss}%</strong>.`
             });
         }
-        // Rule 1 — Take-Profit
+        // E — Take-Profit
         if (absReturnPct >= alertSettings.takeProfit) {
             alerts.push({
                 type: 'take_profit',
@@ -560,29 +641,26 @@ async function runInsightAlerts(holdings, alertSettings) {
             });
         }
 
-        // Rule 2 — Peer Underperformance
-        // Find this fund in master list to get its category
-        const fundMeta = master.find(f => String(f.schemeCode) === String(h.code));
-        if (fundMeta && fundMeta.category) {
-            const category = fundMeta.category;
-
-            // Find all funds in same category with 1Y return
-            const peers = master.filter(f => f.category === category && f.returns1Y != null);
-            if (peers.length > 1) {
-                const topPeer = peers.reduce((best, f) =>
-                    (f.returns1Y > (best.returns1Y || -Infinity)) ? f : best, peers[0]);
-
-                const myReturn1Y = fundMeta.returns1Y || 0;
-                const gap = topPeer.returns1Y - myReturn1Y;
-
-                if (gap > 3) {
-                    alerts.push({
-                        type: 'peer_lag',
-                        severity: 'warning',
-                        icon: '🟡',
-                        title: `Peer Underperformance: ${h.name}`,
-                        message: `Your fund's 1Y return (<strong>${myReturn1Y.toFixed(2)}%</strong>) lags the top peer <em>${topPeer.schemeName}</em> (<strong>${topPeer.returns1Y.toFixed(2)}%</strong>) by <strong>${gap.toFixed(2)}%</strong>.`
-                    });
+        // D — Peer Underperformance (now reads peerTolerance from automation rules)
+        if (rules.enablePeerAlert) {
+            const fundMeta = master.find(f => String(f.schemeCode) === String(h.code));
+            if (fundMeta && fundMeta.category) {
+                const category = fundMeta.category;
+                const peers = master.filter(f => f.category === category && f.returns1Y != null);
+                if (peers.length > 1) {
+                    const topPeer = peers.reduce((best, f) =>
+                        (f.returns1Y > (best.returns1Y || -Infinity)) ? f : best, peers[0]);
+                    const myReturn1Y = fundMeta.returns1Y || 0;
+                    const gap = topPeer.returns1Y - myReturn1Y;
+                    if (gap > rules.peerTolerance) {
+                        alerts.push({
+                            type: 'peer_lag',
+                            severity: 'warning',
+                            icon: '📊',
+                            title: `Peer Underperformance: ${h.name}`,
+                            message: `Your fund's 1Y return (<strong>${myReturn1Y.toFixed(2)}%</strong>) lags the top peer <em>${topPeer.schemeName}</em> (<strong>${topPeer.returns1Y.toFixed(2)}%</strong>) by <strong>${gap.toFixed(2)}%</strong>.`
+                        });
+                    }
                 }
             }
         }
@@ -590,6 +668,15 @@ async function runInsightAlerts(holdings, alertSettings) {
 
     return alerts;
 }
+
+/* Severity order for grouping */
+const SEVERITY_ORDER = ['danger', 'warning', 'info', 'success'];
+const SEVERITY_META = {
+    danger: { bg: 'rgba(239,68,68,0.1)', border: 'rgba(239,68,68,0.3)', label: '🚨 Action Required' },
+    warning: { bg: 'rgba(245,158,11,0.1)', border: 'rgba(245,158,11,0.3)', label: '⚠️ Needs Attention' },
+    info: { bg: 'rgba(56,189,248,0.1)', border: 'rgba(56,189,248,0.3)', label: '💡 Opportunities' },
+    success: { bg: 'rgba(16,185,129,0.1)', border: 'rgba(16,185,129,0.3)', label: '✅ Good News' }
+};
 
 function renderInsightAlerts(alerts) {
     const panel = document.getElementById('portfolioInsightsPanel');
@@ -606,20 +693,38 @@ function renderInsightAlerts(alerts) {
 
     if (badge) { badge.textContent = alerts.length; badge.style.display = 'inline-flex'; }
 
-    panel.innerHTML = alerts.map(a => `
-        <div class="alert-card alert-${a.severity}" style="
-            display:flex;gap:14px;align-items:flex-start;
-            padding:14px 16px;border-radius:var(--radius);
-            background:${a.severity === 'danger' ? 'rgba(239,68,68,0.1)' : a.severity === 'success' ? 'rgba(16,185,129,0.1)' : 'rgba(245,158,11,0.1)'};
-            border:1px solid ${a.severity === 'danger' ? 'rgba(239,68,68,0.3)' : a.severity === 'success' ? 'rgba(16,185,129,0.3)' : 'rgba(245,158,11,0.3)'};
-            margin-bottom:10px;">
-            <div style="font-size:20px;flex-shrink:0;">${a.icon}</div>
-            <div>
-                <div style="font-weight:600;font-size:13px;color:var(--text-primary);margin-bottom:4px;">${a.title}</div>
-                <div style="font-size:12px;color:var(--text-secondary);line-height:1.5;">${a.message}</div>
-            </div>
-        </div>`).join('');
+    // Group by severity
+    const grouped = {};
+    SEVERITY_ORDER.forEach(s => { grouped[s] = []; });
+    alerts.forEach(a => { if (grouped[a.severity]) grouped[a.severity].push(a); });
+
+    let html = '';
+    SEVERITY_ORDER.forEach(sev => {
+        const group = grouped[sev];
+        if (group.length === 0) return;
+        const meta = SEVERITY_META[sev];
+        html += `<div style="margin-bottom:14px;">
+            <div style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:8px;">${meta.label}</div>`;
+        group.forEach(a => {
+            html += `<div style="
+                display:flex;gap:14px;align-items:flex-start;
+                padding:14px 16px;border-radius:var(--radius);
+                background:${meta.bg};
+                border:1px solid ${meta.border};
+                margin-bottom:8px;">
+                <div style="font-size:20px;flex-shrink:0;">${a.icon}</div>
+                <div>
+                    <div style="font-weight:600;font-size:13px;color:var(--text-primary);margin-bottom:4px;">${a.title}</div>
+                    <div style="font-size:12px;color:var(--text-secondary);line-height:1.5;">${a.message}</div>
+                </div>
+            </div>`;
+        });
+        html += '</div>';
+    });
+
+    panel.innerHTML = html;
 }
+
 
 /* ── Transaction History Renderer ───────────────────────────────── */
 function renderTransactionHistory(txns) {
