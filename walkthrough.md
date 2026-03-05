@@ -45,7 +45,7 @@ The Portfolio Analytics panel has been upgraded with advisory intelligence.
 
 ## 5. Multi-Layer Loss Recovery Advisor
 We have successfully implemented a decoupled rules engine (`advisor.js`) that analyzes underperforming investments and visually prescribes recovery strategies.
-- **Layer 1-3 (Diagnosis):** Calculates the specific fund's 52-week drawdown, measures it against the broader market drop (Nifty 50), and fetches the best-performing peer within the exact same category.
+- **Layer 1-3 (Diagnosis):** Calculates the specific fund's 52-week drawdown, measures it against the broader market drop (Nifty 50), and fetches the best-performing peer within the exact same category dynamically using `getPeerRanking`.
 - **Layer 4-5 (Strategy Engine):** Uses a sophisticated decision tree to recommend:
   - `COST_AVERAGE`: Buy the dip during broader market corrections.
   - `HOLD_CATEGORY_CYCLE`: Hold during sector-wide downturns.
@@ -53,6 +53,12 @@ We have successfully implemented a decoupled rules engine (`advisor.js`) that an
   - The engine also computes a 3-year projection array comparing a "Do Nothing" scenario against the recommended strategy.
 - **Layer 6 (UI Visualizer):** Any fund with a negative return automatically displays an "🤖 Analyze Loss" button. Clicking it opens a premium Glassmorphic modal rendering the diagnosis and a `Chart.js` future projection graph.
 
+## 6. Dynamic Chart Time-Range Navigation
+The primary Fund Dashboard chart has been overhauled for deeper historical analysis.
+- **Exhaustive Timeframes:** Users can now toggle between 1D, 1W, 1M, 3M, 6M, 1Y, 3Y, 5Y, 10Y, and MAX directly above the main NAV Chart.
+- **Zero-Latency Slicing:** Selecting a timeframe executes instant JavaScript Date math on the already-fetched master array, filtering it without triggering a new network request.
+- **Fluid Animation:** The timeframe upgrades leverage the Chart.js `.update()` functionality to mutate dataset boundaries smoothly, maintaining performance and aesthetics instead of resorting to heavy canvas re-renders.
+
 ---
-**The Robo-Advisor suite is now fully operational and ready for deployment.**
+**The Robo-Advisor suite & Enhanced Charting features are now fully operational and ready for deployment.**
 

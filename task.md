@@ -1,20 +1,24 @@
-# Multi-Layer Loss Recovery Advisor
+# Advisor Bug Fix & Chart Upgrade
 
-- [x] Step 1: The Multi-Layer Diagnostic Engine (Layers 1-3)
-    - [x] Create `/js/advisor.js` exporting `analyzeLoss`.
-    - [x] Layer 1: Calculate specific fund drawdown using `CacheManager`.
-    - [x] Layer 2: Fetch Nifty 50 (120716) drawdown from 52-week high.
-    - [x] Layer 3: Identify category top performer from `FUND_UNIVERSE`.
-    - [x] Return intermediate diagnostic object.
+- [x] Step 1: Synchronize Advisor Peer Data
+    - [x] Update `advisor.js` to replace `FUND_UNIVERSE` fallback.
+    - [x] Fetch live category peers using `getPeerRanking` or UI equivalent logic.
+    - [x] Sort array by 1Y CAGR (b.cagr - a.cagr) and pick the absolute #1.
+    - [x] Assign to `targetFund` and `bestPeerReturn` in `analyzeLoss`.
     - [x] Commit, Push, and await approval.
 
-- [x] Step 2: The Strategy & Simulation Engine (Layers 4-5)
-    - [x] Implement decision tree (Hold, Cost-Average, Switch).
-    - [x] Generate 3-year projection simulation arrays (Do Nothing vs Strategy).
+- [x] Step 2: Update Advisor Strategy Thresholds
+    - [x] Update `advisor.js` decision tree.
+    - [x] If true Top Peer is positive and fund is negative, ensure `SWITCH_FUND` is triggered.
     - [x] Commit, Push, and await approval.
 
-- [x] Step 3: UI Renderer & Portfolio Integration (Layer 6)
-    - [x] Update `/js/ui.js` or portfolio view to show "🤖 Analyze Loss" button.
-    - [x] Render sleek glassmorphic modal with diagnosis and charts.
-    - [x] Visualize `SimulationData` via Chart.js.
+- [x] Step 3: Implement Chart Time-Range HTML/CSS
+    - [x] Add 1D, 1W, 1M, 3M, 6M, 1Y, 3Y, 5Y, 10Y, MAX buttons in `index.html`.
+    - [x] Style buttons with active state highlighting.
+    - [x] Commit, Push, and await approval.
+
+- [x] Step 4: Implement Chart Data Slicing Logic
+    - [x] Create `updateChartRange(range, fullNavArray)` in `ui.js` or `app.js`.
+    - [x] Filter dataset based on cutoff date.
+    - [x] Call `Chart.js` `.update()` to animate.
     - [x] Commit, Push, and await approval.
