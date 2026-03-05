@@ -2230,10 +2230,18 @@ async function loadPortfolioView() {
             xirrEl.textContent = '—';
         }
 
-        // 7. Show main sections
+        // 7. Show main sections + build analyticsData for steps 7b and 9
         document.getElementById('portfolioEmptyState').style.display = 'none';
         document.getElementById('portfolioStatsGrid').style.display = 'grid';
         document.getElementById('portfolioTableCard').style.display = 'block';
+
+        const freshAlertSettings = loadAlertSettings();
+        const analyticsData = { portfolioEquityPct, stcgValue, ltcgValue, holdings };
+
+        // 7b. Run Robo-Advisor Suggestions Lab (non-blocking, uses analyticsData)
+        if (typeof runRoboAdvisor === 'function') {
+            runRoboAdvisor(holdings, analyticsData);
+        }
 
         // 8. Render Transaction History
         const txnDetails = document.getElementById('txnHistoryDetails');
@@ -2243,8 +2251,6 @@ async function loadPortfolioView() {
         // 9. Run Insights & Alerts — pass analyticsData (portfolioEquityPct + taxData)
         const insightsWrapper = document.getElementById('portfolioInsightsWrapper');
         if (insightsWrapper) insightsWrapper.style.display = 'block';
-        const freshAlertSettings = loadAlertSettings();
-        const analyticsData = { portfolioEquityPct, stcgValue, ltcgValue, holdings };
         const alerts = await runInsightAlerts(holdings, freshAlertSettings, analyticsData);
         renderInsightAlerts(alerts);
 
