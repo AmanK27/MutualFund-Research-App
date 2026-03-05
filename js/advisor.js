@@ -111,7 +111,7 @@ async function analyzeLoss(schemeCode, currentReturn, userTransactions = []) {
                 // Select the single highest qualified candidate
                 const absoluteBest = candidatePool[0];
 
-                if (absoluteBest.code !== schemeCode) {
+                if (String(absoluteBest.code) !== String(schemeCode)) {
                     topPeer = absoluteBest;
                 } else if (candidatePool.length > 1) {
                     // If the absolute best IS the current fund, topPeer stays null or we take the runner up

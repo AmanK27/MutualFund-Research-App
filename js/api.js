@@ -284,6 +284,18 @@ async function getPeerRanking(categoryString, currentSchemeCode) {
         peers = window.allMfFunds.filter(f => liveFundsCodeSet.has(String(f.schemeCode)));
     }
 
+    // Filter to ensure we capture Direct & Growth variants before slicing
+    let prioritizedPeers = peers.filter(f => {
+        if (!f.schemeName) return false;
+        const n = f.schemeName.toUpperCase();
+        return n.includes('DIRECT') && n.includes('GROWTH') &&
+            !n.includes('IDCW') && !n.includes('DIVIDEND') && !n.includes('BONUS');
+    });
+
+    if (prioritizedPeers.length > 0) {
+        peers = prioritizedPeers;
+    }
+
     if (peers.length < 2) {
         const keyword = categoryString
             .replace(/Equity Scheme\s*-?\s*/ig, '')
@@ -311,30 +323,51 @@ async function getPeerRanking(categoryString, currentSchemeCode) {
         if (currentFromMaster) peers.push(currentFromMaster);
     }
 
-    peers = peers.slice(0, 20);
+    peers = peers.slice(0, 15); // Reduce to 15 to ease API pressure
 
-    const fetchPromises = peers.map(async (peer) => {
+    const validRankings = [];
+    for (const peer of peers) {
         try {
-            const res = await fetch(`https://api.mfapi.in/mf/${peer.schemeCode}`);
-            if (!res.ok) return null;
-            const data = await res.json();
-            if (!data || !data.data || data.data.length === 0) return null;
+            // Check cache first to avoid slamming the MFAPI
+            const cached = await CacheManager.get(String(peer.schemeCode));
+            let navHistory = null;
 
-            const navHistory = data.data.map(d => {
-                const parts = d.date.split('-');
-                return { date: new Date(parts[2], parts[1] - 1, parts[0]), nav: parseFloat(d.nav) };
-            }).sort((a, b) => a.date - b.date);
+            if (CacheManager.isCacheValid(cached) && cached.data) {
+                navHistory = cached.data;
+            } else {
+                const res = await fetch(`https://api.mfapi.in/mf/${peer.schemeCode}`);
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data && data.data && data.data.length > 0) {
+                        navHistory = data.data.map(d => {
+                            const parts = d.date.split('-');
+                            return { date: new Date(parts[2], parts[1] - 1, parts[0]), nav: parseFloat(d.nav) };
+                        }).sort((a, b) => a.date - b.date);
+                    }
+                }
+            }
 
-            const cagr1y = getCAGR(navHistory, 1);
-            return { schemeCode: String(peer.schemeCode), schemeName: formatFundName(peer.schemeName), cagr1y };
+            if (navHistory) {
+                const cagr1y = getCAGR(navHistory, 1);
+                if (cagr1y !== null) {
+                    validRankings.push({
+                        schemeCode: String(peer.schemeCode),
+                        schemeName: formatFundName(peer.schemeName),
+                        cagr1y
+                    });
+                }
+            }
+
+            // Artificial delay to prevent 429 Rate Limit from MFAPI if fetched freshly
+            if (!navHistory || !cached) {
+                await new Promise(r => setTimeout(r, 100));
+            }
+
         } catch (err) {
             console.error("Peer fetch failed for", peer.schemeCode, err);
-            return null;
         }
-    });
+    }
 
-    const results = await Promise.all(fetchPromises);
-    const validRankings = results.filter(r => r !== null && r.cagr1y !== null);
     validRankings.sort((a, b) => b.cagr1y - a.cagr1y);
     return validRankings;
 }
