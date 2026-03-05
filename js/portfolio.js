@@ -469,17 +469,19 @@ function renderAllocationDonut(equityPct, debtPct, cashPct) {
     if (!canvas) return;
 
     // Show the analytics row as a 3-column grid
-    if (analyticsRow) {
-        analyticsRow.style.display = 'grid';
-    }
+    if (analyticsRow) analyticsRow.style.display = 'grid';
 
-    const data = [
-        Math.round(equityPct * 10) / 10,
-        Math.round(debtPct * 10) / 10,
-        Math.round(cashPct * 10) / 10
-    ];
+    // Sanitize inputs — guard against NaN / Infinity
+    const safeEq = isFinite(equityPct) ? Math.max(0, Math.round(equityPct * 10) / 10) : 0;
+    const safeDt = isFinite(debtPct) ? Math.max(0, Math.round(debtPct * 10) / 10) : 0;
+    const safeCsh = isFinite(cashPct) ? Math.max(0, Math.round(cashPct * 10) / 10) : 0;
+
+    // Ensure at least a tiny segment so the donut always renders
+    const total = safeEq + safeDt + safeCsh;
+    const data = total > 0 ? [safeEq, safeDt, safeCsh] : [100, 0, 0];
     const labels = ['Equity', 'Debt', 'Cash/Others'];
     const colors = ['#6366f1', '#10b981', '#f59e0b'];
+    const displayData = total > 0 ? [safeEq, safeDt, safeCsh] : ['—', '—', '—'];
 
     if (_allocationChart) {
         _allocationChart.data.datasets[0].data = data;
@@ -512,13 +514,13 @@ function renderAllocationDonut(equityPct, debtPct, cashPct) {
         });
     }
 
-    // Custom legend
+    // Custom legend with clean numbers
     const legend = document.getElementById('allocationLegend');
     if (legend) {
         legend.innerHTML = labels.map((l, i) => `
             <span style="display:flex;align-items:center;gap:4px;">
                 <span style="width:9px;height:9px;border-radius:50%;background:${colors[i]};display:inline-block;"></span>
-                ${l} ${data[i]}%
+                ${l} ${typeof displayData[i] === 'number' ? displayData[i] + '%' : displayData[i]}
             </span>`).join('');
     }
 }
