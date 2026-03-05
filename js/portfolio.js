@@ -434,11 +434,15 @@ function computeXIRR(cashFlows, guess = 0.1) {
         const df = dnpv(rate);
         if (Math.abs(df) < 1e-12) break;
         const newRate = rate - f / df;
-        if (Math.abs(newRate - rate) < TOLERANCE) return newRate;
+        if (Math.abs(newRate - rate) < TOLERANCE) {
+            // Sanity check: if result is NaN or astronomical, return null
+            if (isNaN(newRate) || Math.abs(newRate) > 10) return null;
+            return newRate;
+        }
         rate = newRate;
-        if (rate < -0.999) rate = -0.999; // guard against blow-up
+        if (rate < -0.999) rate = -0.999;
     }
-    return rate;
+    return null; // non-convergent
 }
 
 /**

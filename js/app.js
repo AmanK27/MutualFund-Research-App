@@ -2203,50 +2203,72 @@ async function loadPortfolioView() {
 
         // 3. Fetch latest NAV & Metrics for each holding in parallel (Cache-First)
         await Promise.all(Object.keys(holdings).map(async code => {
-            if (fundDetails) {
-                // Map standardize schema back to portfolio view expectations
-                // data is sorted oldest -> newest via utils.js; take last element
-                const latestNav = (fundDetails.data && fundDetails.data.length > 0) ? fundDetails.data[fundDetails.data.length - 1].nav : 0;
-                holdings[code].currentNav = latestNav;
-                holdings[code].currentValue = latestNav * holdings[code].totalUnits;
+            try {
+                const fundDetails = await aggregateFundDetails(code, holdings[code].name);
+                if (fundDetails) {
+                    // Map standardize schema back to portfolio view expectations
+                    // data is sorted oldest -> newest via utils.js; take last element
+                    const latestNav = (fundDetails.data && fundDetails.data.length > 0) ? fundDetails.data[fundDetails.data.length - 1].nav : 0;
+                    holdings[code].currentNav = latestNav;
+                    holdings[code].currentValue = latestNav * holdings[code].totalUnits;
+                    holdings[code].fetchError = false;
 
-                // Asset allocation for donut chart
-                holdings[code].equityPct = fundDetails.portfolio.equity_percentage;
-                holdings[code].debtPct = fundDetails.portfolio.debt_percentage;
-                holdings[code].cashPct = fundDetails.portfolio.cash_percentage;
-            } else {
-                holdings[code].currentNav = 0;
-                holdings[code].currentValue = 0;
+                    // Asset allocation for donut chart
+                    holdings[code].equityPct = fundDetails.portfolio.equity_percentage;
+                    holdings[code].debtPct = fundDetails.portfolio.debt_percentage;
+                    holdings[code].cashPct = fundDetails.portfolio.cash_percentage;
+                } else {
+                    holdings[code].fetchError = true;
+                    holdings[code].currentNav = null;
+                    holdings[code].currentValue = null;
+                }
+            } catch (err) {
+                console.error(`Failed to fetch details for ${code}:`, err);
+                holdings[code].fetchError = true;
+                holdings[code].currentNav = null;
+                holdings[code].currentValue = null;
             }
         }));
 
         // 4. Build holdings table
         let globalCurrentValue = 0;
+        let globalInvestedInSuccessfulFunds = 0; // only sum invested if fetch worked
         const tbody = document.getElementById('portfolioTableBody');
         tbody.innerHTML = '';
 
         Object.values(holdings).forEach(h => {
-            globalCurrentValue += h.currentValue;
+            const hasError = h.fetchError || h.currentValue === null;
+            if (!hasError) {
+                globalCurrentValue += h.currentValue;
+                globalInvestedInSuccessfulFunds += h.totalInvested;
+            }
+
             const avgNav = h.totalUnits > 0 ? h.totalInvested / h.totalUnits : 0;
-            const absReturnPct = h.totalInvested > 0 ? ((h.currentValue - h.totalInvested) / h.totalInvested) * 100 : 0;
+            const absReturnPct = (!hasError && h.totalInvested > 0) ? ((h.currentValue - h.totalInvested) / h.totalInvested) * 100 : 0;
 
             const tr = document.createElement('tr');
             tr.style.cursor = 'pointer';
             tr.onclick = () => loadFund(h.code);
             tr.innerHTML = `
-                <td style="font-weight: 500;">${escapeHtml(h.name)}</td>
+                <td style="font-weight: 500;">
+                    ${escapeHtml(h.name)} 
+                    ${hasError ? '<span title="Fetch failed" style="color:var(--error); cursor:help;">⚠️</span>' : ''}
+                </td>
                 <td>${h.totalUnits.toFixed(3)}</td>
                 <td>₹${avgNav.toFixed(2)}</td>
-                <td>₹${h.currentNav.toFixed(2)}</td>
+                <td>${hasError ? '<span style="color:var(--error);">---</span>' : '₹' + h.currentNav.toFixed(2)}</td>
                 <td>₹${h.totalInvested.toLocaleString('en-IN')}</td>
-                <td>₹${h.currentValue.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</td>
-                <td style="text-align: right;" class="${getPercentClass(absReturnPct / 100)}">${(absReturnPct >= 0 ? '+' : '')}${absReturnPct.toFixed(2)}%</td>
+                <td>${hasError ? '<span style="color:var(--error);">---</span>' : '₹' + h.currentValue.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</td>
+                <td style="text-align: right;" class="${hasError ? '' : getPercentClass(absReturnPct / 100)}">
+                    ${hasError ? 'Error' : (absReturnPct >= 0 ? '+' : '') + absReturnPct.toFixed(2) + '%'}
+                </td>
             `;
             tbody.appendChild(tr);
         });
 
         // 5. Compute aggregate financial stats
-        const totalAbsReturn = globalInvested > 0 ? ((globalCurrentValue - globalInvested) / globalInvested) * 100 : 0;
+        // Formula change: only compare Current Value vs Invested amount for funds that actually loaded!
+        const totalAbsReturn = globalInvestedInSuccessfulFunds > 0 ? ((globalCurrentValue - globalInvestedInSuccessfulFunds) / globalInvestedInSuccessfulFunds) * 100 : 0;
 
         document.getElementById('pfTotalInvested').textContent = '₹' + globalInvested.toLocaleString('en-IN');
         document.getElementById('pfCurrentValue').textContent = '₹' + globalCurrentValue.toLocaleString('en-IN', { maximumFractionDigits: 0 });
