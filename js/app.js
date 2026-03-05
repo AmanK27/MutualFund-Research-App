@@ -746,25 +746,43 @@ function updateSIPCalculator() {
 
 
 function filterDataByRange(range) {
+    if (!fullNavData || fullNavData.length === 0) return [];
     if (range === 'MAX') return fullNavData;
-
-    const yearsMap = { '1Y': 1, '3Y': 3, '5Y': 5 };
-    const years = yearsMap[range];
-    if (!years) return fullNavData;
 
     const latest = fullNavData[fullNavData.length - 1].date;
     const cutoff = new Date(latest);
-    cutoff.setFullYear(cutoff.getFullYear() - years);
+
+    switch (range) {
+        case '1D': cutoff.setDate(cutoff.getDate() - 1); break;
+        case '1W': cutoff.setDate(cutoff.getDate() - 7); break;
+        case '1M': cutoff.setMonth(cutoff.getMonth() - 1); break;
+        case '3M': cutoff.setMonth(cutoff.getMonth() - 3); break;
+        case '6M': cutoff.setMonth(cutoff.getMonth() - 6); break;
+        case '1Y': cutoff.setFullYear(cutoff.getFullYear() - 1); break;
+        case '3Y': cutoff.setFullYear(cutoff.getFullYear() - 3); break;
+        case '5Y': cutoff.setFullYear(cutoff.getFullYear() - 5); break;
+        case '10Y': cutoff.setFullYear(cutoff.getFullYear() - 10); break;
+        default: return fullNavData;
+    }
 
     return fullNavData.filter(d => d.date >= cutoff);
 }
 
 function setActiveRange(range) {
-    document.querySelectorAll('.range-btn').forEach(btn => {
+    document.querySelectorAll('#chartRangeBtns .range-btn').forEach(btn => {
         btn.classList.toggle('active', btn.dataset.range === range);
     });
+
     const filtered = filterDataByRange(range);
-    renderChart(filtered);
+
+    if (navChart) {
+        // Animate the update dynamically instead of destroying
+        navChart.data.labels = filtered.map(d => d.date);
+        navChart.data.datasets[0].data = filtered.map(d => d.nav);
+        navChart.update();
+    } else {
+        renderChart(filtered);
+    }
 }
 
 let isLoading = false;
