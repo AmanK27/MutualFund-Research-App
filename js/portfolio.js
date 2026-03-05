@@ -460,6 +460,69 @@ function buildCashFlows(txns, totalCurrentValue) {
     return flows;
 }
 
+/* ── Asset Allocation Donut Chart ────────────────────────────── */
+let _allocationChart = null;
+
+function renderAllocationDonut(equityPct, debtPct, cashPct) {
+    const canvas = document.getElementById('allocationDonut');
+    const analyticsRow = document.getElementById('portfolioAnalyticsRow');
+    if (!canvas) return;
+
+    // Show the analytics row as a 3-column grid
+    if (analyticsRow) {
+        analyticsRow.style.display = 'grid';
+    }
+
+    const data = [
+        Math.round(equityPct * 10) / 10,
+        Math.round(debtPct * 10) / 10,
+        Math.round(cashPct * 10) / 10
+    ];
+    const labels = ['Equity', 'Debt', 'Cash/Others'];
+    const colors = ['#6366f1', '#10b981', '#f59e0b'];
+
+    if (_allocationChart) {
+        _allocationChart.data.datasets[0].data = data;
+        _allocationChart.update();
+    } else {
+        _allocationChart = new Chart(canvas, {
+            type: 'doughnut',
+            data: {
+                labels,
+                datasets: [{
+                    data,
+                    backgroundColor: colors,
+                    borderWidth: 2,
+                    borderColor: 'rgba(0,0,0,0.2)',
+                    hoverOffset: 6
+                }]
+            },
+            options: {
+                cutout: '72%',
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            label: ctx => ` ${ctx.label}: ${ctx.parsed.toFixed(1)}%`
+                        }
+                    }
+                },
+                animation: { duration: 600 }
+            }
+        });
+    }
+
+    // Custom legend
+    const legend = document.getElementById('allocationLegend');
+    if (legend) {
+        legend.innerHTML = labels.map((l, i) => `
+            <span style="display:flex;align-items:center;gap:4px;">
+                <span style="width:9px;height:9px;border-radius:50%;background:${colors[i]};display:inline-block;"></span>
+                ${l} ${data[i]}%
+            </span>`).join('');
+    }
+}
+
 /* ── Insights & Alerts Engine ───────────────────────────────────── */
 /**
  * Rule 1: Stop-Loss and Take-Profit
@@ -620,4 +683,5 @@ window.buildCashFlows = buildCashFlows;
 window.runInsightAlerts = runInsightAlerts;
 window.renderInsightAlerts = renderInsightAlerts;
 window.renderTransactionHistory = renderTransactionHistory;
+window.renderAllocationDonut = renderAllocationDonut;
 

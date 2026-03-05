@@ -511,6 +511,32 @@
                     </div>
                 </div>
 
+                <!-- Asset Allocation & Tax Bucket Row -->
+                <div id="portfolioAnalyticsRow"
+                    style="margin-top:20px;display:none;gap:16px;grid-template-columns:1fr 1fr 1fr;align-items:stretch;">
+                    <!-- Donut Chart -->
+                    <div class="stat-card"
+                        style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:180px;">
+                        <div class="stat-label" style="margin-bottom:10px;">Asset Allocation</div>
+                        <canvas id="allocationDonut" width="140" height="140" style="max-width:140px;"></canvas>
+                        <div id="allocationLegend"
+                            style="display:flex;gap:10px;margin-top:10px;flex-wrap:wrap;justify-content:center;font-size:11px;color:var(--text-muted);">
+                        </div>
+                    </div>
+                    <!-- STCG Tile -->
+                    <div class="stat-card">
+                        <div class="stat-label">STCG Holdings</div>
+                        <div class="stat-value" id="pfStcgValue" style="color:#f59e0b;">—</div>
+                        <div class="stat-sub">Units held &lt; 1 year (Short-term)</div>
+                    </div>
+                    <!-- LTCG Tile -->
+                    <div class="stat-card">
+                        <div class="stat-label">LTCG Holdings</div>
+                        <div class="stat-value" id="pfLtcgValue" style="color:#10b981;">—</div>
+                        <div class="stat-sub">Units held ≥ 1 year (Long-term)</div>
+                    </div>
+                </div>
+
                 <div class="table-card" id="portfolioTableCard" style="margin-top: 24px; display: none;">
                     <table class="fund-table">
                         <thead>

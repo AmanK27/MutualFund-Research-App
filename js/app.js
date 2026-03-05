@@ -2049,6 +2049,10 @@ async function loadPortfolioView() {
         const holdings = {};
         let globalInvested = 0;
 
+        const today = new Date();
+        const MS_PER_DAY = 86400000;
+        const LTCG_THRESHOLD_DAYS = 365;
+
         expandedTxns.forEach(t => {
             const code = t.schemeCode;
             if (!holdings[code]) {
@@ -2058,6 +2062,15 @@ async function loadPortfolioView() {
                 holdings[code].totalUnits += Number(t.units);
                 holdings[code].totalInvested += Number(t.amount);
                 globalInvested += Number(t.amount);
+
+                // Tax bucket: tag each unit lot as STCG or LTCG
+                const txDate = t.date && t.date.toDate ? t.date.toDate() : new Date(t.date);
+                const ageInDays = (today - txDate) / MS_PER_DAY;
+                const bucket = ageInDays >= LTCG_THRESHOLD_DAYS ? 'LTCG' : 'STCG';
+                if (!holdings[code].taxBuckets) holdings[code].taxBuckets = { LTCG: { units: 0, cost: 0 }, STCG: { units: 0, cost: 0 } };
+                holdings[code].taxBuckets[bucket].units += Number(t.units);
+                holdings[code].taxBuckets[bucket].cost += Number(t.amount);
+
             } else if (t.type === 'sell') {
                 holdings[code].totalUnits -= Number(t.units);
                 const avgCost = holdings[code].totalInvested / (holdings[code].totalUnits + Number(t.units));
@@ -2073,7 +2086,7 @@ async function loadPortfolioView() {
         });
 
 
-        // 3. Fetch latest NAV for each holding in parallel
+        // 3. Fetch latest NAV + Kuvera asset-class data for each holding in parallel
         await Promise.all(Object.keys(holdings).map(async code => {
             try {
                 const res = await fetch(`https://api.mfapi.in/mf/${code}`);
@@ -2088,6 +2101,21 @@ async function loadPortfolioView() {
             } catch (e) {
                 holdings[code].currentNav = 0; holdings[code].currentValue = 0;
             }
+
+            // Kuvera API: fetch equity/debt % for this scheme
+            try {
+                const kvRes = await fetch(`https://api.kuvera.in/mf/api/v4/fund_schemes/${code}.json`);
+                if (kvRes.ok) {
+                    const kv = await kvRes.json();
+                    // Kuvera returns asset_allocation as an object like { equity: 92.5, debt: 0, ... }
+                    const alloc = kv?.asset_allocation || kv?.fund?.asset_allocation || null;
+                    if (alloc) {
+                        holdings[code].equityPct = parseFloat(alloc.equity) || 0;
+                        holdings[code].debtPct = parseFloat(alloc.debt) || 0;
+                        holdings[code].cashPct = parseFloat(alloc.cash) || parseFloat(alloc.others) || 0;
+                    }
+                }
+            } catch (_) { /* Kuvera not critical — silently skip */ }
         }));
 
         // 4. Build holdings table
@@ -2115,7 +2143,7 @@ async function loadPortfolioView() {
             tbody.appendChild(tr);
         });
 
-        // 5. Compute aggregate stats
+        // 5. Compute aggregate financial stats
         const totalAbsReturn = globalInvested > 0 ? ((globalCurrentValue - globalInvested) / globalInvested) * 100 : 0;
 
         document.getElementById('pfTotalInvested').textContent = '₹' + globalInvested.toLocaleString('en-IN');
@@ -2124,6 +2152,56 @@ async function loadPortfolioView() {
         const returnEl = document.getElementById('pfAbsoluteReturn');
         returnEl.textContent = (totalAbsReturn >= 0 ? '+' : '') + totalAbsReturn.toFixed(2) + '%';
         returnEl.className = 'stat-value ' + getPercentClass(totalAbsReturn / 100);
+
+        // 5b. Asset Allocation & Tax Bucketing analytics
+        let weightedEquityRs = 0, weightedDebtRs = 0, weightedCashRs = 0;
+        let stcgValue = 0, ltcgValue = 0;
+
+        Object.values(holdings).forEach(h => {
+            const cv = h.currentValue || 0;
+            const nav = h.currentNav || 0;
+
+            // Weighted equity / debt by current value
+            if (h.equityPct !== undefined) {
+                weightedEquityRs += cv * (h.equityPct / 100);
+                weightedDebtRs += cv * (h.debtPct / 100);
+                weightedCashRs += cv * (h.cashPct / 100);
+            } else {
+                // Fall back to category guess from master list
+                const meta = (window.allMfFunds || []).find(f => String(f.schemeCode) === String(h.code));
+                const cat = (meta?.category || '').toLowerCase();
+                if (cat.includes('debt') || cat.includes('liquid') || cat.includes('overnight')) {
+                    weightedDebtRs += cv;
+                } else if (cat.includes('hybrid')) {
+                    weightedEquityRs += cv * 0.65;
+                    weightedDebtRs += cv * 0.35;
+                } else {
+                    weightedEquityRs += cv;   // default: treat as equity
+                }
+            }
+
+            // STCG / LTCG values based on current NAV
+            if (h.taxBuckets && nav > 0) {
+                stcgValue += h.taxBuckets.STCG.units * nav;
+                ltcgValue += h.taxBuckets.LTCG.units * nav;
+            }
+        });
+
+        const totalAllocated = weightedEquityRs + weightedDebtRs + weightedCashRs || globalCurrentValue || 1;
+        const portfolioEquityPct = (weightedEquityRs / totalAllocated) * 100;
+        const portfolioDebtPct = (weightedDebtRs / totalAllocated) * 100;
+        const portfolioCashPct = Math.max(0, 100 - portfolioEquityPct - portfolioDebtPct);
+
+        // Update STCG / LTCG stat tiles
+        const stcgEl = document.getElementById('pfStcgValue');
+        const ltcgEl = document.getElementById('pfLtcgValue');
+        if (stcgEl) stcgEl.textContent = '₹' + stcgValue.toLocaleString('en-IN', { maximumFractionDigits: 0 });
+        if (ltcgEl) ltcgEl.textContent = '₹' + ltcgValue.toLocaleString('en-IN', { maximumFractionDigits: 0 });
+
+        // Render allocation donut
+        if (typeof renderAllocationDonut === 'function') {
+            renderAllocationDonut(portfolioEquityPct, portfolioDebtPct, portfolioCashPct);
+        }
 
         // 6. XIRR — build cash flows across all expanded transactions (includes synthetic SIP rows)
         const allBuyTxns = expandedTxns.filter(t => t.type === 'buy');
@@ -2155,11 +2233,12 @@ async function loadPortfolioView() {
         if (txnDetails) txnDetails.style.display = 'block';
         renderTransactionHistory(txns);
 
-        // 9. Run Insights & Alerts
+        // 9. Run Insights & Alerts — pass analyticsData (portfolioEquityPct + taxData)
         const insightsWrapper = document.getElementById('portfolioInsightsWrapper');
         if (insightsWrapper) insightsWrapper.style.display = 'block';
         const freshAlertSettings = loadAlertSettings();
-        const alerts = await runInsightAlerts(holdings, freshAlertSettings);
+        const analyticsData = { portfolioEquityPct, stcgValue, ltcgValue, holdings };
+        const alerts = await runInsightAlerts(holdings, freshAlertSettings, analyticsData);
         renderInsightAlerts(alerts);
 
     } catch (e) {
