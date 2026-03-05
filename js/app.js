@@ -2909,3 +2909,31 @@ document.addEventListener('keydown', (e) => {
     }
 });
 
+
+// ── PORTFOLIO UI TOGGLES ──────────────────────────────────────────────
+window.toggleAnalyticsPanel = function(show) {
+    const container = document.getElementById('portfolioContainer');
+    if (!container) return;
+    
+    if (show) {
+        container.classList.remove('analytics-closed');
+        container.classList.add('analytics-open');
+    } else {
+        container.classList.remove('analytics-open');
+        container.classList.add('analytics-closed');
+    }
+    
+    // The CSS grid transition takes 400ms. We trigger chart resize slightly 
+    // after the CSS transition starts and again when it finishes to prevent warping.
+    if (window.Chart) {
+        // resize continuously over the transition duration for smooth scaling
+        const resizeInterval = setInterval(() => {
+            Chart.instances.forEach(c => c.resize());
+        }, 50);
+        
+        setTimeout(() => {
+            clearInterval(resizeInterval);
+            Chart.instances.forEach(c => c.resize());
+        }, 450); // 400ms transition + 50ms buffer
+    }
+};
