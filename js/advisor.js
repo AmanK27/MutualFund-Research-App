@@ -63,6 +63,7 @@ async function analyzeLoss(schemeCode, currentReturn, userTransactions = []) {
 
     let topPeer = null;
     let candidatePool = [];
+    let targetFundScore = 0;
 
     try {
         const peers = await getPeerRanking(fundCategory, schemeCode);
@@ -93,7 +94,7 @@ async function analyzeLoss(schemeCode, currentReturn, userTransactions = []) {
                         name: candidate.schemeName,
                         cagr1Y: baseScore,
                         expenseRatio: expenseRatio,
-                        drawdown: calculate52WeekDrawdown(details.data),
+                        drawdown: calculate52WeekDrawdown(details.data) || 0,
                         score: qualityScore
                     });
                 }
@@ -101,8 +102,7 @@ async function analyzeLoss(schemeCode, currentReturn, userTransactions = []) {
 
             // Also score the current fund for apples-to-apples comparison
             const targetER = fundDetails.portfolio?.expense_ratio || 0.75;
-            const targetScore = (fund1yCAGR * 100) - (targetER * 2);
-            diagnosis.targetFundScore = targetScore;
+            targetFundScore = (fund1yCAGR * 100) - (targetER * 2);
 
             if (candidatePool.length > 0) {
                 // Sort by the newly minted QualityScore descending
@@ -134,7 +134,8 @@ async function analyzeLoss(schemeCode, currentReturn, userTransactions = []) {
         fund1yCAGR: fund1yCAGR !== null ? fund1yCAGR * 100 : null,
         marketDrawdown,
         category: fundCategory,
-        topPeer
+        topPeer,
+        targetFundScore
     };
 
     console.log("[Advisor Engine] Diagnosis Generated:", diagnosis);
