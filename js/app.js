@@ -541,9 +541,9 @@ function getFundHealthScore(data, expenseRatio) {
 
     let weights = { cagr: 40, vol: 20, sharpe: 20, efficiency: 20 };
     const healthyCAGR = 0.15;
-    const normCAGR = Math.min(Math.max((cagr3 ?? cagr1 ?? 0) / healthyCAGR, 0), 1.25);
+    const normCAGR = Math.min(Math.max((cagr1 ?? cagr3 ?? 0) / healthyCAGR, 0), 1.25);
     const normVol = vol !== null ? Math.max(0, 1 - (vol / 0.25)) : null;
-    let sharpe = (vol > 0) ? (cagr3 ?? cagr1 ?? 0) / vol : null;
+    let sharpe = (vol > 0) ? (cagr1 ?? cagr3 ?? 0) / vol : null;
     const normSharpe = sharpe !== null ? Math.min(Math.max(sharpe / 1.0, 0), 1) : null;
     const normEfficiency = (expenseRatio !== null && !isNaN(expenseRatio)) ? Math.max(0, 1 - (expenseRatio / 2.5)) : null;
 
@@ -3275,35 +3275,34 @@ document.addEventListener('keydown', (e) => {
 // ── PORTFOLIO UI TOGGLES ──────────────────────────────────────────────
 window.toggleAnalyticsPanel = function (show) {
     const container = document.getElementById('portfolioContainer');
+    const panel = document.getElementById('portfolioAnalyticsPanel');
     const btn = document.getElementById('btnToggleAnalytics');
-    if (!container) return;
+    if (!container || !panel) return;
 
-    // Determine the target state: if 'show' is undefined, toggle based on current class
+    // Determine target state
     const isCurrentlyOpen = container.classList.contains('analytics-open');
     const targetState = typeof show !== 'undefined' ? show : !isCurrentlyOpen;
 
     if (targetState) {
         container.classList.remove('analytics-closed');
         container.classList.add('analytics-open');
+        panel.style.display = 'block';
         if (btn) btn.querySelector('span').textContent = 'Hide Details / Analytics';
     } else {
         container.classList.remove('analytics-open');
         container.classList.add('analytics-closed');
+        panel.style.display = 'none'; // Explicitly hide when closed
         if (btn) btn.querySelector('span').textContent = 'Show Details / Analytics';
     }
 
-    // The CSS grid transition takes 400ms. We trigger chart resize slightly 
-    // after the CSS transition starts and again when it finishes to prevent warping.
     if (window.Chart) {
-        // resize continuously over the transition duration for smooth scaling
         const resizeInterval = setInterval(() => {
             Chart.instances.forEach(c => c.resize());
         }, 50);
-
         setTimeout(() => {
             clearInterval(resizeInterval);
             Chart.instances.forEach(c => c.resize());
-        }, 450); // 400ms transition + 50ms buffer
+        }, 450);
     }
 };
 
