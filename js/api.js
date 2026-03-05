@@ -235,7 +235,7 @@ async function fetchAdvancedFundData(schemeName) {
 
 // Maps mfapi.in scheme_category strings → LIVE_FUNDS subcategory key
 // (authoritative AMFI-parsed category buckets)
-const SCHEME_CATEGORY_TO_LIVE_FUNDS = {
+window.SCHEME_CATEGORY_TO_LIVE_FUNDS = {
     // Equity
     'Equity Scheme - Large Cap Fund': 'Large Cap',
     'Equity Scheme - Mid Cap Fund': 'Mid Cap',
@@ -498,11 +498,15 @@ async function aggregateFundDetails(schemeCode, cleanFundName) {
         clearTimeout(timer);
         if (kvRes.ok) {
             const kv = await kvRes.json();
-            const alloc = kv?.asset_allocation || kv?.fund?.asset_allocation || null;
+            const root = Array.isArray(kv) ? kv[0] : kv;
+            const alloc = root?.asset_allocation || root?.fund?.asset_allocation || null;
             if (alloc) {
                 fund.portfolio.equity_percentage = parseFloat(alloc.equity) || 0;
                 fund.portfolio.debt_percentage = parseFloat(alloc.debt) || 0;
                 fund.portfolio.cash_percentage = parseFloat(alloc.cash) || parseFloat(alloc.others) || 0;
+            }
+            if (root?.fund?.category) {
+                fund.meta.kuvera_category = root.fund.category;
             }
         }
     } catch (_) { /* Kuvera errors are not fatal */ }
