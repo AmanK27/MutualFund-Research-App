@@ -491,171 +491,190 @@
                 <!-- New Dynamic CSS Grid Container -->
                 <div id="portfolioContainer" class="analytics-closed">
 
-                    <div class="stats-grid" id="portfolioStatsGrid" style="margin-top: 24px; display: none;">
-                        <div class="stat-card">
-                            <div class="stat-label">Total Invested</div>
-                            <div class="stat-value" id="pfTotalInvested">—</div>
-                            <div class="stat-sub">Sum of all principal</div>
-                        </div>
-                        <div class="stat-card">
-                            <div class="stat-label">Current Value</div>
-                            <div class="stat-value" id="pfCurrentValue" style="color: var(--accent);">—</div>
-                            <div class="stat-sub">Based on latest NAV</div>
-                        </div>
-                        <div class="stat-card">
-                            <div class="stat-label">Absolute Return</div>
-                            <div class="stat-value" id="pfAbsoluteReturn">—</div>
-                            <div class="stat-sub">Overall profit/loss</div>
-                        </div>
-                        <div class="stat-card">
-                            <div class="stat-label">Overall XIRR</div>
-                            <div class="stat-value" id="pfXirr">—</div>
-                            <div class="stat-sub">Annualised Return</div>
-                        </div>
-                    </div>
-
-                    <!-- Asset Allocation & Tax Bucket Row -->
-                    <div id="portfolioAnalyticsRow"
-                        style="margin-top:20px;display:none;gap:16px;grid-template-columns:1fr 1fr 1fr;align-items:stretch;">
-                        <!-- Donut Chart -->
-                        <div class="stat-card"
-                            style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:180px;">
-                            <div class="stat-label" style="margin-bottom:10px;">Asset Allocation</div>
-                            <canvas id="allocationDonut" width="140" height="140" style="max-width:140px;"></canvas>
-                            <div id="allocationLegend"
-                                style="display:flex;gap:10px;margin-top:10px;flex-wrap:wrap;justify-content:center;font-size:11px;color:var(--text-muted);">
+                    <!-- ── Main Left Content ── -->
+                    <div id="portfolioMainContent">
+                        <div class="stats-grid" id="portfolioStatsGrid" style="margin-top: 24px; display: none;">
+                            <div class="stat-card compact">
+                                <div class="stat-label">Total Invested</div>
+                                <div class="stat-value" id="pfTotalInvested">—</div>
+                                <div class="stat-sub">Sum of all principal</div>
+                            </div>
+                            <div class="stat-card compact">
+                                <div class="stat-label">Current Value</div>
+                                <div class="stat-value" id="pfCurrentValue" style="color: var(--accent);">—</div>
+                                <div class="stat-sub">Based on latest NAV</div>
+                            </div>
+                            <div class="stat-card compact">
+                                <div class="stat-label">Absolute Return</div>
+                                <div class="stat-value" id="pfAbsoluteReturn">—</div>
+                                <div class="stat-sub">Overall profit/loss</div>
+                            </div>
+                            <div class="stat-card compact">
+                                <div class="stat-label">Overall XIRR</div>
+                                <div class="stat-value" id="pfXirr">—</div>
+                                <div class="stat-sub">Annualised Return</div>
                             </div>
                         </div>
-                        <!-- STCG Tile -->
-                        <div class="stat-card">
-                            <div class="stat-label">STCG Holdings</div>
-                            <div class="stat-value" id="pfStcgValue" style="color:#f59e0b;">—</div>
-                            <div class="stat-sub">Units held &lt; 1 year (Short-term)</div>
+
+                        <!-- Concise Summary Bar -->
+                        <div class="portfolio-summary-bar" id="portfolioSummaryBar" style="display: none;">
+                            <div class="summary-bar-text">Concise portfolio summary</div>
+                            <button class="btn-toggle-analytics" onclick="toggleAnalyticsPanel(true)">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M3 3v18h18" />
+                                    <path d="m19 9-5 5-4-4-3 3" />
+                                </svg>
+                                Show Details / Analytics
+                            </button>
                         </div>
-                        <!-- LTCG Tile -->
-                        <div class="stat-card">
-                            <div class="stat-label">LTCG Holdings</div>
-                            <div class="stat-value" id="pfLtcgValue" style="color:#10b981;">—</div>
-                            <div class="stat-sub">Units held ≥ 1 year (Long-term)</div>
+
+                        <!-- Asset Allocation & Tax Bucket Row -->
+                        <div id="portfolioAnalyticsRow"
+                            style="margin-top:20px;display:none;gap:16px;grid-template-columns:1fr 1fr 1fr;align-items:stretch;">
+                            <!-- Donut Chart -->
+                            <div class="stat-card"
+                                style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:180px;">
+                                <div class="stat-label" style="margin-bottom:10px;">Asset Allocation</div>
+                                <canvas id="allocationDonut" width="140" height="140" style="max-width:140px;"></canvas>
+                                <div id="allocationLegend"
+                                    style="display:flex;gap:10px;margin-top:10px;flex-wrap:wrap;justify-content:center;font-size:11px;color:var(--text-muted);">
+                                </div>
+                            </div>
+                            <!-- STCG Tile -->
+                            <div class="stat-card">
+                                <div class="stat-label">STCG Holdings</div>
+                                <div class="stat-value" id="pfStcgValue" style="color:#f59e0b;">—</div>
+                                <div class="stat-sub">Units held &lt; 1 year (Short-term)</div>
+                            </div>
+                            <!-- LTCG Tile -->
+                            <div class="stat-card">
+                                <div class="stat-label">LTCG Holdings</div>
+                                <div class="stat-value" id="pfLtcgValue" style="color:#10b981;">—</div>
+                                <div class="stat-sub">Units held ≥ 1 year (Long-term)</div>
+                            </div>
                         </div>
-                    </div>
 
-                    <!-- ── Tab Bar ─────────────────────────────────────── -->
-                    <div id="portfolioTabBar"
-                        style="display:none;margin-top:24px;border-bottom:2px solid rgba(255,255,255,0.08);display:none;">
-                        <button id="tabHoldings" onclick="switchPortfolioTab('holdings')"
-                            style="background:none;border:none;padding:10px 20px;cursor:pointer;font-size:13px;font-weight:600;color:var(--accent);border-bottom:2px solid var(--accent);margin-bottom:-2px;">
-                            📊 Holdings
-                        </button>
-                        <button id="tabSuggestions" onclick="switchPortfolioTab('suggestions')"
-                            style="background:none;border:none;padding:10px 20px;cursor:pointer;font-size:13px;font-weight:600;color:var(--text-muted);border-bottom:2px solid transparent;margin-bottom:-2px;">
-                            💡 Suggestions
-                        </button>
-                    </div>
+                        <!-- ── Tab Bar ─────────────────────────────────────── -->
+                        <div id="portfolioTabBar"
+                            style="display:none;margin-top:24px;border-bottom:2px solid rgba(255,255,255,0.08);display:none;">
+                            <button id="tabHoldings" onclick="switchPortfolioTab('holdings')"
+                                style="background:none;border:none;padding:10px 20px;cursor:pointer;font-size:13px;font-weight:600;color:var(--accent);border-bottom:2px solid var(--accent);margin-bottom:-2px;">
+                                📊 Holdings
+                            </button>
+                            <button id="tabSuggestions" onclick="switchPortfolioTab('suggestions')"
+                                style="background:none;border:none;padding:10px 20px;cursor:pointer;font-size:13px;font-weight:600;color:var(--text-muted);border-bottom:2px solid transparent;margin-bottom:-2px;">
+                                💡 Suggestions
+                            </button>
+                        </div>
 
-                    <!-- ── Holdings Table (now inside a tab panel) ───────── -->
-                    <div class="table-card" id="portfolioTableCard"
-                        style="margin-top: 0; display: none; border-radius: 0 0 var(--radius) var(--radius);">
-                        <table class="fund-table">
-                            <thead>
-                                <tr>
-                                    <th>Fund Name</th>
-                                    <th>Units Held</th>
-                                    <th>Avg. Buy NAV</th>
-                                    <th>Current NAV</th>
-                                    <th>Invested Value</th>
-                                    <th>Current Value</th>
-                                    <th style="text-align: right;">Return (%)</th>
-                                </tr>
-                            </thead>
-                            <tbody id="portfolioTableBody"></tbody>
-                        </table>
-                    </div>
+                        <!-- ── Holdings Table (now inside a tab panel) ───────── -->
+                        <div class="table-card" id="portfolioTableCard"
+                            style="margin-top: 0; display: none; border-radius: 0 0 var(--radius) var(--radius);">
+                            <table class="fund-table">
+                                <thead>
+                                    <tr>
+                                        <th>Fund Name</th>
+                                        <th>Units Held</th>
+                                        <th>Avg. Buy NAV</th>
+                                        <th>Current NAV</th>
+                                        <th>Invested Value</th>
+                                        <th>Current Value</th>
+                                        <th style="text-align: right;">Return (%)</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="portfolioTableBody"></tbody>
+                            </table>
+                        </div>
 
-                    <!-- ── Suggestions Tab Panel ─────────────────────────── -->
-                    <div id="suggestionsTab" style="display:none;margin-top:0;">
-                        <!-- Diagnosis / Swap Card -->
-                        <div id="swapDiagnosisCard" style="
+                        <!-- ── Suggestions Tab Panel ─────────────────────────── -->
+                        <div id="suggestionsTab" style="display:none;margin-top:0;">
+                            <!-- Diagnosis / Swap Card -->
+                            <div id="swapDiagnosisCard" style="
                         background: linear-gradient(135deg, rgba(99,102,241,0.12), rgba(16,185,129,0.08));
                         border: 1px solid rgba(99,102,241,0.3);
                         border-radius: var(--radius);
                         padding: 20px 24px;
                         margin-bottom: 20px;">
-                            <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;">
-                                <span style="font-size:22px;">🤖</span>
-                                <div>
-                                    <div style="font-size:14px;font-weight:700;color:var(--text-primary);">Robo-Advisor
-                                        Diagnosis</div>
-                                    <div style="font-size:11px;color:var(--text-muted);">AI-powered portfolio
-                                        optimisation
-                                        suggestion</div>
+                                <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;">
+                                    <span style="font-size:22px;">🤖</span>
+                                    <div>
+                                        <div style="font-size:14px;font-weight:700;color:var(--text-primary);">
+                                            Robo-Advisor
+                                            Diagnosis</div>
+                                        <div style="font-size:11px;color:var(--text-muted);">AI-powered portfolio
+                                            optimisation
+                                            suggestion</div>
+                                    </div>
+                                </div>
+                                <div id="swapDiagnosisContent" style="font-size:13px;color:var(--text-secondary);">
+                                    Loading analysis…
                                 </div>
                             </div>
-                            <div id="swapDiagnosisContent" style="font-size:13px;color:var(--text-secondary);">
-                                Loading analysis…
+
+                            <!-- Projection Chart -->
+                            <div class="stat-card" style="padding:20px 24px;">
+                                <div
+                                    style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+                                    <div style="font-size:13px;font-weight:700;color:var(--text-primary);">📈 5-Year
+                                        Portfolio
+                                        Projection</div>
+                                    <div style="display:flex;gap:14px;font-size:11px;color:var(--text-muted);">
+                                        <span><span
+                                                style="display:inline-block;width:12px;height:3px;background:#6366f1;vertical-align:middle;border-radius:2px;margin-right:4px;"></span>Do
+                                            Nothing</span>
+                                        <span><span
+                                                style="display:inline-block;width:12px;height:3px;background:#10b981;vertical-align:middle;border-radius:2px;margin-right:4px;"></span>With
+                                            Swap</span>
+                                    </div>
+                                </div>
+                                <canvas id="swapSimulatorChart" height="80"></canvas>
                             </div>
                         </div>
 
-                        <!-- Projection Chart -->
-                        <div class="stat-card" style="padding:20px 24px;">
+
+                        <!-- Insights & Alerts Panel -->
+                        <div id="portfolioInsightsWrapper" style="display:none;margin-top:24px;">
+                            <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
+                                <span style="font-size:18px;">🔔</span>
+                                <h3 style="font-size:15px;font-weight:700;color:var(--text-primary);margin:0;">Insights
+                                    &
+                                    Alerts
+                                </h3>
+                            </div>
+                            <div id="portfolioInsightsPanel"></div>
+                        </div>
+
+                        <!-- Transaction History Accordion -->
+                        <details id="txnHistoryDetails" style="margin-top:24px;display:none;">
+                            <summary
+                                style="cursor:pointer;padding:12px 16px;background:rgba(56,189,248,0.06);border:1px solid rgba(56,189,248,0.15);border-radius:var(--radius);font-size:13px;font-weight:600;color:var(--text-primary);list-style:none;display:flex;align-items:center;gap:8px;">
+                                📋 Transaction History
+                            </summary>
                             <div
-                                style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
-                                <div style="font-size:13px;font-weight:700;color:var(--text-primary);">📈 5-Year
-                                    Portfolio
-                                    Projection</div>
-                                <div style="display:flex;gap:14px;font-size:11px;color:var(--text-muted);">
-                                    <span><span
-                                            style="display:inline-block;width:12px;height:3px;background:#6366f1;vertical-align:middle;border-radius:2px;margin-right:4px;"></span>Do
-                                        Nothing</span>
-                                    <span><span
-                                            style="display:inline-block;width:12px;height:3px;background:#10b981;vertical-align:middle;border-radius:2px;margin-right:4px;"></span>With
-                                        Swap</span>
-                                </div>
+                                style="border:1px solid rgba(56,189,248,0.1);border-top:none;border-radius:0 0 var(--radius) var(--radius);overflow:hidden;">
+                                <table class="fund-table" style="margin:0;">
+                                    <thead>
+                                        <tr>
+                                            <th>Date</th>
+                                            <th>Type</th>
+                                            <th>Fund</th>
+                                            <th>Amount</th>
+                                            <th>Units</th>
+                                            <th style="text-align:right;">Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="txnHistoryBody"></tbody>
+                                </table>
                             </div>
-                            <canvas id="swapSimulatorChart" height="80"></canvas>
+                        </details>
+
+                        <div id="portfolioEmptyState"
+                            style="text-align: center; margin-top: 64px; color: var(--text-secondary);">
+                            Loading your portfolio data...
                         </div>
-                    </div>
+                    </div> <!-- /#portfolioMainContent -->
 
-
-                    <!-- Insights & Alerts Panel -->
-                    <div id="portfolioInsightsWrapper" style="display:none;margin-top:24px;">
-                        <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
-                            <span style="font-size:18px;">🔔</span>
-                            <h3 style="font-size:15px;font-weight:700;color:var(--text-primary);margin:0;">Insights &
-                                Alerts
-                            </h3>
-                        </div>
-                        <div id="portfolioInsightsPanel"></div>
-                    </div>
-
-                    <!-- Transaction History Accordion -->
-                    <details id="txnHistoryDetails" style="margin-top:24px;display:none;">
-                        <summary
-                            style="cursor:pointer;padding:12px 16px;background:rgba(56,189,248,0.06);border:1px solid rgba(56,189,248,0.15);border-radius:var(--radius);font-size:13px;font-weight:600;color:var(--text-primary);list-style:none;display:flex;align-items:center;gap:8px;">
-                            📋 Transaction History
-                        </summary>
-                        <div
-                            style="border:1px solid rgba(56,189,248,0.1);border-top:none;border-radius:0 0 var(--radius) var(--radius);overflow:hidden;">
-                            <table class="fund-table" style="margin:0;">
-                                <thead>
-                                    <tr>
-                                        <th>Date</th>
-                                        <th>Type</th>
-                                        <th>Fund</th>
-                                        <th>Amount</th>
-                                        <th>Units</th>
-                                        <th style="text-align:right;">Actions</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="txnHistoryBody"></tbody>
-                            </table>
-                        </div>
-                    </details>
-
-                    <div id="portfolioEmptyState"
-                        style="text-align: center; margin-top: 64px; color: var(--text-secondary);">
-                        Loading your portfolio data...
-                    </div>
                 </div> <!-- /#portfolioContainer -->
             </section>
 

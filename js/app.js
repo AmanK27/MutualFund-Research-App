@@ -2233,6 +2233,7 @@ async function loadPortfolioView() {
         // 7. Show main sections + build analyticsData for steps 7b and 9
         document.getElementById('portfolioEmptyState').style.display = 'none';
         document.getElementById('portfolioStatsGrid').style.display = 'grid';
+        document.getElementById('portfolioSummaryBar').style.display = 'flex';
         document.getElementById('portfolioTableCard').style.display = 'block';
 
         const freshAlertSettings = loadAlertSettings();
