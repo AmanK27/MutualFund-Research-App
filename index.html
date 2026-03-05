@@ -476,35 +476,17 @@
                     </button>
                 </div>
 
-                <!-- Alert Settings Card -->
-                <details id="alertSettingsDetails" style="margin-top:16px;">
-                    <summary
-                        style="cursor:pointer;padding:12px 16px;background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.2);border-radius:var(--radius);font-size:13px;font-weight:600;color:var(--text-primary);list-style:none;display:flex;align-items:center;gap:8px;">
+                <!-- Automation Settings button -->
+                <div style="margin-top:16px;">
+                    <button onclick="openAutomationModal()"
+                        style="display:inline-flex;align-items:center;gap:8px;padding:10px 18px;background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.2);border-radius:var(--radius);font-size:13px;font-weight:600;color:#fbbf24;cursor:pointer;font-family:inherit;transition:background 0.2s;"
+                        onmouseover="this.style.background='rgba(245,158,11,0.15)'"
+                        onmouseout="this.style.background='rgba(245,158,11,0.08)'">
                         ⚙️ Alert Settings
                         <span id="alertsBadge"
                             style="display:none;background:#ef4444;color:#fff;border-radius:999px;padding:2px 7px;font-size:11px;font-weight:700;">0</span>
-                    </summary>
-                    <div
-                        style="padding:16px;border:1px solid rgba(245,158,11,0.15);border-top:none;border-radius:0 0 var(--radius) var(--radius);background:rgba(0,0,0,0.2);">
-                        <div style="display:flex;gap:20px;flex-wrap:wrap;align-items:flex-end;">
-                            <div style="display:flex;flex-direction:column;gap:6px;">
-                                <label style="font-size:12px;color:var(--text-muted);">Stop-Loss Threshold (%)</label>
-                                <input type="number" id="alertStopLoss" value="-5" step="0.5"
-                                    style="width:130px;padding:8px 12px;background:rgba(0,0,0,0.3);border:1px solid var(--border-glass);border-radius:var(--radius-sm);color:var(--text-primary);font-size:13px;font-family:inherit;">
-                            </div>
-                            <div style="display:flex;flex-direction:column;gap:6px;">
-                                <label style="font-size:12px;color:var(--text-muted);">Take-Profit Target (%)</label>
-                                <input type="number" id="alertTakeProfit" value="15" step="0.5"
-                                    style="width:130px;padding:8px 12px;background:rgba(0,0,0,0.3);border:1px solid var(--border-glass);border-radius:var(--radius-sm);color:var(--text-primary);font-size:13px;font-family:inherit;">
-                            </div>
-                            <button
-                                onclick="saveAlertSettings({stopLoss: parseFloat(document.getElementById('alertStopLoss').value), takeProfit: parseFloat(document.getElementById('alertTakeProfit').value)})"
-                                style="padding:8px 18px;background:rgba(245,158,11,0.15);border:1px solid rgba(245,158,11,0.3);border-radius:var(--radius-sm);color:#fbbf24;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;">
-                                Save Alerts
-                            </button>
-                        </div>
-                    </div>
-                </details>
+                    </button>
+                </div>
 
                 <div class="stats-grid" id="portfolioStatsGrid" style="margin-top: 24px; display: none;">
                     <div class="stat-card">
@@ -585,6 +567,148 @@
                     Loading your portfolio data...
                 </div>
             </section>
+
+            <!-- Automation Settings Modal -->
+            <div id="automationSettingsModal"
+                style="display:none;position:fixed;inset:0;z-index:1300;align-items:center;justify-content:center;background:rgba(0,0,0,0.65);backdrop-filter:blur(8px);">
+                <div id="automationModalCard"
+                    style="background:var(--bg-card);border:1px solid var(--border-glass);border-radius:var(--radius-lg);padding:28px;width:min(520px,95vw);max-height:90vh;overflow-y:auto;transform:scale(0.95);transition:transform 0.2s cubic-bezier(0.4,0,0.2,1);">
+                    <!-- Header -->
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:22px;">
+                        <div>
+                            <h3 style="font-size:17px;font-weight:700;color:var(--text-primary);margin:0;">⚙️ Automation
+                                Rules</h3>
+                            <p style="font-size:12px;color:var(--text-muted);margin:4px 0 0;">Enable or disable each
+                                rule and set your thresholds.</p>
+                        </div>
+                        <button onclick="closeAutomationModal()"
+                            style="background:transparent;border:none;color:var(--text-muted);font-size:22px;cursor:pointer;line-height:1;padding:0 4px;">×</button>
+                    </div>
+
+                    <!-- Rule Cards -->
+                    <div style="display:flex;flex-direction:column;gap:14px;">
+
+                        <!-- Rule 1: Asset Drift -->
+                        <div class="automation-rule-card"
+                            style="background:rgba(99,102,241,0.08);border:1px solid rgba(99,102,241,0.2);border-radius:var(--radius);padding:16px;">
+                            <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;">
+                                <div style="flex:1;">
+                                    <div
+                                        style="font-size:13px;font-weight:600;color:var(--text-primary);margin-bottom:3px;">
+                                        ⚖️ Asset Drift Alert</div>
+                                    <div style="font-size:11px;color:var(--text-muted);line-height:1.5;">Fires when your
+                                        actual equity allocation drifts more than 5% from your target.</div>
+                                    <div style="margin-top:10px;display:flex;align-items:center;gap:10px;">
+                                        <label style="font-size:11px;color:var(--text-muted);">Target Equity %</label>
+                                        <input type="number" id="ruleTargetEquity" value="70" min="0" max="100" step="5"
+                                            style="width:70px;padding:5px 8px;background:rgba(0,0,0,0.3);border:1px solid var(--border-glass);border-radius:var(--radius-sm);color:var(--text-primary);font-size:12px;font-family:inherit;">
+                                    </div>
+                                </div>
+                                <label class="auto-toggle">
+                                    <input type="checkbox" id="ruleEnableDrift" checked>
+                                    <span class="auto-slider"></span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <!-- Rule 2: Peer Underperformance -->
+                        <div class="automation-rule-card"
+                            style="background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.2);border-radius:var(--radius);padding:16px;">
+                            <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;">
+                                <div style="flex:1;">
+                                    <div
+                                        style="font-size:13px;font-weight:600;color:var(--text-primary);margin-bottom:3px;">
+                                        📊 Peer Underperformance</div>
+                                    <div style="font-size:11px;color:var(--text-muted);line-height:1.5;">Alerts when
+                                        your fund lags the top peer in its category by your tolerance threshold.</div>
+                                    <div style="margin-top:10px;display:flex;align-items:center;gap:10px;">
+                                        <label style="font-size:11px;color:var(--text-muted);">Tolerance %</label>
+                                        <input type="number" id="rulePeerTolerance" value="2" min="0.5" max="20"
+                                            step="0.5"
+                                            style="width:70px;padding:5px 8px;background:rgba(0,0,0,0.3);border:1px solid var(--border-glass);border-radius:var(--radius-sm);color:var(--text-primary);font-size:12px;font-family:inherit;">
+                                    </div>
+                                </div>
+                                <label class="auto-toggle">
+                                    <input type="checkbox" id="ruleEnablePeer" checked>
+                                    <span class="auto-slider"></span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <!-- Rule 3: Market Timing -->
+                        <div class="automation-rule-card"
+                            style="background:rgba(16,185,129,0.08);border:1px solid rgba(16,185,129,0.2);border-radius:var(--radius);padding:16px;">
+                            <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;">
+                                <div style="flex:1;">
+                                    <div
+                                        style="font-size:13px;font-weight:600;color:var(--text-primary);margin-bottom:3px;">
+                                        📉 Market Timing Alert</div>
+                                    <div style="font-size:11px;color:var(--text-muted);line-height:1.5;">Triggers a
+                                        "Deploy Capital" alert when Nifty 50 drops from its 52-week peak by your
+                                        threshold.</div>
+                                    <div style="margin-top:10px;display:flex;align-items:center;gap:10px;">
+                                        <label style="font-size:11px;color:var(--text-muted);">Market Drop %</label>
+                                        <input type="number" id="ruleMarketDrop" value="10" min="1" max="50" step="1"
+                                            style="width:70px;padding:5px 8px;background:rgba(0,0,0,0.3);border:1px solid var(--border-glass);border-radius:var(--radius-sm);color:var(--text-primary);font-size:12px;font-family:inherit;">
+                                    </div>
+                                </div>
+                                <label class="auto-toggle">
+                                    <input type="checkbox" id="ruleEnableMarket" checked>
+                                    <span class="auto-slider"></span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <!-- Rule 4: Tax Harvesting -->
+                        <div class="automation-rule-card"
+                            style="background:rgba(239,68,68,0.07);border:1px solid rgba(239,68,68,0.2);border-radius:var(--radius);padding:16px;">
+                            <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;">
+                                <div style="flex:1;">
+                                    <div
+                                        style="font-size:13px;font-weight:600;color:var(--text-primary);margin-bottom:3px;">
+                                        🏦 Tax Loss Harvesting</div>
+                                    <div style="font-size:11px;color:var(--text-muted);line-height:1.5;">Scans LTCG
+                                        holdings (≥ 1 year) for unrealized losses that can be harvested to reduce tax
+                                        liability.</div>
+                                </div>
+                                <label class="auto-toggle">
+                                    <input type="checkbox" id="ruleEnableTax" checked>
+                                    <span class="auto-slider"></span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <!-- Legacy: Stop-Loss / Take-Profit -->
+                        <div class="automation-rule-card"
+                            style="background:rgba(56,189,248,0.06);border:1px solid rgba(56,189,248,0.15);border-radius:var(--radius);padding:16px;">
+                            <div style="font-size:13px;font-weight:600;color:var(--text-primary);margin-bottom:10px;">🎯
+                                Return Thresholds</div>
+                            <div style="display:flex;gap:16px;flex-wrap:wrap;">
+                                <div style="display:flex;flex-direction:column;gap:5px;">
+                                    <label style="font-size:11px;color:var(--text-muted);">Stop-Loss %</label>
+                                    <input type="number" id="alertStopLoss" value="-5" step="0.5"
+                                        style="width:90px;padding:6px 10px;background:rgba(0,0,0,0.3);border:1px solid var(--border-glass);border-radius:var(--radius-sm);color:var(--text-primary);font-size:12px;font-family:inherit;">
+                                </div>
+                                <div style="display:flex;flex-direction:column;gap:5px;">
+                                    <label style="font-size:11px;color:var(--text-muted);">Take-Profit %</label>
+                                    <input type="number" id="alertTakeProfit" value="15" step="0.5"
+                                        style="width:90px;padding:6px 10px;background:rgba(0,0,0,0.3);border:1px solid var(--border-glass);border-radius:var(--radius-sm);color:var(--text-primary);font-size:12px;font-family:inherit;">
+                                </div>
+                            </div>
+                        </div>
+
+                    </div><!-- /rule cards -->
+
+                    <!-- Footer Buttons -->
+                    <div style="display:flex;gap:12px;margin-top:22px;justify-content:flex-end;">
+                        <button onclick="closeAutomationModal()"
+                            style="padding:9px 20px;background:transparent;border:1px solid var(--border-glass);border-radius:var(--radius-sm);color:var(--text-secondary);font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;">Cancel</button>
+                        <button onclick="saveAutomationRules()"
+                            style="padding:9px 20px;background:linear-gradient(135deg,rgba(99,102,241,0.7),rgba(139,92,246,0.7));border:1px solid rgba(139,92,246,0.4);border-radius:var(--radius-sm);color:#fff;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;">Save
+                            &amp; Close</button>
+                    </div>
+                </div>
+            </div><!-- /automationSettingsModal -->
 
             <!-- Portfolio Transaction Modal -->
             <div id="portfolioTxnModal"

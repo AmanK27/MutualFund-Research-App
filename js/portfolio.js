@@ -1,20 +1,83 @@
-/* ═══════════════════════════════════════════════════════════════════
-   portfolio.js — My Portfolio: Transaction Modal, XIRR Engine, Alerts
-   ═══════════════════════════════════════════════════════════════════ */
+/* ── Automation Rules (localStorage) ────────────────────── */
+const AUTOMATION_RULES_KEY = 'mf_automation_rules';
 
-/* ── Alert Settings (localStorage) ─────────────────────────────── */
-const ALERT_SETTINGS_KEY = 'mf_portfolio_alerts';
+const AUTOMATION_RULES_DEFAULTS = {
+    // Legacy thresholds (still used by stop-loss / take-profit rules)
+    stopLoss: -5,
+    takeProfit: 15,
+    // New rules
+    enableDriftAlert: true,
+    targetEquity: 70,
+    enablePeerAlert: true,
+    peerTolerance: 2,
+    enableMarketTimingAlert: true,
+    marketDropThreshold: 10,
+    enableTaxHarvestAlert: true
+};
 
-function loadAlertSettings() {
+function loadAutomationRules() {
     try {
-        return JSON.parse(localStorage.getItem(ALERT_SETTINGS_KEY)) || { stopLoss: -5, takeProfit: 15 };
-    } catch (e) { return { stopLoss: -5, takeProfit: 15 }; }
+        const stored = JSON.parse(localStorage.getItem(AUTOMATION_RULES_KEY));
+        return Object.assign({}, AUTOMATION_RULES_DEFAULTS, stored || {});
+    } catch (e) {
+        return { ...AUTOMATION_RULES_DEFAULTS };
+    }
 }
 
-function saveAlertSettings(settings) {
-    localStorage.setItem(ALERT_SETTINGS_KEY, JSON.stringify(settings));
-    showToast('Alert settings saved ✓', 'success');
+function saveAutomationRules() {
+    const rules = {
+        stopLoss: parseFloat(document.getElementById('alertStopLoss').value) || -5,
+        takeProfit: parseFloat(document.getElementById('alertTakeProfit').value) || 15,
+        enableDriftAlert: document.getElementById('ruleEnableDrift').checked,
+        targetEquity: parseFloat(document.getElementById('ruleTargetEquity').value) || 70,
+        enablePeerAlert: document.getElementById('ruleEnablePeer').checked,
+        peerTolerance: parseFloat(document.getElementById('rulePeerTolerance').value) || 2,
+        enableMarketTimingAlert: document.getElementById('ruleEnableMarket').checked,
+        marketDropThreshold: parseFloat(document.getElementById('ruleMarketDrop').value) || 10,
+        enableTaxHarvestAlert: document.getElementById('ruleEnableTax').checked
+    };
+    localStorage.setItem(AUTOMATION_RULES_KEY, JSON.stringify(rules));
+    showToast('Automation rules saved ✓', 'success');
+    closeAutomationModal();
 }
+
+/** Backward-compat shim so old code calling loadAlertSettings() still works */
+function loadAlertSettings() { return loadAutomationRules(); }
+function saveAlertSettings(s) {
+    const rules = loadAutomationRules();
+    localStorage.setItem(AUTOMATION_RULES_KEY, JSON.stringify({ ...rules, ...s }));
+    showToast('Settings saved ✓', 'success');
+}
+
+/* ── Automation Modal ────────────────────────────────────── */
+function openAutomationModal() {
+    const rules = loadAutomationRules();
+    // Populate all fields from stored rules
+    document.getElementById('alertStopLoss').value = rules.stopLoss;
+    document.getElementById('alertTakeProfit').value = rules.takeProfit;
+    document.getElementById('ruleEnableDrift').checked = rules.enableDriftAlert;
+    document.getElementById('ruleTargetEquity').value = rules.targetEquity;
+    document.getElementById('ruleEnablePeer').checked = rules.enablePeerAlert;
+    document.getElementById('rulePeerTolerance').value = rules.peerTolerance;
+    document.getElementById('ruleEnableMarket').checked = rules.enableMarketTimingAlert;
+    document.getElementById('ruleMarketDrop').value = rules.marketDropThreshold;
+    document.getElementById('ruleEnableTax').checked = rules.enableTaxHarvestAlert;
+
+    const modal = document.getElementById('automationSettingsModal');
+    modal.style.display = 'flex';
+    setTimeout(() => document.getElementById('automationModalCard').style.transform = 'scale(1)', 10);
+}
+
+function closeAutomationModal() {
+    const card = document.getElementById('automationModalCard');
+    if (card) card.style.transform = 'scale(0.95)';
+    setTimeout(() => {
+        const modal = document.getElementById('automationSettingsModal');
+        if (modal) modal.style.display = 'none';
+    }, 200);
+}
+
+
 
 /* ── Portfolio Transaction Modal ────────────────────────────────── */
 let pfModalSelectedCode = null;
@@ -548,8 +611,13 @@ window.saveNewTransaction = saveNewTransaction;
 window.deleteTxnAndRefresh = deleteTxnAndRefresh;
 window.loadAlertSettings = loadAlertSettings;
 window.saveAlertSettings = saveAlertSettings;
+window.loadAutomationRules = loadAutomationRules;
+window.saveAutomationRules = saveAutomationRules;
+window.openAutomationModal = openAutomationModal;
+window.closeAutomationModal = closeAutomationModal;
 window.computeXIRR = computeXIRR;
 window.buildCashFlows = buildCashFlows;
 window.runInsightAlerts = runInsightAlerts;
 window.renderInsightAlerts = renderInsightAlerts;
 window.renderTransactionHistory = renderTransactionHistory;
+
