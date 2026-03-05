@@ -58,40 +58,72 @@ async function analyzeLoss(schemeCode, currentReturn, userTransactions = []) {
     const marketDetails = await aggregateFundDetails(NIFTY_50_CODE, "UTI Nifty 50");
     const marketDrawdown = marketDetails ? calculate52WeekDrawdown(marketDetails.data) : 0;
 
-    // Layer 3: Category Peer Analysis
+    // Layer 3: Category Peer Analysis & Two-Pass Scoring Engine
     console.log(`[Advisor Engine] Scanning Universe for top peer in category: ${fundCategory}`);
 
     let topPeer = null;
+    let candidatePool = [];
 
     try {
         const peers = await getPeerRanking(fundCategory, schemeCode);
         if (peers && peers.length > 0) {
-            // Array is sorted desc by cagr1y inside getPeerRanking, but sort again to be absolutely sure
-            peers.sort((a, b) => b.cagr1y - a.cagr1y);
+            // First pass: Filter for standard Direct-Growth funds, excluding IDCW/Bonus variants
+            const cleanPeers = peers.filter(p => {
+                const n = p.schemeName.toUpperCase();
+                // We prefer explicit Direct and Growth, but getPeerRanking might have already filtered.
+                // We absolutely MUST exclude structural variants to avoid weird recommendations.
+                return !n.includes('IDCW') && !n.includes('DIVIDEND') && !n.includes('BONUS');
+            });
 
-            const absoluteBest = peers[0];
+            cleanPeers.sort((a, b) => b.cagr1y - a.cagr1y);
+            const topCandidates = cleanPeers.slice(0, 10); // Take the top 10 by raw CAGR
 
-            if (absoluteBest.schemeCode !== schemeCode) {
-                const peerDetails = await aggregateFundDetails(absoluteBest.schemeCode);
-                if (peerDetails) {
-                    topPeer = {
-                        code: absoluteBest.schemeCode,
-                        name: absoluteBest.schemeName,
-                        cagr1Y: absoluteBest.cagr1y * 100, // Convert to percentage
-                        drawdown: calculate52WeekDrawdown(peerDetails.data)
-                    };
+            // Second pass: Deep Comparison Engine
+            // Fetch detailed stats (Expense Ratio) for the candidates and the target fund
+            for (const candidate of topCandidates) {
+                const details = await aggregateFundDetails(candidate.schemeCode);
+                if (details) {
+                    const expenseRatio = details.portfolio?.expense_ratio || 0.75; // assume high if unknown
+                    const baseScore = candidate.cagr1y * 100;
+                    // Penalty: Subtract (ExpenseRatio * 2) from base CAGR score
+                    const qualityScore = baseScore - (expenseRatio * 2);
+
+                    candidatePool.push({
+                        code: candidate.schemeCode,
+                        name: candidate.schemeName,
+                        cagr1Y: baseScore,
+                        expenseRatio: expenseRatio,
+                        drawdown: calculate52WeekDrawdown(details.data),
+                        score: qualityScore
+                    });
                 }
-            } else {
-                topPeer = {
-                    code: absoluteBest.schemeCode,
-                    name: absoluteBest.schemeName,
-                    cagr1Y: absoluteBest.cagr1y * 100,
-                    drawdown: fundDrawdown
-                };
+            }
+
+            // Also score the current fund for apples-to-apples comparison
+            const targetER = fundDetails.portfolio?.expense_ratio || 0.75;
+            const targetScore = (fund1yCAGR * 100) - (targetER * 2);
+            diagnosis.targetFundScore = targetScore;
+
+            if (candidatePool.length > 0) {
+                // Sort by the newly minted QualityScore descending
+                candidatePool.sort((a, b) => b.score - a.score);
+
+                // Select the single highest qualified candidate
+                const absoluteBest = candidatePool[0];
+
+                if (absoluteBest.code !== schemeCode) {
+                    topPeer = absoluteBest;
+                } else if (candidatePool.length > 1) {
+                    // If the absolute best IS the current fund, topPeer stays null or we take the runner up
+                    // For the sake of matching logic, topPeer is meant to be the *alternative* best peer.
+                    // We'll leave topPeer as null if the current fund is natively the #1 scoring fund.
+                    // Or we could assign the runner-up for comparison. Let's assign the runner-up.
+                    topPeer = candidatePool[1];
+                }
             }
         }
     } catch (err) {
-        console.error("Failed to fetch live category peers:", err);
+        console.error("Failed to execute Two-Pass Scoring Engine:", err);
     }
 
     const diagnosis = {
@@ -118,23 +150,23 @@ function generateStrategyAndSimulation(diagnosis, userTransactions) {
     let strategy = "UNKNOWN";
     let strategyReason = "";
 
-    const { fundDrawdown, marketDrawdown, topPeer, currentReturn } = diagnosis;
+    const { fundDrawdown, marketDrawdown, topPeer, currentReturn, targetFundScore } = diagnosis;
 
     // Layer 4: Decision Tree
     if (marketDrawdown < -10) {
         // Market is in correction territory
         strategy = "COST_AVERAGE";
         strategyReason = "Market Drop Detected. Buy the dip to lower your average cost.";
-    } else if (currentReturn < 0 && topPeer && topPeer.cagr1Y > 0 && topPeer.code !== diagnosis.schemeCode) {
-        // True Top Peer is positive and fund is negative
+    } else if (currentReturn < 0 && topPeer && topPeer.score > targetFundScore) {
+        // High quality peer dominates current fund
         strategy = "SWITCH_FUND";
-        strategyReason = `Underperforming active management. Switch to ${topPeer.name}.`;
+        strategyReason = `Underperforming active management. Switch to ${topPeer.name} (Superior Score).`;
     } else if (fundDrawdown < -5 && topPeer && topPeer.drawdown < -5) {
         // Market is fine, but the entire category is suffering
         strategy = "HOLD_CATEGORY_CYCLE";
         strategyReason = "Category Sector rotation. The entire sector is down right now. Hold.";
-    } else if (fundDrawdown < -3 && topPeer && topPeer.drawdown >= -2 && topPeer.cagr1Y > (diagnosis.fund1yCAGR || 0)) {
-        // Fund is losing, but the top peer is winning
+    } else if (fundDrawdown < -3 && topPeer && topPeer.score > targetFundScore && topPeer.cagr1Y > (diagnosis.fund1yCAGR || 0)) {
+        // Fund is losing, but the top peer is fundamentally winning
         strategy = "SWITCH_FUND";
         strategyReason = `Underperforming active management. Switch to ${topPeer.name}.`;
     } else {
