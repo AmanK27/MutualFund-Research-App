@@ -38,75 +38,134 @@ function switchPortfolioTab(tab) {
 
 /* ── Diagnosis ──────────────────────────────────────────────────── */
 /**
- * Identifies the holding with the lowest 1-year CAGR from master list metadata.
- * Returns { holding, fundMeta, returns1Y } or null if insufficient data.
+ * Fetches NAV history and metadata for all holdings to calculate CAGRs.
+ * Identifies the holding with the lowest 1-year CAGR.
+ * Returns { holding, fundMeta, returns1Y, returns3Y } or null if insufficient data.
  */
-function diagnosePortfolio(holdings) {
+async function diagnosePortfolio(holdings) {
     const master = window.allMfFunds || [];
-    let worst = null;
+    const enrichedHoldings = [];
 
     for (const h of Object.values(holdings)) {
-        const meta = master.find(f => String(f.schemeCode) === String(h.code));
-        if (!meta) continue;
-        const r1Y = meta.returns1Y ?? null;
-        if (r1Y === null) continue;
+        try {
+            const res = await fetch(`https://api.mfapi.in/mf/${h.code}`);
+            if (!res.ok) continue;
+            const data = await res.json();
+            if (!data || !data.data || data.data.length === 0 || !data.meta) continue;
 
-        if (!worst || r1Y < worst.returns1Y) {
-            worst = { holding: h, fundMeta: meta, returns1Y: r1Y };
+            const navHistory = data.data.map(d => {
+                const parts = d.date.split('-');
+                return { date: new Date(parts[2], parts[1] - 1, parts[0]), nav: parseFloat(d.nav) };
+            }).sort((a, b) => a.date - b.date);
+
+            const cagr1y = window.getCAGR(navHistory, 1);
+            const cagr3y = window.getCAGR(navHistory, 3);
+
+            if (cagr1y !== null) {
+                enrichedHoldings.push({
+                    holding: h,
+                    fundMeta: {
+                        schemeCode: h.code,
+                        schemeName: h.name,
+                        category: data.meta.scheme_category
+                    },
+                    returns1Y: cagr1y,
+                    returns3Y: cagr3y
+                });
+            }
+        } catch (err) {
+            console.warn("Failed to fetch history for robo advisor", h.code, err);
         }
     }
-    return worst;
+
+    if (enrichedHoldings.length === 0) return null;
+
+    // Sort by 1Y return ascending to find the worst performer
+    enrichedHoldings.sort((a, b) => a.returns1Y - b.returns1Y);
+    return enrichedHoldings[0];
 }
 
 /* ── Replacement Fund Finder ────────────────────────────────────── */
 /**
- * Given the diagnosed weakest holding, find the best replacement candidate:
- *  - Same category as the weak fund, top performer by 1Y return.
- *  - Exclude the weak fund itself.
- * Returns { fundMeta, returns1Y } or null.
+ * Uses window.getPeerRanking (from api.js) to find the best peer in the category.
+ * Returns { fundMeta, returns1Y, returns3Y } or null.
  */
-function findReplacementFund(diagnosis) {
-    if (!diagnosis) return null;
-    const master = window.allMfFunds || [];
-    const category = diagnosis.fundMeta?.category;
-    if (!category) return null;
+async function findReplacementFund(diagnosis) {
+    if (!diagnosis || !diagnosis.fundMeta || !diagnosis.fundMeta.category) return null;
 
-    const candidates = master.filter(f =>
-        f.category === category &&
-        String(f.schemeCode) !== String(diagnosis.holding.code) &&
-        f.returns1Y != null
-    );
+    // getPeerRanking returns array of { schemeCode, schemeName, cagr1y }
+    try {
+        const peers = await window.getPeerRanking(diagnosis.fundMeta.category, diagnosis.holding.code);
+        if (!peers || peers.length === 0) return null;
 
-    if (candidates.length === 0) return null;
-    const best = candidates.reduce((b, f) => f.returns1Y > b.returns1Y ? f : b, candidates[0]);
-    return { fundMeta: best, returns1Y: best.returns1Y };
+        // The top peer is the first item that is NOT the current holding
+        const topPeer = peers.find(p => String(p.schemeCode) !== String(diagnosis.holding.code));
+        if (!topPeer) return null;
+
+        // Fetch the 3Y CAGR for the replacement to use in projection
+        let returns3Y = topPeer.cagr1y; // default to 1Y if 3Y fails
+        try {
+            const res = await fetch(`https://api.mfapi.in/mf/${topPeer.schemeCode}`);
+            if (res.ok) {
+                const data = await res.json();
+                if (data && data.data) {
+                    const navHistory = data.data.map(d => {
+                        const parts = d.date.split('-');
+                        return { date: new Date(parts[2], parts[1] - 1, parts[0]), nav: parseFloat(d.nav) };
+                    }).sort((a, b) => a.date - b.date);
+                    const c3y = window.getCAGR(navHistory, 3);
+                    if (c3y !== null) returns3Y = c3y;
+                }
+            }
+        } catch (e) {
+            // ignore
+        }
+
+        return {
+            fundMeta: {
+                schemeCode: topPeer.schemeCode,
+                schemeName: topPeer.schemeName,
+                category: diagnosis.fundMeta.category
+            },
+            returns1Y: topPeer.cagr1y,
+            returns3Y: returns3Y
+        };
+    } catch (e) {
+        console.warn("Failed to find replacement fund:", e);
+        return null;
+    }
 }
 
 /* ── Portfolio Value Projector ──────────────────────────────────── */
-/**
- * Projects the current portfolio's value over `years` using:
- *  - baseline: each holding grows at the fund's historical 3Y CAGR (or 1Y if not available).
- *  - swapped: the weak holding is replaced by the replacement fund's CAGR.
- *
- * Returns { labels, baseline, swapped } — arrays of yearly ₹ values.
- */
 function projectPortfolioValue(holdings, diagnosis, replacement, years = 5) {
-    const master = window.allMfFunds || [];
     const labels = Array.from({ length: years + 1 }, (_, i) => i === 0 ? 'Now' : `Y${i}`);
     let baselineNow = 0;
     let swappedNow = 0;
 
-    // Compute per-fund compound growth
     const fundGrowths = []; // { currentValue, baseCAGR, swapCAGR }
 
     for (const h of Object.values(holdings)) {
         const cv = h.currentValue || 0;
-        const meta = master.find(f => String(f.schemeCode) === String(h.code));
-        const cagr = (meta?.returns3Y ?? meta?.returns1Y ?? 12) / 100; // fallback 12%
+
+        let cagr = 0.12; // fallback 12%
+        let swapCAGR = cagr;
+
         const isWeak = diagnosis && String(h.code) === String(diagnosis.holding.code);
-        const swapCAGR = isWeak && replacement
-            ? (replacement.fundMeta.returns3Y ?? replacement.fundMeta.returns1Y ?? 14) / 100
-            : cagr;
+
+        if (isWeak && diagnosis) {
+            cagr = (diagnosis.returns3Y ?? diagnosis.returns1Y ?? 12) / 100;
+            if (replacement) {
+                swapCAGR = (replacement.returns3Y ?? replacement.returns1Y ?? 14) / 100;
+            } else {
+                swapCAGR = cagr;
+            }
+        } else {
+            // For other holdings we don't have their historical CAGRs explicitly stored right now unless we passed them all down.
+            // But we can approximate them as 12% for the baseline.
+            cagr = 0.12;
+            swapCAGR = cagr;
+        }
+
         fundGrowths.push({ cv, baseCAGR: cagr, swapCAGR });
         baselineNow += cv;
         swappedNow += cv;
@@ -133,9 +192,9 @@ function renderSuggestionCard(diagnosis, replacement) {
     const el = document.getElementById('swapDiagnosisContent');
     if (!el) return;
 
-    if (!diagnosis) {
+    if (!diagnosis || !replacement) {
         el.innerHTML = `<div style="color:var(--text-muted);text-align:center;padding:12px 0;">
-            Add at least one fund with historical return data to get a suggestion.
+            Add at least one fund with historical return data and peers to get a suggestion.
         </div>`;
         return;
     }
@@ -247,24 +306,40 @@ function renderSwapSimulatorChart(projection) {
  * Called from app.js after all holdings are computed.
  * Shows the tab bar and runs the full diagnosis → projection pipeline.
  */
-function runRoboAdvisor(holdings, analyticsData) {
+async function runRoboAdvisor(holdings, analyticsData) {
     // Show tab bar
     const tabBar = document.getElementById('portfolioTabBar');
-    if (tabBar) tabBar.style.display = 'block';
+    if (tabBar) tabBar.style.display = 'flex'; // Or block depending on CSS
 
-    // Run in next tick to not block the main render
-    setTimeout(() => {
-        const diagnosis = diagnosePortfolio(holdings);
-        const replacement = findReplacementFund(diagnosis);
+    // Show loading state
+    const el = document.getElementById('swapDiagnosisContent');
+    if (el) el.innerHTML = `<div style="color:var(--text-muted);text-align:center;padding:12px 0;">Loading analysis...</div>`;
+
+    try {
+        const diagnosis = await diagnosePortfolio(holdings);
+        const replacement = await findReplacementFund(diagnosis);
 
         renderSuggestionCard(diagnosis, replacement);
 
-        if (diagnosis) {
+        if (diagnosis && replacement) {
             const projection = projectPortfolioValue(holdings, diagnosis, replacement, 5);
             renderSwapSimulatorChart(projection);
         }
-    }, 0);
+    } catch (e) {
+        console.error("RoboAdvisor failed:", e);
+        if (el) el.innerHTML = `<div style="color:var(--text-muted);text-align:center;padding:12px 0;">Error running analysis. Please try again later.</div>`;
+    }
 }
+
+/* ── Global exposure ────────────────────────────────────────────── */
+window.switchPortfolioTab = switchPortfolioTab;
+window.runRoboAdvisor = runRoboAdvisor;
+window.diagnosePortfolio = diagnosePortfolio;
+window.findReplacementFund = findReplacementFund;
+window.projectPortfolioValue = projectPortfolioValue;
+window.renderSuggestionCard = renderSuggestionCard;
+window.renderSwapSimulatorChart = renderSwapSimulatorChart;
+
 
 /* ── Global exposure ────────────────────────────────────────────── */
 window.switchPortfolioTab = switchPortfolioTab;
