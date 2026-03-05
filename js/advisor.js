@@ -62,42 +62,36 @@ async function analyzeLoss(schemeCode, currentReturn, userTransactions = []) {
     console.log(`[Advisor Engine] Scanning Universe for top peer in category: ${fundCategory}`);
 
     let topPeer = null;
-    let highestCAGR = -Infinity;
 
-    if (window.FUND_UNIVERSE && window.FUND_UNIVERSE.length > 0) {
-        // Sequentially fetch/cache universe metrics
-        for (const peerCode of window.FUND_UNIVERSE) {
-            if (peerCode === schemeCode) continue; // Skip self
+    try {
+        const peers = await getPeerRanking(fundCategory, schemeCode);
+        if (peers && peers.length > 0) {
+            // Array is sorted desc by cagr1y inside getPeerRanking, but sort again to be absolutely sure
+            peers.sort((a, b) => b.cagr1y - a.cagr1y);
 
-            try {
-                // aggregateFundDetails utilizes CacheManager internally
-                const peerDetails = await aggregateFundDetails(peerCode);
+            const absoluteBest = peers[0];
+
+            if (absoluteBest.schemeCode !== schemeCode) {
+                const peerDetails = await aggregateFundDetails(absoluteBest.schemeCode);
                 if (peerDetails) {
-                    const peerCat = peerDetails.meta.kuvera_category ||
-                        (window.SCHEME_CATEGORY_TO_LIVE_FUNDS ? window.SCHEME_CATEGORY_TO_LIVE_FUNDS[peerDetails.meta.scheme_category] : "");
-
-                    const isSameCategory = peerCat && (
-                        peerCat.toLowerCase().includes(fundCategory.toLowerCase()) ||
-                        fundCategory.toLowerCase().includes(peerCat.toLowerCase())
-                    );
-
-                    if (isSameCategory) {
-                        const peerCAGR = getCAGR(peerDetails.data, 1);
-                        if (peerCAGR !== null && peerCAGR > highestCAGR) {
-                            highestCAGR = peerCAGR;
-                            topPeer = {
-                                code: peerCode,
-                                name: peerDetails.meta.scheme_name,
-                                cagr1Y: peerCAGR * 100, // as percentage
-                                drawdown: calculate52WeekDrawdown(peerDetails.data)
-                            };
-                        }
-                    }
+                    topPeer = {
+                        code: absoluteBest.schemeCode,
+                        name: absoluteBest.schemeName,
+                        cagr1Y: absoluteBest.cagr1y * 100, // Convert to percentage
+                        drawdown: calculate52WeekDrawdown(peerDetails.data)
+                    };
                 }
-            } catch (err) {
-                // Ignore silent fetch failures for peers
+            } else {
+                topPeer = {
+                    code: absoluteBest.schemeCode,
+                    name: absoluteBest.schemeName,
+                    cagr1Y: absoluteBest.cagr1y * 100,
+                    drawdown: fundDrawdown
+                };
             }
         }
+    } catch (err) {
+        console.error("Failed to fetch live category peers:", err);
     }
 
     const diagnosis = {
@@ -124,13 +118,17 @@ function generateStrategyAndSimulation(diagnosis, userTransactions) {
     let strategy = "UNKNOWN";
     let strategyReason = "";
 
-    const { fundDrawdown, marketDrawdown, topPeer } = diagnosis;
+    const { fundDrawdown, marketDrawdown, topPeer, currentReturn } = diagnosis;
 
     // Layer 4: Decision Tree
     if (marketDrawdown < -10) {
         // Market is in correction territory
         strategy = "COST_AVERAGE";
         strategyReason = "Market Drop Detected. Buy the dip to lower your average cost.";
+    } else if (currentReturn < 0 && topPeer && topPeer.cagr1Y > 0 && topPeer.code !== diagnosis.schemeCode) {
+        // True Top Peer is positive and fund is negative
+        strategy = "SWITCH_FUND";
+        strategyReason = `Underperforming active management. Switch to ${topPeer.name}.`;
     } else if (fundDrawdown < -5 && topPeer && topPeer.drawdown < -5) {
         // Market is fine, but the entire category is suffering
         strategy = "HOLD_CATEGORY_CYCLE";
