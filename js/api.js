@@ -315,6 +315,19 @@ async function getPeerRanking(categoryString, currentSchemeCode) {
         }
     }
 
+    // Prioritize active, direct, and growth funds to the top before taking our 15-fund slice
+    peers.sort((a, b) => {
+        const aName = (a.schemeName || "").toUpperCase();
+        const bName = (b.schemeName || "").toUpperCase();
+
+        // We artificially weight the search to throw structural Direct Growth to the top
+        // while penalizing IDCW, Bonus, and historically defunct Institutional variants
+        const aScore = (aName.includes('DIRECT') ? 2 : 0) + (aName.includes('GROWTH') ? 1 : 0) - (aName.includes('IDCW') || aName.includes('BONUS') || aName.includes('INSTITUTIONAL') || aName.includes('REGULAR') ? 5 : 0);
+        const bScore = (bName.includes('DIRECT') ? 2 : 0) + (bName.includes('GROWTH') ? 1 : 0) - (bName.includes('IDCW') || bName.includes('BONUS') || bName.includes('INSTITUTIONAL') || bName.includes('REGULAR') ? 5 : 0);
+
+        return bScore - aScore;
+    });
+
     const hasCurrent = peers.find(p => String(p.schemeCode) === String(currentSchemeCode));
     if (!hasCurrent) {
         const currentFromMaster = window.allMfFunds.find(p => String(p.schemeCode) === String(currentSchemeCode));
