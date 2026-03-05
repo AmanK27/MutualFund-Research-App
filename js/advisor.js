@@ -112,5 +112,96 @@ async function analyzeLoss(schemeCode, currentReturn, userTransactions = []) {
     };
 
     console.log("[Advisor Engine] Diagnosis Generated:", diagnosis);
+
+    // Pass to Layer 4 & 5
+    return generateStrategyAndSimulation(diagnosis, userTransactions);
+}
+
+/**
+ * Step 2: The Strategy & Simulation Engine (Layers 4-5)
+ */
+function generateStrategyAndSimulation(diagnosis, userTransactions) {
+    let strategy = "UNKNOWN";
+    let strategyReason = "";
+
+    const { fundDrawdown, marketDrawdown, topPeer } = diagnosis;
+
+    // Layer 4: Decision Tree
+    if (marketDrawdown < -10) {
+        // Market is in correction territory
+        strategy = "COST_AVERAGE";
+        strategyReason = "Market Drop Detected. Buy the dip to lower your average cost.";
+    } else if (fundDrawdown < -5 && topPeer && topPeer.drawdown < -5) {
+        // Market is fine, but the entire category is suffering
+        strategy = "HOLD_CATEGORY_CYCLE";
+        strategyReason = "Category Sector rotation. The entire sector is down right now. Hold.";
+    } else if (fundDrawdown < -3 && topPeer && topPeer.drawdown >= -2 && topPeer.cagr1Y > (diagnosis.fund1yCAGR || 0)) {
+        // Fund is losing, but the top peer is winning
+        strategy = "SWITCH_FUND";
+        strategyReason = `Underperforming active management. Switch to ${topPeer.name}.`;
+    } else {
+        // Catch-all
+        strategy = "HOLD_CATEGORY_CYCLE";
+        strategyReason = "Underperformance is likely temporary noise. Hold the asset.";
+    }
+
+    diagnosis.strategy = strategy;
+    diagnosis.strategyReason = strategyReason;
+
+    // Layer 5: Simulation Array (3-Year Future Projection)
+    // Assume current invested corpus for simulation. In real app, calculate from txns.
+    // We will assume a proxy corpus of ₹100,000 for relative charting if txns are empty.
+
+    let currentCorpus = 100000;
+    let monthlySip = 5000;
+
+    if (userTransactions && userTransactions.length > 0) {
+        const units = userTransactions.reduce((acc, t) => acc + (t.type === 'BUY' ? t.units : -t.units), 0);
+        // Approximation without active NAV fetch:
+        // Real implementation would pass actual `currentValue` from portfolio view
+    }
+
+    const projectionMonths = 36;
+    const simData = {
+        labels: [], // Month 1, Month 2... Date objects or strings
+        doNothingArray: [],
+        strategyArray: []
+    };
+
+    // Base Rates for compounding
+    const fundMonthlyRate = diagnosis.fund1yCAGR ? Math.pow(1 + (diagnosis.fund1yCAGR / 100), 1 / 12) - 1 : 0.005; // Default 6% 
+    const peerMonthlyRate = topPeer ? Math.pow(1 + (topPeer.cagr1Y / 100), 1 / 12) - 1 : fundMonthlyRate + 0.002;
+
+    let corpusA = currentCorpus; // Do Nothing
+    let corpusB = currentCorpus; // Strategy
+
+    const now = new Date();
+
+    for (let m = 0; m <= projectionMonths; m++) {
+        const simDate = new Date(now.getFullYear(), now.getMonth() + m, 1);
+        simData.labels.push(simDate.toLocaleDateString('default', { month: 'short', year: '2-digit' }));
+
+        simData.doNothingArray.push(Math.round(corpusA));
+        simData.strategyArray.push(Math.round(corpusB));
+
+        // Compound Do Nothing (Current Rate + Normal SIP)
+        corpusA = (corpusA * (1 + fundMonthlyRate)) + monthlySip;
+
+        // Compound Strategy
+        if (strategy === "COST_AVERAGE") {
+            // Strategy: Increase SIP by 50% during the dip for higher compounding at same rate
+            corpusB = (corpusB * (1 + fundMonthlyRate)) + (monthlySip * 1.5);
+        } else if (strategy === "SWITCH_FUND") {
+            // Strategy: Compound at Top Peer's superior rate
+            corpusB = (corpusB * (1 + peerMonthlyRate)) + monthlySip;
+        } else {
+            // HOLD
+            corpusB = (corpusB * (1 + fundMonthlyRate)) + monthlySip;
+        }
+    }
+
+    diagnosis.simulation = simData;
+    console.log("[Advisor Engine] Strategy & Math Complete:", diagnosis);
+
     return diagnosis;
 }
