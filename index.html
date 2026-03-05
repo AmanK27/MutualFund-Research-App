@@ -529,32 +529,6 @@
                             </button>
                         </div>
 
-                        <!-- Asset Allocation & Tax Bucket Row -->
-                        <div id="portfolioAnalyticsRow"
-                            style="margin-top:20px;display:none;gap:16px;grid-template-columns:1fr 1fr 1fr;align-items:stretch;">
-                            <!-- Donut Chart -->
-                            <div class="stat-card"
-                                style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:180px;">
-                                <div class="stat-label" style="margin-bottom:10px;">Asset Allocation</div>
-                                <canvas id="allocationDonut" width="140" height="140" style="max-width:140px;"></canvas>
-                                <div id="allocationLegend"
-                                    style="display:flex;gap:10px;margin-top:10px;flex-wrap:wrap;justify-content:center;font-size:11px;color:var(--text-muted);">
-                                </div>
-                            </div>
-                            <!-- STCG Tile -->
-                            <div class="stat-card">
-                                <div class="stat-label">STCG Holdings</div>
-                                <div class="stat-value" id="pfStcgValue" style="color:#f59e0b;">—</div>
-                                <div class="stat-sub">Units held &lt; 1 year (Short-term)</div>
-                            </div>
-                            <!-- LTCG Tile -->
-                            <div class="stat-card">
-                                <div class="stat-label">LTCG Holdings</div>
-                                <div class="stat-value" id="pfLtcgValue" style="color:#10b981;">—</div>
-                                <div class="stat-sub">Units held ≥ 1 year (Long-term)</div>
-                            </div>
-                        </div>
-
                         <!-- ── Tab Bar ─────────────────────────────────────── -->
                         <div id="portfolioTabBar"
                             style="display:none;margin-top:24px;border-bottom:2px solid rgba(255,255,255,0.08);display:none;">
@@ -674,6 +648,44 @@
                             Loading your portfolio data...
                         </div>
                     </div> <!-- /#portfolioMainContent -->
+
+                    <!-- ── Collapsible Right Analytics Panel ── -->
+                    <div id="portfolioAnalyticsPanel" class="analytics-panel">
+                        <!-- Header with Close Button -->
+                        <div style="display:flex;justify-content:space-between;align-items:center;">
+                            <h3 style="font-size:15px;font-weight:700;color:var(--text-primary);margin:0;">Deep
+                                Analytics</h3>
+                            <button onclick="toggleAnalyticsPanel(false)"
+                                style="background:transparent;border:none;color:var(--text-muted);font-size:20px;cursor:pointer;padding:0;line-height:1;margin-top:-2px;">&times;</button>
+                        </div>
+
+                        <!-- Donut Chart -->
+                        <div class="stat-card"
+                            style="padding:16px;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:200px;">
+                            <div class="stat-label" style="margin-bottom:12px;width:100%;text-align:left;">Portfolio
+                                Asset Allocation</div>
+                            <canvas id="allocationDonut" width="160" height="160" style="max-width:160px;"></canvas>
+                            <div id="allocationLegend"
+                                style="display:flex;gap:12px;margin-top:16px;flex-wrap:wrap;justify-content:center;font-size:11px;color:var(--text-muted);">
+                            </div>
+                        </div>
+
+                        <!-- STCG Tile -->
+                        <div class="stat-card compact">
+                            <div class="stat-label">Short-term Holdings (STCG)</div>
+                            <div class="stat-value" id="pfStcgValue" style="color:#f59e0b;font-size:20px;margin:6px 0;">
+                                —</div>
+                            <div class="stat-sub">Held &lt; 1 year</div>
+                        </div>
+
+                        <!-- LTCG Tile -->
+                        <div class="stat-card compact">
+                            <div class="stat-label">Long-term Holdings (LTCG)</div>
+                            <div class="stat-value" id="pfLtcgValue" style="color:#10b981;font-size:20px;margin:6px 0;">
+                                —</div>
+                            <div class="stat-sub">Held &ge; 1 year</div>
+                        </div>
+                    </div> <!-- /#portfolioAnalyticsPanel -->
 
                 </div> <!-- /#portfolioContainer -->
             </section>
