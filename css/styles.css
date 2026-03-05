@@ -360,11 +360,13 @@ body::before {
     display: flex;
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
-    scrollbar-width: none; /* Firefox */
+    scrollbar-width: none;
+    /* Firefox */
 }
 
 .compare-tabs::-webkit-scrollbar {
-    display: none; /* Chrome, Safari, Opera */
+    display: none;
+    /* Chrome, Safari, Opera */
 }
 
 .compare-tab {
@@ -499,6 +501,43 @@ body::before {
     flex: 1;
     position: relative;
 }
+
+/* ── Portfolio Layout Structure ──────────────────────────────── */
+#portfolioContainer {
+    width: 100%;
+}
+
+/* Default (closed) state: single column, analytics panel hidden */
+#portfolioContainer.analytics-closed {
+    display: grid;
+    grid-template-columns: 1fr 0px;
+    gap: 0px;
+    transition: grid-template-columns 0.4s cubic-bezier(0.4, 0, 0.2, 1), gap 0.4s ease;
+}
+
+/* Open state: main content + 320px analytics panel */
+#portfolioContainer.analytics-open {
+    display: grid;
+    grid-template-columns: 1fr 320px;
+    gap: 24px;
+    transition: grid-template-columns 0.4s cubic-bezier(0.4, 0, 0.2, 1), gap 0.4s ease;
+}
+
+/* Analytics panel base styling (hides overflow when closed to stop text wrapping weirdly during animation) */
+.analytics-panel {
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    opacity: 1;
+    transition: opacity 0.3s ease;
+}
+
+#portfolioContainer.analytics-closed .analytics-panel {
+    opacity: 0;
+    pointer-events: none;
+}
+
 
 .search-icon {
     position: absolute;
@@ -2310,15 +2349,22 @@ body::before {
     flex-shrink: 0;
     cursor: pointer;
 }
-.auto-toggle input { opacity: 0; width: 0; height: 0; }
+
+.auto-toggle input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
 .auto-slider {
     position: absolute;
     inset: 0;
-    background: rgba(255,255,255,0.1);
+    background: rgba(255, 255, 255, 0.1);
     border-radius: 999px;
     transition: background 0.25s;
-    border: 1px solid rgba(255,255,255,0.12);
+    border: 1px solid rgba(255, 255, 255, 0.12);
 }
+
 .auto-slider::before {
     content: '';
     position: absolute;
@@ -2328,16 +2374,19 @@ body::before {
     top: 2px;
     background: #fff;
     border-radius: 50%;
-    transition: transform 0.25s cubic-bezier(0.4,0,0.2,1);
+    transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 }
-.auto-toggle input:checked + .auto-slider {
+
+.auto-toggle input:checked+.auto-slider {
     background: linear-gradient(135deg, #6366f1, #8b5cf6);
-    border-color: rgba(139,92,246,0.4);
+    border-color: rgba(139, 92, 246, 0.4);
 }
-.auto-toggle input:checked + .auto-slider::before {
+
+.auto-toggle input:checked+.auto-slider::before {
     transform: translateX(18px);
 }
 
 /* ── CSS variable alias (used by inline styles) ──────────── */
-:root { --radius: var(--radius-md); }
-
+:root {
+    --radius: var(--radius-md);
+}
