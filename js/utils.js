@@ -118,6 +118,35 @@ function calcVolatility(data) {
 }
 
 /**
+ * Simple Moving Average (DMA) for a given window
+ */
+function calcDMA(data, windowSize) {
+    if (data.length < windowSize) return null;
+    const subset = data.slice(data.length - windowSize);
+    const sum = subset.reduce((acc, entry) => acc + entry.nav, 0);
+    return sum / windowSize;
+}
+
+/**
+ * 30-day return calculation for a given data set
+ */
+function calc30DayReturn(data) {
+    if (data.length < 2) return null;
+    const end = data[data.length - 1];
+    const thirtyDaysAgo = new Date(end.date);
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+    let startEntry = data[0];
+    for (let i = data.length - 1; i >= 0; i--) {
+        if (data[i].date <= thirtyDaysAgo) {
+            startEntry = data[i];
+            break;
+        }
+    }
+    return (end.nav - startEntry.nav) / startEntry.nav;
+}
+
+/**
  * Sharpe Ratio = (CAGR - RiskFreeRate) / Volatility
  * Risk-free rate ≈ 6.5% (approximate Indian T-bill rate)
  */

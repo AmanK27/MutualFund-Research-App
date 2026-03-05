@@ -102,19 +102,64 @@ function renderWatchlist() {
         return;
     }
 
-    container.innerHTML = list.map(item => `
-<div class="watchlist-item ${currentCode === item.code ? 'active' : ''}"
-     onclick="loadFund('${item.code}')">
-    <div class="watchlist-item-dot"></div>
-    <div class="watchlist-item-info">
-        <div class="watchlist-item-name">${escapeHtml(item.name)}</div>
-        <div class="watchlist-item-code">${item.code}</div>
-    </div>
-    <button class="watchlist-item-remove"
-            onclick="event.stopPropagation(); removeFromWatchlist('${item.code}')"
-            title="Remove">✕</button>
-</div>
-`).join('');
+    container.innerHTML = list.map(item => {
+        const momentumBadge = item.momentum ? `<span style="font-size:10px; background:#10b981; color:white; padding:2px 6px; border-radius:10px; margin-left:8px; font-weight:700;">🔥 MOMENTUM</span>` : '';
+        return `
+            <div class="watchlist-item ${currentCode === item.code ? 'active' : ''}"
+                 onclick="loadFund('${item.code}')">
+                <div class="watchlist-item-dot"></div>
+                <div class="watchlist-item-info">
+                    <div style="display:flex; align-items:center;">
+                        <div class="watchlist-item-name">${escapeHtml(item.name)}</div>
+                        ${momentumBadge}
+                    </div>
+                    <div class="watchlist-item-code">${item.code}</div>
+                </div>
+                <button class="watchlist-item-remove"
+                        onclick="event.stopPropagation(); removeFromWatchlist('${item.code}')"
+                        title="Remove">✕</button>
+            </div>
+        `;
+    }).join('');
+
+    // Trigger momentum calculation in background if not already done
+    calculateWatchlistMomentum();
+}
+
+async function calculateWatchlistMomentum() {
+    const list = loadWatchlist();
+    if (list.length === 0 || window.momentumCalculated) return;
+    window.momentumCalculated = true;
+
+    try {
+        const results = [];
+        // Batch fetch to avoid rate limits
+        for (let i = 0; i < list.length; i++) {
+            const fund = list[i];
+            try {
+                const json = await fetchFundData(fund.code);
+                const data = prepareNavData(json.data);
+                const ret30 = calc30DayReturn(data);
+                if (ret30 !== null) {
+                    results.push({ code: fund.code, ret30 });
+                }
+            } catch (e) { }
+            if (i < list.length - 1) await new Promise(r => setTimeout(r, 300));
+        }
+
+        if (results.length > 0) {
+            results.sort((a, b) => b.ret30 - a.ret30);
+            const bestCode = results[0].code;
+            const updatedList = list.map(item => ({
+                ...item,
+                momentum: item.code === bestCode && results[0].ret30 > 0.05 // only if > 5%
+            }));
+            saveWatchlist(updatedList);
+            // Re-render without re-triggering this loop
+            const container = document.getElementById('watchlistContainer');
+            if (container) renderWatchlist();
+        }
+    } catch (err) { }
 }
 
 function toggleWatchlist() {
@@ -362,6 +407,7 @@ function showState(state) {
     document.getElementById('tableView').style.display = state === 'table' ? 'block' : 'none';
     document.getElementById('portfolioView').style.display = state === 'portfolio' ? 'block' : 'none';
     document.getElementById('compareView').style.display = state === 'compare' ? 'block' : 'none';
+    document.getElementById('sipForecastState').style.display = state === 'sip-forecast' ? 'block' : 'none';
     document.getElementById('searchResultsState').style.display = state === 'searchResults' ? 'block' : 'none';
 
     // Feature Toggle: show topFunds panel only on welcome screen,
@@ -2696,6 +2742,113 @@ function renderCompareChart() {
     // Run Robo Momentum Scanner
     runMomentumScanner();
 })();
+
+/* ── SIP Forecast View ─────────────────────────────────────────── */
+async function loadForecastView() {
+    showState('sip-forecast');
+    // Active Tab Styling
+    document.querySelectorAll('.sidebar-nav-item, .portfolio-nav-item').forEach(el => el.classList.remove('active'));
+    document.getElementById('forecastNavBtn').classList.add('active');
+
+    await runSIPForecast();
+}
+
+async function runSIPForecast() {
+    const opportunitiesList = document.getElementById('sipOpportunitiesList');
+    const loading = document.getElementById('sipOpportunityLoading');
+    const alertBox = document.getElementById('marketCorrectionAlert');
+    if (!opportunitiesList || !loading || !alertBox) return;
+
+    loading.style.display = 'block';
+    opportunitiesList.innerHTML = '';
+    alertBox.innerHTML = '';
+
+    try {
+        // 1. Market Crash Detector (Nifty 50 - 120716)
+        const niftyJson = await fetchFundData('120716');
+        const niftyData = prepareNavData(niftyJson.data);
+        if (niftyData.length > 10) {
+            const recent = niftyData.slice(-10);
+            const peak = Math.max(...recent.map(d => d.nav));
+            const latest = niftyData[niftyData.length - 1].nav;
+            const drawdown = (latest - peak) / peak;
+
+            if (drawdown <= -0.08) { // 8% correction in 10 days is significant per specs
+                alertBox.innerHTML = `
+                    <div style="background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 12px; padding: 20px; display: flex; align-items: center; gap: 20px;">
+                        <div style="font-size: 32px;">🚨</div>
+                        <div>
+                            <div style="font-size: 16px; font-weight: 700; color: #ef4444; margin-bottom: 4px;">Market Correction Detected!</div>
+                            <div style="font-size: 13px; color: var(--text-secondary);">
+                                Nifty 50 has dropped <strong>${(Math.abs(drawdown) * 100).toFixed(2)}%</strong> from its 10-day peak. 
+                                This is historically a great time to increase your SIP amounts or make top-up investments.
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+        }
+
+        // 2. 200 DMA Opportunity Scanner
+        const watchlist = loadWatchlist();
+        const portfolio = window.currentUserPortfolio || [];
+        const uniqueCodes = new Set([...watchlist.map(f => f.code), ...portfolio.map(f => f.schemeCode)]);
+
+        const opportunities = [];
+        for (const code of uniqueCodes) {
+            try {
+                const json = await fetchFundData(code);
+                const data = prepareNavData(json.data);
+                if (data.length >= 200) {
+                    const dma200 = calcDMA(data, 200);
+                    const latest = data[data.length - 1].nav;
+                    if (latest < dma200) {
+                        opportunities.push({
+                            code,
+                            name: json.meta.scheme_name,
+                            category: json.meta.scheme_category,
+                            price: latest,
+                            dma: dma200,
+                            discount: (dma200 - latest) / dma200
+                        });
+                    }
+                }
+            } catch (e) { }
+            // Throttle
+            await new Promise(r => setTimeout(r, 400));
+        }
+
+        loading.style.display = 'none';
+        if (opportunities.length === 0) {
+            opportunitiesList.innerHTML = `
+                <div style="grid-column: 1/-1; text-align: center; padding: 40px; color: var(--text-muted); font-size: 13px;">
+                    No accumulation opportunities found. All your funds are trading above their 200 DMA.
+                </div>
+            `;
+        } else {
+            opportunitiesList.innerHTML = opportunities.map(opp => `
+                <div class="stat-card" style="cursor: pointer;" onclick="loadFund('${opp.code}')">
+                    <div style="font-size: 10px; font-weight: 700; color: var(--accent); text-transform: uppercase; margin-bottom: 6px;">💎 Accumulation Zone</div>
+                    <div style="font-size: 13px; font-weight: 700; color: var(--text-primary); margin-bottom: 12px; line-height: 1.4;">${escapeHtml(opp.name)}</div>
+                    <div style="display: flex; justify-content: space-between; align-items: flex-end;">
+                        <div>
+                            <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 2px;">Vs 200 DMA</div>
+                            <div style="font-size: 14px; font-weight: 700; color: #ef4444;">-${(opp.discount * 100).toFixed(2)}%</div>
+                        </div>
+                        <div style="text-align: right;">
+                            <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 2px;">NAV</div>
+                            <div style="font-size: 14px; font-weight: 600;">₹${opp.price.toFixed(2)}</div>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+    } catch (err) {
+        loading.style.display = 'none';
+        console.error("Forecast error:", err);
+    }
+}
 
 /* ── Robo Momentum Scanner (Homepage) ────────────────────────────── */
 async function runMomentumScanner() {

@@ -84,6 +84,12 @@
                 <span>Compare Funds</span>
             </div>
 
+            <div id="forecastNavBtn" class="portfolio-nav-item" onclick="loadForecastView()"
+                style="background: linear-gradient(135deg, rgba(245, 158, 11, 0.15), rgba(217, 119, 6, 0.15)); border-color: rgba(245, 158, 11, 0.3);">
+                <span>🔮</span>
+                <span>SIP Forecast</span>
+            </div>
+
             <div id="mobileAccessBtn" class="portfolio-nav-item" onclick="openQrModal()"
                 style="background: linear-gradient(135deg, rgba(16, 185, 129, 0.15), rgba(5, 150, 105, 0.15)); border-color: rgba(16, 185, 129, 0.3);">
                 <span>📱</span>
@@ -1202,6 +1208,38 @@
                 <div id="compareLoadingState" style="text-align: center; margin-top: 48px; display: none;">
                     <div class="spinner"></div>
                     <div style="margin-top: 16px; color: var(--text-secondary);">Fetching data for both funds...</div>
+                </div>
+            </section>
+
+            <!-- SIP Forecast State -->
+            <section id="sipForecastState" style="display: none;">
+                <div class="fund-header">
+                    <h1 class="fund-name">SIP Forecast & Analysis</h1>
+                    <div style="color: var(--text-muted); font-size: 13px;">Market timing and opportunity breakout
+                        engine.</div>
+                </div>
+
+                <div id="marketCorrectionAlert" style="margin-bottom: 24px;"></div>
+
+                <div class="dashboard-grid">
+                    <div class="dashboard-main-col">
+                        <div class="analysis-card">
+                            <h2 class="analysis-title">SIP Opportunity Scanner</h2>
+                            <p style="font-size: 12px; color: var(--text-secondary); margin-bottom: 20px;">
+                                We scan your portfolio and watchlist for funds trading below their 200-day moving
+                                average (200 DMA),
+                                signaling a strong accumulation opportunity.
+                            </p>
+                            <div id="sipOpportunityLoading" style="text-align: center; padding: 40px;">
+                                <div class="spinner" style="margin: 0 auto 12px;"></div>
+                                <div style="font-size: 13px; color: var(--text-muted);">Analyzing 200-day trends...
+                                </div>
+                            </div>
+                            <div id="sipOpportunitiesList"
+                                style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px;">
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </section>
         </main>
