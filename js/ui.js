@@ -57,7 +57,7 @@ async function openLossAdvisor(schemeCode, currentReturn) {
 
         const peerEl = document.getElementById('advPeerDD');
         if (diagnosis.topPeer) {
-            peerEl.innerHTML = `<span style="font-size:12px;display:block;color:white;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${diagnosis.topPeer.name}">${diagnosis.topPeer.name}</span>${diagnosis.topPeer.drawdown === 0 ? '0%' : diagnosis.topPeer.drawdown.toFixed(2)}%`;
+            peerEl.innerHTML = `<span style="font-size:12px;display:block;color:white;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${diagnosis.topPeer.name}">${diagnosis.topPeer.name}</span>${diagnosis.topPeer.drawdown === 0 ? '0' : diagnosis.topPeer.drawdown.toFixed(2)}%`;
         } else {
             peerEl.textContent = 'N/A';
         }
