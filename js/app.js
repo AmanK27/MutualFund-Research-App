@@ -2086,7 +2086,7 @@ async function loadPortfolioView() {
         });
 
 
-        // 3. Fetch latest NAV + Kuvera asset-class data for each holding in parallel
+        // 3. Fetch latest NAV for each holding in parallel
         await Promise.all(Object.keys(holdings).map(async code => {
             try {
                 const res = await fetch(`https://api.mfapi.in/mf/${code}`);
@@ -2101,13 +2101,20 @@ async function loadPortfolioView() {
             } catch (e) {
                 holdings[code].currentNav = 0; holdings[code].currentValue = 0;
             }
+        }));
 
-            // Kuvera API: fetch equity/debt % for this scheme
+        // 3b. Kuvera equity/debt fetch — separate parallel pass with 3-second timeout
+        await Promise.all(Object.keys(holdings).map(async code => {
             try {
-                const kvRes = await fetch(`https://api.kuvera.in/mf/api/v4/fund_schemes/${code}.json`);
+                const ctrl = new AbortController();
+                const timer = setTimeout(() => ctrl.abort(), 3000);
+                const kvRes = await fetch(
+                    `https://api.kuvera.in/mf/api/v4/fund_schemes/${code}.json`,
+                    { signal: ctrl.signal }
+                );
+                clearTimeout(timer);
                 if (kvRes.ok) {
                     const kv = await kvRes.json();
-                    // Kuvera returns asset_allocation as an object like { equity: 92.5, debt: 0, ... }
                     const alloc = kv?.asset_allocation || kv?.fund?.asset_allocation || null;
                     if (alloc) {
                         holdings[code].equityPct = parseFloat(alloc.equity) || 0;
@@ -2115,7 +2122,7 @@ async function loadPortfolioView() {
                         holdings[code].cashPct = parseFloat(alloc.cash) || parseFloat(alloc.others) || 0;
                     }
                 }
-            } catch (_) { /* Kuvera not critical — silently skip */ }
+            } catch (_) { /* Kuvera not critical — skip on error or timeout */ }
         }));
 
         // 4. Build holdings table
