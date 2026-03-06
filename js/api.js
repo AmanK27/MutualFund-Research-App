@@ -267,8 +267,34 @@ window.SCHEME_CATEGORY_TO_LIVE_FUNDS = {
 };
 
 /**
+ * Derive plan type from a fund scheme name string.
+ * @param {string} name
+ * @returns {'DIRECT'|'REGULAR'|'UNKNOWN'}
+ */
+function derivePlanType(name) {
+    if (!name) return 'UNKNOWN';
+    const n = name.toUpperCase();
+    if (n.includes('DIRECT')) return 'DIRECT';
+    if (n.includes('REGULAR')) return 'REGULAR';
+    return 'UNKNOWN';
+}
+
+/**
+ * Derive option type from a fund scheme name string.
+ * @param {string} name
+ * @returns {'GROWTH'|'IDCW'|'UNKNOWN'}
+ */
+function deriveOptionType(name) {
+    if (!name) return 'UNKNOWN';
+    const n = name.toUpperCase();
+    if (n.includes('IDCW') || n.includes('DIVIDEND')) return 'IDCW';
+    if (n.includes('GROWTH')) return 'GROWTH';
+    return 'UNKNOWN';
+}
+
+/**
  * Fetch peer fund rankings for a given AMFI category.
- * Returns array of { schemeCode, schemeName, cagr1y } sorted desc.
+ * Returns array of { schemeCode, schemeName, planType, optionType, fromLiveFunds, cagr1y } sorted desc.
  */
 async function getPeerRanking(categoryString, currentSchemeCode) {
     if (!window.allMfFunds || !categoryString) return [];
@@ -277,6 +303,14 @@ async function getPeerRanking(categoryString, currentSchemeCode) {
     const liveFundsList = liveFundsKey && window.LIVE_FUNDS && window.LIVE_FUNDS[liveFundsKey]
         ? window.LIVE_FUNDS[liveFundsKey]
         : [];
+
+    // Build a code→name lookup from LIVE_FUNDS (AMFI-verified Direct Growth names).
+    // These names are guaranteed to contain "DIRECT" and "GROWTH" — unlike the truncated
+    // mfapi.in master list names which can drop those keywords and break string filters.
+    const liveFundsNameMap = {};
+    for (const f of liveFundsList) {
+        liveFundsNameMap[String(f.code)] = f.name;
+    }
 
     let peers = [];
     if (liveFundsList.length > 1) {
@@ -361,9 +395,17 @@ async function getPeerRanking(categoryString, currentSchemeCode) {
             if (navHistory) {
                 const cagr1y = getCAGR(navHistory, 1);
                 if (cagr1y !== null) {
+                    const code = String(peer.schemeCode);
+                    const fromLiveFunds = !!liveFundsNameMap[code];
+                    // Prefer the AMFI-verified full name from LIVE_FUNDS (guaranteed to say Direct/Growth).
+                    // Fall back to the mfapi.in master list name only when unavailable.
+                    const verifiedName = liveFundsNameMap[code] || peer.schemeName || '';
                     validRankings.push({
-                        schemeCode: String(peer.schemeCode),
-                        schemeName: formatFundName(peer.schemeName),
+                        schemeCode: code,
+                        schemeName: formatFundName(verifiedName),
+                        planType: fromLiveFunds ? 'DIRECT' : derivePlanType(verifiedName),
+                        optionType: fromLiveFunds ? 'GROWTH' : deriveOptionType(verifiedName),
+                        fromLiveFunds,
                         cagr1y
                     });
                 }
