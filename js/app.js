@@ -621,7 +621,14 @@ async function initPeerRanking(category, schemeCode) {
                 <div class="peer-item ${highlightClass}" onclick="loadFund('${peer.schemeCode}')" title="Click to view details">
                     <div class="peer-info">
                         <span class="peer-rank">#${index + 1}</span>
-                        <span class="peer-name">${peer.schemeName}</span>
+                        <span class="peer-name">${(() => {
+                    const n = peer.schemeName || '';
+                    if (n.toLowerCase().includes('direct')) return n;
+                    const badge = (peer.planType && peer.optionType && peer.planType !== 'UNKNOWN')
+                        ? `${peer.planType} ${peer.optionType}`
+                        : 'DIRECT GROWTH';
+                    return `${n} <span style="font-size:9px;opacity:0.65;font-weight:500;">[${badge}]</span>`;
+                })()}</span>
                     </div>
                     <div class="peer-metric">
                         <span class="peer-metric-label">1Y CAGR</span>

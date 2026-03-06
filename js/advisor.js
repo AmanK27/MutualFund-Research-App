@@ -181,6 +181,8 @@ async function analyzeLoss(schemeCode, currentReturn, userTransactions = []) {
                 topPeer = {
                     code: winner.schemeCode,
                     name: winner.schemeName,
+                    planType: winner.planType || 'UNKNOWN',
+                    optionType: winner.optionType || 'UNKNOWN',
                     cagr1Y: winner.cagr1y * 100,
                     drawdown,
                     score: winner.cagr1y * 100

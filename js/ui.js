@@ -59,10 +59,19 @@ async function openLossAdvisor(schemeCode, currentReturn) {
         if (diagnosis.topPeer) {
             const returnVal = diagnosis.topPeer.cagr1Y;
             const formattedReturn = returnVal > 0 ? '+' + returnVal.toFixed(2) : returnVal.toFixed(2);
+            // If the display name is truncated (no 'direct' keyword), append the
+            // normalized plan/option type badge so the user always has clarity.
+            const rawName = diagnosis.topPeer.name || '';
+            const needsBadge = !rawName.toLowerCase().includes('direct');
+            const planBadge = diagnosis.topPeer.planType && diagnosis.topPeer.optionType
+                ? `${diagnosis.topPeer.planType} ${diagnosis.topPeer.optionType}`
+                : 'DIRECT GROWTH';
+            const displayName = needsBadge ? `${rawName} [${planBadge}]` : rawName;
             peerEl.innerHTML = `
-                <span style="font-size:12px;display:block;color:white;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:4px;" title="${diagnosis.topPeer.name}">${diagnosis.topPeer.name}</span>
+                <span style="font-size:12px;display:block;color:white;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:4px;" title="${displayName}">${displayName}</span>
                 <span style="color:${returnVal > 0 ? 'var(--success)' : 'var(--danger)'};font-size:16px;">${formattedReturn}% <span style="font-size:10px;color:var(--text-muted);">1Y Return</span></span>
             `;
+
         } else {
             peerEl.textContent = 'N/A';
         }
