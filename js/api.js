@@ -672,9 +672,12 @@ async function aggregateFundDetails(schemeCode, cleanFundName) {
     // 1. Check local IndexedDB cache first
     try {
         const cached = await CacheManager.get(schemeCode);
-        if (CacheManager.isCacheValid(cached)) {
+        // Schema check: Ensure it's the new StandardFundObject with .nav.history
+        if (CacheManager.isCacheValid(cached) && cached.nav && cached.nav.history) {
             console.log(`[Cache Hit] Serving ${schemeCode} from IndexedDB`);
             return cached;
+        } else if (cached) {
+            console.log(`[Cache Miss] Ignoring old-schema cache for ${schemeCode}`);
         }
     } catch (e) {
         console.warn("Cache retrieval failed, falling back to network:", e);
