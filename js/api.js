@@ -470,8 +470,11 @@ async function getNavHistory(schemeCode) {
 async function getPeerRanking(categoryString, currentSchemeCode, targetSubCategory = null) {
     if (!window.allMfFunds || !categoryString) return [];
 
+    // Use targetSubCategory for keyword extraction if available, as it's the most specific
+    const baseCategoryForKeyword = targetSubCategory || categoryString;
+
     // Extract category keyword from mfapi scheme_category string
-    const keyword = categoryString
+    const keyword = baseCategoryForKeyword
         .replace(/Equity Scheme\s*-?\s*/ig, '')
         .replace(/Hybrid Scheme\s*-?\s*/ig, '')
         .replace(/Debt Scheme\s*-?\s*/ig, '')
