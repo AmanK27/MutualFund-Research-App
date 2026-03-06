@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Advisor Peer-Selection Unit Test</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: #0d0f1a;
+            color: #e2e8f0;
+            font-family: 'Courier New', monospace;
+            padding: 32px;
+        }
+
+        h1 {
+            font-size: 22px;
+            color: #7c3aed;
+            margin-bottom: 8px;
+            letter-spacing: 0.05em;
+        }
+
+        p.subtitle {
+            color: #94a3b8;
+            font-size: 13px;
+            margin-bottom: 32px;
+        }
+
+        .step {
+            background: #141828;
+            border: 1px solid #1e2a3a;
+            border-radius: 10px;
+            padding: 20px 24px;
+            margin-bottom: 20px;
+        }
+
+        .step-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 14px;
+        }
+
+        .step-badge {
+            background: #1e2a3a;
+            border-radius: 6px;
+            font-size: 11px;
+            padding: 3px 10px;
+            color: #7c3aed;
+            font-weight: bold;
+            letter-spacing: 0.08em;
+        }
+
+        .step h2 {
+            font-size: 14px;
+            color: #cbd5e1;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+
+        th {
+            text-align: left;
+            color: #64748b;
+            padding: 6px 12px;
+            border-bottom: 1px solid #1e2a3a;
+            font-weight: 600;
+            font-size: 11px;
+            text-transform: uppercase;
+        }
+
+        td {
+            padding: 8px 12px;
+            border-bottom: 1px solid #1a2233;
+            color: #cbd5e1;
+        }
+
+        tr:last-child td {
+            border-bottom: none;
+        }
+
+        .tag {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: 600;
+        }
+
+        .tag-pass {
+            background: rgba(16, 185, 129, 0.15);
+            color: #34d399;
+        }
+
+        .tag-fail {
+            background: rgba(239, 68, 68, 0.15);
+            color: #f87171;
+        }
+
+        .tag-null {
+            background: rgba(100, 116, 139, 0.2);
+            color: #94a3b8;
+        }
+
+        .cagr-pos {
+            color: #34d399;
+            font-weight: bold;
+        }
+
+        .cagr-neg {
+            color: #f87171;
+            font-weight: bold;
+        }
+
+        .cagr-null {
+            color: #64748b;
+        }
+
+        .winner-box {
+            background: linear-gradient(135deg, rgba(124, 58, 237, 0.2), rgba(16, 185, 129, 0.1));
+            border: 1px solid rgba(124, 58, 237, 0.4);
+            border-radius: 10px;
+            padding: 24px;
+            text-align: center;
+        }
+
+        .winner-box .trophy {
+            font-size: 36px;
+            margin-bottom: 8px;
+        }
+
+        .winner-box .name {
+            font-size: 16px;
+            color: #e2e8f0;
+            font-weight: bold;
+            margin-bottom: 4px;
+        }
+
+        .winner-box .cagr {
+            font-size: 28px;
+            color: #34d399;
+            font-weight: 800;
+        }
+
+        .winner-box .label {
+            font-size: 12px;
+            color: #64748b;
+            margin-top: 4px;
+        }
+
+        .top-three {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 12px;
+        }
+
+        .peer-card {
+            background: #1a2233;
+            border-radius: 8px;
+            padding: 14px;
+            border: 1px solid #1e2a3a;
+        }
+
+        .peer-card .rank {
+            font-size: 11px;
+            color: #7c3aed;
+            margin-bottom: 4px;
+            font-weight: 700;
+        }
+
+        .peer-card .peer-name {
+            font-size: 11px;
+            color: #94a3b8;
+            margin-bottom: 6px;
+            line-height: 1.4;
+        }
+
+        .peer-card .peer-cagr {
+            font-size: 18px;
+            font-weight: 800;
+            color: #34d399;
+        }
+    </style>
+</head>
+
+<body>
+
+    <h1>🧪 Advisor Peer-Selection Unit Test</h1>
+    <p class="subtitle">Offline simulation of the Cascading Filter Algorithm in <code>advisor.js</code>. No network
+        calls.</p>
+
+    <div id="output"></div>
+
+    <script>
+        // ══════════════════════════════════════════════════════════════════
+        // MOCK DATA: Simulates the raw category peers from the API
+        // ══════════════════════════════════════════════════════════════════
+        const mockCategoryAPIResponse = [
+            { cleanName: "HDFC Mid-Cap Opportunities Fund Direct Growth", cagr: 25.12 },
+            { cleanName: "Broken API Fund Direct Growth", cagr: null },
+            { cleanName: "Tata Mid Cap Growth Fund - Direct Plan Bonus(Growth)", cagr: 35.50 },
+            { cleanName: "Motilal Oswal Midcap Fund Direct Growth", cagr: -18.47 },
+            { cleanName: "ICICI Prudential MidCap Fund Direct Growth", cagr: 28.47 },
+            { cleanName: "Nippon India Growth Mid Cap IDCW", cagr: 32.10 }
+        ];
+
+        // ── Helpers ────────────────────────────────────────────────────────
+        const output = document.getElementById('output');
+        function createStep(id, title, html) {
+            const div = document.createElement('div');
+            div.className = 'step';
+            div.innerHTML = `
+        <div class="step-header">
+            <span class="step-badge">STEP ${id}</span>
+            <h2>${title}</h2>
+        </div>
+        ${html}`;
+            output.appendChild(div);
+        }
+
+        function renderTable(data, columns, highlightCol, highlightFn) {
+            const colDefs = columns;
+            let rows = data.map(row => {
+                const cells = colDefs.map(col => {
+                    let val = row[col.key] !== undefined ? row[col.key] : '—';
+                    let display = val;
+                    if (col.key === 'cagr') {
+                        if (val === null || val === -999) display = `<span class="cagr-null">null → -999</span>`;
+                        else if (val > 0) display = `<span class="cagr-pos">+${val.toFixed(2)}%</span>`;
+                        else display = `<span class="cagr-neg">${val.toFixed(2)}%</span>`;
+                    }
+                    if (col.key === 'status') {
+                        display = `<span class="tag ${val === 'PASS' ? 'tag-pass' : val === 'FAIL' ? 'tag-fail' : 'tag-null'}">${val}</span>`;
+                    }
+                    return `<td>${display}</td>`;
+                }).join('');
+                return `<tr>${cells}</tr>`;
+            }).join('');
+
+            const headers = colDefs.map(c => `<th>${c.label}</th>`).join('');
+            return `<table><thead><tr>${headers}</tr></thead><tbody>${rows}</tbody></table>`;
+        }
+
+        // ══════════════════════════════════════════════════════════════════
+        // STEP 1 — RAW DATA
+        // ══════════════════════════════════════════════════════════════════
+        console.log("--- 1. RAW DATA ---");
+        console.table(mockCategoryAPIResponse);
+        createStep(1, "RAW DATA — Output from mocked category API response",
+            renderTable(mockCategoryAPIResponse, [
+                { key: 'cleanName', label: 'Fund Name' },
+                { key: 'cagr', label: '1Y CAGR' }
+            ])
+        );
+
+        // ══════════════════════════════════════════════════════════════════
+        // STEP 2 — FORCE NUMERICAL SORT
+        // ══════════════════════════════════════════════════════════════════
+        const sortedPeers = [...mockCategoryAPIResponse].map(fund => ({
+            ...fund,
+            cagr: parseFloat(fund.cagr) || -999
+        })).sort((a, b) => b.cagr - a.cagr);
+
+        console.log("--- 2. AFTER NUMERICAL SORT (Highest to Lowest) ---");
+        console.table(sortedPeers);
+        createStep(2, "NUMERICAL SORT — null CAGRs mapped to -999 and sorted highest → lowest",
+            renderTable(sortedPeers, [
+                { key: 'cleanName', label: 'Fund Name' },
+                { key: 'cagr', label: 'Normalized CAGR' }
+            ])
+        );
+
+        // ══════════════════════════════════════════════════════════════════
+        // STEP 3 — STRIKE 1: STRICT FILTER (Remove Bonus/IDCW + require Direct + Growth + positive)
+        // ══════════════════════════════════════════════════════════════════
+        const audited = sortedPeers.map(fund => {
+            const name = fund.cleanName.toLowerCase();
+            const hasDirect = name.includes("direct");
+            const hasGrowth = name.includes("growth");
+            const noBonus = !name.includes("bonus");
+            const noIdcw = !name.includes("idcw");
+            const noDividend = !name.includes("dividend");
+            const positiveReturn = fund.cagr > 0;
+            const pass = hasDirect && hasGrowth && noBonus && noIdcw && noDividend && positiveReturn;
+            return { ...fund, status: pass ? 'PASS' : 'FAIL' };
+        });
+
+        const strictFilter = audited.filter(f => f.status === 'PASS');
+
+        console.log("--- 3. AFTER STRIKE 1 FILTER ---");
+        console.table(audited);
+        createStep(3, "STRIKE 1 — Trap funds (IDCW, Bonus, null, negative-return) eliminated",
+            renderTable(audited, [
+                { key: 'cleanName', label: 'Fund Name' },
+                { key: 'cagr', label: '1Y CAGR' },
+                { key: 'status', label: 'Status' }
+            ])
+        );
+
+        // ══════════════════════════════════════════════════════════════════
+        // STEP 4 — EXTRACT WINNER (Top 3 from strict filter)
+        // ══════════════════════════════════════════════════════════════════
+        let topThree = [];
+        let usedFallback = false;
+
+        if (strictFilter.length > 0) {
+            topThree = strictFilter.slice(0, 3);
+            console.log("--- 4. SUCCESS: Extracted Top 3 ---", topThree);
+        } else {
+            // Fallback: Relax the direct+growth requirement, still discard IDCW/Bonus/null
+            topThree = sortedPeers.filter(f => f.cagr > 0 && !f.cleanName.toLowerCase().includes('idcw') && !f.cleanName.toLowerCase().includes('bonus')).slice(0, 3);
+            usedFallback = true;
+            console.log("--- 4. FALLBACK: Strike 2 executed ---", topThree);
+        }
+
+        const podiumHtml = topThree.length > 0 ? `<div class="top-three">
+    ${topThree.map((f, i) => `
+        <div class="peer-card">
+            <div class="rank">#${i + 1} ${i === 0 ? '🏆 WINNER' : i === 1 ? '🥈' : '🥉'}</div>
+            <div class="peer-name">${f.cleanName}</div>
+            <div class="peer-cagr">+${f.cagr.toFixed(2)}%</div>
+        </div>
+    `).join('')}
+</div>` : `<div style="color:#f87171;padding:16px;">⚠️ No valid peers found — all funds failed the filter.</div>`;
+
+        createStep(4, `TOP 3 PEERS ${usedFallback ? '<span style="color:#f59e0b;font-size:12px;">(⚠️ Fallback Strike 2 was used)</span>' : '<span style="color:#34d399;font-size:12px;">(✅ Strike 1 passed)</span>'}`, podiumHtml);
+
+        // ══════════════════════════════════════════════════════════════════
+        // STEP 5 — FINAL WINNER
+        // ══════════════════════════════════════════════════════════════════
+        const winningFund = topThree[0];
+        console.log("--- 5. FINAL SELECTED PEER ---");
+        if (winningFund) {
+            console.log(`🏆 WINNER: ${winningFund.cleanName} (${winningFund.cagr}%)`);
+            createStep(5, "FINAL WINNER — The fund that will be surfaced in the Advisor UI",
+                `<div class="winner-box">
+            <div class="trophy">🏆</div>
+            <div class="name">${winningFund.cleanName}</div>
+            <div class="cagr">+${winningFund.cagr.toFixed(2)}%</div>
+            <div class="label">1Y CAGR — Surfaced to the UI</div>
+        </div>`
+            );
+        } else {
+            createStep(5, "FINAL WINNER", `<div class="winner-box"><div style="color:#f87171;">⚠️ No valid peer could be extracted. The UI will render N/A.</div></div>`);
+        }
+    </script>
+
+</body>
+
+</html>
