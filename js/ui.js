@@ -67,10 +67,15 @@ async function openLossAdvisor(schemeCode, currentReturn) {
                 ? `${diagnosis.topPeer.planType} ${diagnosis.topPeer.optionType}`
                 : 'DIRECT GROWTH';
             const displayName = needsBadge ? `${rawName} [${planBadge}]` : rawName;
+            const catLabel = diagnosis.topPeer.subCategory
+                ? (window.Normalizer ? Normalizer.formatSubCategory(diagnosis.topPeer.subCategory) : diagnosis.topPeer.subCategory)
+                : '';
             peerEl.innerHTML = `
                 <span style="font-size:12px;display:block;color:white;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:4px;" title="${displayName}">${displayName}</span>
                 <span style="color:${returnVal > 0 ? 'var(--success)' : 'var(--danger)'};font-size:16px;">${formattedReturn}% <span style="font-size:10px;color:var(--text-muted);">1Y Return</span></span>
+                ${catLabel ? `<span style="display:inline-block;margin-top:6px;font-size:10px;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.12);border-radius:4px;padding:2px 7px;color:var(--text-muted);letter-spacing:0.03em;">${catLabel}</span>` : ''}
             `;
+
 
         } else {
             peerEl.textContent = 'N/A';

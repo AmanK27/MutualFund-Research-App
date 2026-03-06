@@ -318,5 +318,38 @@ function createStandardFund(amfiRaw, kuveraRaw = null, growwRaw = null, extras =
     };
 }
 
+// ──────────────────────────────────────────────────────────────────────────────
+// UI Formatter — subCategory display label
+// ──────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Converts a raw AMFI scheme_category string into a clean, short display label.
+ * Strips SEBI-mandated scheme prefix segments while preserving the meaningful category name.
+ *
+ * Examples:
+ *   'Equity Scheme - Mid Cap Fund'                    → 'Mid Cap Fund'
+ *   'Debt Scheme - Short Duration Fund'               → 'Short Duration Fund'
+ *   'Hybrid Scheme - Aggressive Hybrid Fund'          → 'Aggressive Hybrid Fund'
+ *   'Other Scheme - Index Funds'                      → 'Index Funds'
+ *   'Mid Cap Fund'                                    → 'Mid Cap Fund' (passthrough)
+ *   null / undefined                                  → ''
+ *
+ * @param {string|null} rawCategory - The raw AMFI scheme_category string
+ * @returns {string} Clean, short category label
+ */
+function formatSubCategory(rawCategory) {
+    if (!rawCategory) return '';
+    // Strip known SEBI scheme-type prefixes (case-insensitive)
+    const cleaned = rawCategory
+        .replace(/^(equity|debt|hybrid|solution oriented|other|fund of fund[s]?|index)\s+scheme[s]?\s*[-–—]?\s*/i, '')
+        .replace(/^open ended scheme[s]?\s*[-–—]?\s*/i, '')
+        .replace(/^close ended scheme[s]?\s*[-–—]?\s*/i, '')
+        .trim();
+    // Fallback: if prefix stripping changed nothing, try splitting on ' - ' and take last part
+    if (cleaned && cleaned !== rawCategory.trim()) return cleaned;
+    const parts = rawCategory.split(/\s*[-–—]\s*/);
+    return parts[parts.length - 1].trim() || rawCategory.trim();
+}
+
 // Export for use in api.js (browser global pattern — no ES modules)
-window.Normalizer = { normalizeAmfi, normalizeKuvera, normalizeGroww, createStandardFund };
+window.Normalizer = { normalizeAmfi, normalizeKuvera, normalizeGroww, createStandardFund, formatSubCategory };

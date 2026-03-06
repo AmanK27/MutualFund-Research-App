@@ -461,7 +461,11 @@ function displayFundData() {
     const elFHouse = document.getElementById('fundHouse');
     if (elFHouse) elFHouse.textContent = meta.fund_house || '—';
     const elFCat = document.getElementById('fundCategory');
-    if (elFCat) elFCat.textContent = meta.scheme_category || '—';
+    if (elFCat) elFCat.textContent = (window.Normalizer)
+        ? Normalizer.formatSubCategory(currentFund?.meta?.subCategory || meta.scheme_category || '')
+        : (meta.scheme_category || '—');
+
+
     const elFType = document.getElementById('fundType');
     if (elFType) elFType.textContent = meta.scheme_type || '—';
 
