@@ -293,136 +293,153 @@ function deriveOptionType(name) {
 }
 
 /**
+ * Cache-first NAV history fetcher for a single scheme code.
+ * Returns sorted array of { date, nav } objects or null.
+ * Uses the existing individual-fund IndexedDB cache to avoid duplicate API calls.
+ * @param {string} schemeCode
+ * @returns {Promise<Array|null>}
+ */
+async function getNavHistory(schemeCode) {
+    try {
+        const cached = await CacheManager.get(schemeCode);
+        if (CacheManager.isCacheValid(cached) && cached.data) {
+            return cached.data; // already sorted Date objects from prior fetch
+        }
+        const res = await fetch(`https://api.mfapi.in/mf/${schemeCode}`);
+        if (!res.ok) return null;
+        const json = await res.json();
+        if (!json.data || json.data.length === 0) return null;
+        const navHistory = json.data.map(d => {
+            const parts = d.date.split('-');
+            return { date: new Date(+parts[2], +parts[1] - 1, +parts[0]), nav: parseFloat(d.nav) };
+        }).sort((a, b) => a.date - b.date);
+        // Persist to individual fund cache (shared with the dashboard, so browsing a fund
+        // pre-warms the advisor data for free)
+        await CacheManager.set(schemeCode, { data: navHistory });
+        return navHistory;
+    } catch (e) {
+        console.warn(`[getNavHistory] Failed for ${schemeCode}:`, e);
+        return null;
+    }
+}
+
+/**
  * Fetch peer fund rankings for a given AMFI category.
+ *
+ * PRIMARY PATH (LIVE_FUNDS available):
+ *   Iterates directly over all AMFI-verified Direct+Growth codes from window.LIVE_FUNDS.
+ *   No cross-reference with window.allMfFunds. No name-scoring. No slice limit.
+ *   Every fund in the category gets its 1Y CAGR computed; the top result is the true winner.
+ *
+ * FALLBACK PATH (LIVE_FUNDS empty for this category):
+ *   Falls back to keyword search in window.allMfFunds with name-based filtering.
+ *
  * Returns array of { schemeCode, schemeName, planType, optionType, fromLiveFunds, cagr1y } sorted desc.
  */
 async function getPeerRanking(categoryString, currentSchemeCode) {
-    if (!window.allMfFunds || !categoryString) return [];
+    if (!categoryString) return [];
 
     const liveFundsKey = SCHEME_CATEGORY_TO_LIVE_FUNDS[categoryString.trim()] || null;
     const liveFundsList = liveFundsKey && window.LIVE_FUNDS && window.LIVE_FUNDS[liveFundsKey]
         ? window.LIVE_FUNDS[liveFundsKey]
         : [];
 
-    // Build a code→name lookup from LIVE_FUNDS (AMFI-verified Direct Growth names).
-    // These names are guaranteed to contain "DIRECT" and "GROWTH" — unlike the truncated
-    // mfapi.in master list names which can drop those keywords and break string filters.
-    const liveFundsNameMap = {};
-    for (const f of liveFundsList) {
-        liveFundsNameMap[String(f.code)] = f.name;
-    }
+    // ══════════════════════════════════════════════════════════════════════════
+    // PRIMARY PATH — LIVE_FUNDS is the sole and authoritative source
+    // ══════════════════════════════════════════════════════════════════════════
+    // Every entry in LIVE_FUNDS was AMFI-verified during fetchLiveAmfiCategories:
+    // the parser only adds a fund if its name contains both "DIRECT" and "GROWTH".
+    // By iterating these codes directly we eliminate:
+    //   - allMfFunds cross-reference (which silently dropped ICICI Prudential)
+    //   - name-scoring heuristic (which could mis-rank truncated names)
+    //   - arbitrary slice limit (which cut off high-performing funds)
+    if (liveFundsList.length > 0) {
+        console.log(`[getPeerRanking] PRIMARY PATH — fetching all ${liveFundsList.length} AMFI-verified peers for "${liveFundsKey}"`);
+        const validRankings = [];
 
-    let peers = [];
-    if (liveFundsList.length > 1) {
-        const liveFundsCodeSet = new Set(liveFundsList.map(f => String(f.code)));
-        peers = window.allMfFunds.filter(f => liveFundsCodeSet.has(String(f.schemeCode)));
-    }
-
-    // Filter to ensure we capture Direct & Growth variants before slicing
-    let prioritizedPeers = peers.filter(f => {
-        if (!f.schemeName) return false;
-        const n = f.schemeName.toUpperCase();
-        return n.includes('DIRECT') && n.includes('GROWTH') &&
-            !n.includes('IDCW') && !n.includes('DIVIDEND') && !n.includes('BONUS');
-    });
-
-    if (prioritizedPeers.length > 0) {
-        peers = prioritizedPeers;
-    }
-
-    if (peers.length < 2) {
-        const keyword = categoryString
-            .replace(/Equity Scheme\s*-?\s*/ig, '')
-            .replace(/Hybrid Scheme\s*-?\s*/ig, '')
-            .replace(/Debt Scheme\s*-?\s*/ig, '')
-            .replace(/Other Scheme\s*-?\s*/ig, '')
-            .replace(/Open Ended Schemes/ig, '')
-            .replace(/Fund/ig, '')
-            .trim();
-
-        if (keyword) {
-            peers = window.allMfFunds.filter(f => {
-                if (!f.schemeName) return false;
-                const nameUpper = f.schemeName.toUpperCase();
-                return nameUpper.includes(keyword.toUpperCase());
-            });
-        }
-    }
-
-    // Prioritize active, direct, and growth funds to the top before taking our 15-fund slice
-    peers.sort((a, b) => {
-        const aName = (a.schemeName || "").toUpperCase();
-        const bName = (b.schemeName || "").toUpperCase();
-
-        // We artificially weight the search to throw structural Direct Growth to the top
-        // while penalizing IDCW, Bonus, and historically defunct Institutional variants
-        const aScore = (aName.includes('DIRECT') ? 2 : 0) + (aName.includes('GROWTH') ? 1 : 0) - (aName.includes('IDCW') || aName.includes('BONUS') || aName.includes('INSTITUTIONAL') || aName.includes('REGULAR') ? 5 : 0);
-        const bScore = (bName.includes('DIRECT') ? 2 : 0) + (bName.includes('GROWTH') ? 1 : 0) - (bName.includes('IDCW') || bName.includes('BONUS') || bName.includes('INSTITUTIONAL') || bName.includes('REGULAR') ? 5 : 0);
-
-        return bScore - aScore;
-    });
-
-    const hasCurrent = peers.find(p => String(p.schemeCode) === String(currentSchemeCode));
-    if (!hasCurrent) {
-        const currentFromMaster = window.allMfFunds.find(p => String(p.schemeCode) === String(currentSchemeCode));
-        if (currentFromMaster) peers.push(currentFromMaster);
-    }
-
-    peers = peers.slice(0, 25); // Top 25 to capture more category performers (was 15)
-
-    const validRankings = [];
-    for (const peer of peers) {
-        try {
-            // Check cache first to avoid slamming the MFAPI
-            const cached = await CacheManager.get(String(peer.schemeCode));
-            let navHistory = null;
-
-            if (CacheManager.isCacheValid(cached) && cached.data) {
-                navHistory = cached.data;
-            } else {
-                const res = await fetch(`https://api.mfapi.in/mf/${peer.schemeCode}`);
-                if (res.ok) {
-                    const data = await res.json();
-                    if (data && data.data && data.data.length > 0) {
-                        navHistory = data.data.map(d => {
-                            const parts = d.date.split('-');
-                            return { date: new Date(parts[2], parts[1] - 1, parts[0]), nav: parseFloat(d.nav) };
-                        }).sort((a, b) => a.date - b.date);
-                    }
-                }
-            }
-
-            if (navHistory) {
+        for (const fund of liveFundsList) {
+            const code = String(fund.code);
+            if (code === String(currentSchemeCode)) continue; // skip self
+            try {
+                const navHistory = await getNavHistory(code);
+                if (!navHistory) continue;
                 const cagr1y = getCAGR(navHistory, 1);
-                if (cagr1y !== null) {
-                    const code = String(peer.schemeCode);
-                    const fromLiveFunds = !!liveFundsNameMap[code];
-                    // Prefer the AMFI-verified full name from LIVE_FUNDS (guaranteed to say Direct/Growth).
-                    // Fall back to the mfapi.in master list name only when unavailable.
-                    const verifiedName = liveFundsNameMap[code] || peer.schemeName || '';
-                    validRankings.push({
-                        schemeCode: code,
-                        schemeName: formatFundName(verifiedName),
-                        planType: fromLiveFunds ? 'DIRECT' : derivePlanType(verifiedName),
-                        optionType: fromLiveFunds ? 'GROWTH' : deriveOptionType(verifiedName),
-                        fromLiveFunds,
-                        cagr1y
-                    });
-                }
+                if (cagr1y === null || cagr1y <= 0) continue;
+                validRankings.push({
+                    schemeCode: code,
+                    schemeName: formatFundName(fund.name), // AMFI-verified full name
+                    planType: 'DIRECT',
+                    optionType: 'GROWTH',
+                    fromLiveFunds: true,
+                    cagr1y
+                });
+            } catch (err) {
+                console.error(`[getPeerRanking] NAV fetch failed for ${code}:`, err);
             }
-
-            // Artificial delay to prevent 429 Rate Limit from MFAPI if fetched freshly
-            if (!navHistory || !cached) {
-                await new Promise(r => setTimeout(r, 100));
-            }
-
-        } catch (err) {
-            console.error("Peer fetch failed for", peer.schemeCode, err);
+            // Small delay to avoid overwhelming mfapi.in on first run
+            await new Promise(r => setTimeout(r, 80));
         }
+
+        validRankings.sort((a, b) => b.cagr1y - a.cagr1y);
+        console.log(`[getPeerRanking] PRIMARY PATH complete — ${validRankings.length} peers ranked. #1: ${validRankings[0]?.schemeName} (+${(validRankings[0]?.cagr1y * 100).toFixed(2)}%)`);
+        return validRankings;
     }
 
-    validRankings.sort((a, b) => b.cagr1y - a.cagr1y);
-    return validRankings;
+    // ══════════════════════════════════════════════════════════════════════════
+    // FALLBACK PATH — LIVE_FUNDS has no data for this category
+    // ══════════════════════════════════════════════════════════════════════════
+    // Used for niche categories not covered by fetchLiveAmfiCategories.
+    // Keyword-based search in allMfFunds with conservative name filtering.
+    if (!window.allMfFunds) return [];
+    console.warn(`[getPeerRanking] FALLBACK PATH for "${categoryString}" — LIVE_FUNDS has no data for this category`);
+
+    const keyword = categoryString
+        .replace(/Equity Scheme\s*-?\s*/ig, '')
+        .replace(/Hybrid Scheme\s*-?\s*/ig, '')
+        .replace(/Debt Scheme\s*-?\s*/ig, '')
+        .replace(/Other Scheme\s*-?\s*/ig, '')
+        .replace(/Open Ended Schemes/ig, '')
+        .replace(/Fund/ig, '')
+        .trim();
+
+    let peers = keyword
+        ? window.allMfFunds.filter(f => f.schemeName && f.schemeName.toUpperCase().includes(keyword.toUpperCase()))
+        : [];
+
+    // Keep only Direct Growth variants
+    const directGrowthPeers = peers.filter(f => {
+        const n = (f.schemeName || '').toUpperCase();
+        return n.includes('DIRECT') && n.includes('GROWTH') && !n.includes('IDCW') && !n.includes('BONUS');
+    });
+    if (directGrowthPeers.length > 0) peers = directGrowthPeers;
+
+    peers = peers.slice(0, 20);
+
+    const fallbackRankings = [];
+    for (const peer of peers) {
+        const code = String(peer.schemeCode);
+        if (code === String(currentSchemeCode)) continue;
+        try {
+            const navHistory = await getNavHistory(code);
+            if (!navHistory) continue;
+            const cagr1y = getCAGR(navHistory, 1);
+            if (cagr1y === null || cagr1y <= 0) continue;
+            fallbackRankings.push({
+                schemeCode: code,
+                schemeName: formatFundName(peer.schemeName),
+                planType: derivePlanType(peer.schemeName),
+                optionType: deriveOptionType(peer.schemeName),
+                fromLiveFunds: false,
+                cagr1y
+            });
+        } catch (err) {
+            console.error(`[getPeerRanking] Fallback NAV fetch failed for ${code}:`, err);
+        }
+        await new Promise(r => setTimeout(r, 80));
+    }
+
+    fallbackRankings.sort((a, b) => b.cagr1y - a.cagr1y);
+    return fallbackRankings;
 }
 
 /**
@@ -440,25 +457,16 @@ async function getPeerRanking(categoryString, currentSchemeCode) {
 async function fetchCategoryPeers(categoryName, currentSchemeCode = null) {
     if (!categoryName) return [];
 
-    const cacheKey = 'peers_' + categoryName.trim().replace(/\s+/g, '_').toLowerCase();
+    // peers_v3_: new key format guarantees old cached data (without fromLiveFunds:true) is never served.
+    // Any browser on a previous key format will get a cache miss and fetch fresh data automatically.
+    const cacheKey = 'peers_v3_' + categoryName.trim().replace(/\s+/g, '_').toLowerCase();
 
     // ── 1. Cache-First: Try IndexedDB ──────────────────────────────────────────
     try {
         const cached = await CacheManager.get(cacheKey);
         if (CacheManager.isCacheValid(cached) && cached.peers && cached.peers.length > 0) {
-            // Strict schema version check: the new metadata format requires at least
-            // one peer to have fromLiveFunds===true (set only when the peer's code
-            // exists in window.LIVE_FUNDS — the AMFI-verified list).
-            //
-            // Old cached objects have planType/optionType but fromLiveFunds is false
-            // for ALL peers, because they were cached before the liveFundsNameMap
-            // lookup was added. This check auto-invalidates those old caches.
-            const hasVerifiedPeer = cached.peers.some(p => p.fromLiveFunds === true);
-            if (hasVerifiedPeer) {
-                console.log(`[Cache Hit] fetchCategoryPeers serving "${categoryName}" from IndexedDB (${cached.peers.length} funds)`);
-                return cached.peers;
-            }
-            console.log(`[Cache Miss — Schema v2] fetchCategoryPeers: no AMFI-verified peer (fromLiveFunds===true) in cache. Re-fetching for "${categoryName}"...`);
+            console.log(`[Cache Hit] fetchCategoryPeers serving "${categoryName}" from IndexedDB (${cached.peers.length} funds)`);
+            return cached.peers;
         }
     } catch (e) {
         console.warn('[fetchCategoryPeers] Cache retrieval failed, falling back to network:', e);
