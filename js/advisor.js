@@ -41,20 +41,19 @@ async function analyzeLoss(schemeCode, currentReturn, userTransactions = []) {
 
     // Layer 1: Portfolio Fund Drawdown
     const fundDetails = await aggregateFundDetails(schemeCode);
-    if (!fundDetails || !fundDetails.data) throw new Error("Could not load fund details for advisor.");
+    if (!fundDetails || !fundDetails.nav || !fundDetails.nav.history) throw new Error("Could not load fund details for advisor.");
 
-    const fundDrawdown = calculate52WeekDrawdown(fundDetails.data);
-    const fund1yCAGR = getCAGR(fundDetails.data, 1);
+    const fundDrawdown = calculate52WeekDrawdown(fundDetails.nav.history);
+    const fund1yCAGR = getCAGR(fundDetails.nav.history, 1);
 
-    // Attempt Kuvera category first, then fallback to AMFI mapped category
-    let fundCategory = fundDetails.meta.kuvera_category ||
-        (window.SCHEME_CATEGORY_TO_LIVE_FUNDS ? window.SCHEME_CATEGORY_TO_LIVE_FUNDS[fundDetails.meta.scheme_category] : null);
-    if (!fundCategory) fundCategory = "Equity";
+    // meta.category is set by createStandardFund() from Kuvera adapter (authoritative)
+    // with AMFI scheme_category as fallback — no manual mapping needed
+    let fundCategory = fundDetails.meta.category || 'Equity';
 
     // Layer 2: Market proxy (Nifty 50) Drawdown
     console.log(`[Advisor Engine] Fetching Market Proxy (Nifty 50: ${NIFTY_50_CODE})`);
     const marketDetails = await aggregateFundDetails(NIFTY_50_CODE, "UTI Nifty 50");
-    const marketDrawdown = marketDetails ? calculate52WeekDrawdown(marketDetails.data) : 0;
+    const marketDrawdown = marketDetails ? calculate52WeekDrawdown(marketDetails.nav.history) : 0;
 
     // Layer 3: Category Peer Analysis — Smart API with IndexedDB Cache
     // Call fetchCategoryPeers() directly. It internally uses IndexedDB (cache-first)
@@ -128,7 +127,7 @@ async function analyzeLoss(schemeCode, currentReturn, userTransactions = []) {
 
                 // Fetch drawdown for the winner for the UI
                 const details = await aggregateFundDetails(winner.schemeCode);
-                const drawdown = details ? (calculate52WeekDrawdown(details.data) || 0) : 0;
+                const drawdown = details ? (calculate52WeekDrawdown(details.nav.history) || 0) : 0;
 
                 topPeer = {
                     code: winner.schemeCode,
@@ -151,7 +150,7 @@ async function analyzeLoss(schemeCode, currentReturn, userTransactions = []) {
 
     const diagnosis = {
         schemeCode,
-        fundName: fundDetails.meta.scheme_name,
+        fundName: fundDetails.meta.cleanName,
         currentReturn,
         fundDrawdown,
         fund1yCAGR: fund1yCAGR !== null ? fund1yCAGR * 100 : null,

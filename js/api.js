@@ -635,49 +635,27 @@ async function aggregateFundDetails(schemeCode, cleanFundName) {
         console.warn("Cache retrieval failed, falling back to network:", e);
     }
 
-    // 2. Cache Miss or Stale — Execute standard fetch sequence
+    // 2. Cache Miss — Execute standard fetch sequence
     console.log(`[Cache Miss] Fetching ${schemeCode} from remote APIs...`);
 
-    let baseData = null;
+    let amfiRaw = null;
     try {
-        baseData = await fetchFundData(schemeCode);
+        amfiRaw = await fetchFundData(schemeCode);
     } catch (e) {
         console.error("Master Aggregator failed at base NAV fetch:", e);
         return null;
     }
 
-    // Standardized Schema Definition
-    const fund = {
-        meta: baseData.meta || {},
-        data: baseData.data ? prepareNavData(baseData.data) : [],
-        portfolio: {
-            aum: null,
-            expense_ratio: null,
-            exit_load: null,
-            holdings: [],
-            sectors: [],
-            equity_percentage: null,
-            debt_percentage: null,
-            cash_percentage: null
-        },
-        risk: {
-            volatility: null,
-            sharpe: null,
-            sortino: null,
-            alpha: null,
-            beta: null
-        }
-    };
+    // Extras object — collects data from sources outside the three main adapters
+    const extras = { details: {} };
 
-    const searchName = cleanFundName || (baseData && baseData.meta ? baseData.meta.scheme_name : "");
+    const searchName = cleanFundName || (amfiRaw?.meta?.scheme_name ?? '');
 
-    // Fetch AUM directly from Github CSV dataset matching the schemeCode
+    // ── Fetch AUM from GitHub CSV dataset ────────────────────────────────────
     const aumValue = await fetchAUMFromGithub(schemeCode);
-    if (aumValue) {
-        fund.portfolio.aum = aumValue;
-    }
+    if (aumValue) extras.details.aum = aumValue;
 
-    // TER string matching logic
+    // ── Fetch Expense Ratio from TER tracker CSV (name-matched) ──────────────
     try {
         const terUrl = 'https://raw.githubusercontent.com/captn3m0/india-mutual-fund-ter-tracker/master/data.csv';
         const terRes = await fetch(terUrl);
@@ -695,7 +673,7 @@ async function aggregateFundDetails(schemeCode, cleanFundName) {
                     if (rowName.includes(normalizedTarget) && rowName.includes("direct")) {
                         const directTer = parseFloat(cols[10]);
                         if (!isNaN(directTer)) {
-                            fund.portfolio.expense_ratio = directTer;
+                            extras.details.expenseRatio = directTer;
                             break;
                         }
                     }
@@ -706,7 +684,8 @@ async function aggregateFundDetails(schemeCode, cleanFundName) {
         console.warn("Expense Ratio fetch failed:", e);
     }
 
-    // Step D: Asset Allocation (Kuvera)
+    // ── Fetch Asset Allocation + Category from Kuvera ────────────────────────
+    let kuveraRaw = null;
     try {
         const ctrl = new AbortController();
         const timer = setTimeout(() => ctrl.abort(), 3000);
@@ -715,22 +694,29 @@ async function aggregateFundDetails(schemeCode, cleanFundName) {
             { signal: ctrl.signal }
         );
         clearTimeout(timer);
-        if (kvRes.ok) {
-            const kv = await kvRes.json();
-            const root = Array.isArray(kv) ? kv[0] : kv;
-            const alloc = root?.asset_allocation || root?.fund?.asset_allocation || null;
-            if (alloc) {
-                fund.portfolio.equity_percentage = parseFloat(alloc.equity) || 0;
-                fund.portfolio.debt_percentage = parseFloat(alloc.debt) || 0;
-                fund.portfolio.cash_percentage = parseFloat(alloc.cash) || parseFloat(alloc.others) || 0;
-            }
-            if (root?.fund?.category) {
-                fund.meta.kuvera_category = root.fund.category;
-            }
-        }
+        if (kvRes.ok) kuveraRaw = await kvRes.json();
     } catch (_) { /* Kuvera errors are not fatal */ }
 
-    // 3. Store the merged result in local cache for next time
+    // ── Build StandardFundObject via normalizer ───────────────────────────────
+    const fund = Normalizer.createStandardFund(amfiRaw, kuveraRaw, null, extras);
+
+    // ── Backward-compatibility aliases ───────────────────────────────────────
+    // These allow legacy code (app.js compare, portfolio view) to keep working
+    // without requiring an immediate update of every consumer.
+    // New code should always use the StandardFundObject keys directly.
+    fund.data = fund.nav.history;           // legacy: fund.data[]
+    fund.meta.scheme_name = fund.meta.cleanName;             // compare renderCompareTable
+    fund.meta.scheme_category = fund.meta.category;            // advisor.js kuvera fallback
+    fund.meta.kuvera_category = fund.meta.category;            // advisor.js category lookup
+    fund.portfolio.equity_percentage = fund.portfolio.equityPct;  // portfolio view
+    fund.portfolio.debt_percentage = fund.portfolio.debtPct;
+    fund.portfolio.cash_percentage = fund.portfolio.cashPct;
+    fund.portfolio.expense_ratio = fund.details.expenseRatio;
+    fund.portfolio.aum = fund.details.aum;
+    fund.portfolio.exit_load = fund.details.exitLoad;
+    fund.portfolio.holdings = fund.portfolio.topHoldings;
+
+    // 3. Cache the StandardFundObject for next time
     try {
         await CacheManager.set(schemeCode, fund);
     } catch (e) {
