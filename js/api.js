@@ -387,10 +387,11 @@ async function findTrueBestPeer(rawSchemeName, currentSchemeCode, targetSubCateg
 
         // ── Strict AMFI sub-category enforcement ─────────────────────────────────
         if (targetSubCategory && peerSubCategory) {
-            if (peerSubCategory !== targetSubCategory) {
+            const cleanPeerCategory = window.Normalizer ? window.Normalizer.formatSubCategory(peerSubCategory) : peerSubCategory;
+            if (cleanPeerCategory !== targetSubCategory) {
                 console.warn(
                     `[Discovery] ❌ Category mismatch for "${directGrowthMatch.schemeName}":` +
-                    ` peer is "${peerSubCategory}" but target requires "${targetSubCategory}" — discarded.`
+                    ` peer is "${cleanPeerCategory}" but target requires "${targetSubCategory}" — discarded.`
                 );
                 return null; // caller will try the next candidate
             }
@@ -481,6 +482,9 @@ async function getPeerRanking(categoryString, currentSchemeCode, targetSubCatego
 
     if (!keyword) return [];
 
+    // Remove Spaces from keyword for matching ("Mid Cap" -> "MIDCAP")
+    const keywordNoSpaces = keyword.toUpperCase().replace(/\s+/g, '');
+
     // ── Step 1: DISCOVERY ─────────────────────────────────────────────────────────────
     // Raw pool: all variants in the category from allMfFunds, excluding clear traps.
     // We intentionally include Regular/IDCW/etc. here because we want the top
@@ -488,7 +492,8 @@ async function getPeerRanking(categoryString, currentSchemeCode, targetSubCatego
     const rawPool = window.allMfFunds.filter(f => {
         if (!f.schemeName) return false;
         const n = f.schemeName.toUpperCase();
-        if (!n.includes(keyword.toUpperCase())) return false;
+        // Spacing-agnostic match for "Midcap" vs "Mid Cap"
+        if (!n.replace(/\s+/g, '').includes(keywordNoSpaces)) return false;
         // Exclude structural traps (dividend-adjusted returns are misleading)
         if (n.includes('BONUS') || n.includes('ETF') || n.includes('INDEX')) return false;
         return true;
