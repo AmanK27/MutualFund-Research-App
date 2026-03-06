@@ -598,12 +598,9 @@ async function initPeerRanking(category, schemeCode) {
     loading.style.display = 'block';
 
     try {
-        const rankedPeers = await getPeerRanking(category, schemeCode);
+        // Use the smart IndexedDB-cached fetcher — same function the advisor uses
+        const rankedPeers = await fetchCategoryPeers(category, schemeCode);
         loading.style.display = 'none';
-
-        // Cache peers so the Loss Advisor can reuse them without a new API call
-        window.lastCategoryPeers = window.lastCategoryPeers || {};
-        window.lastCategoryPeers[String(schemeCode)] = rankedPeers || [];
 
         if (!rankedPeers || rankedPeers.length === 0) {
             listEl.innerHTML = '<div style="color:var(--text-muted);font-size:13px;text-align:center;">No peers found for strictly Direct Growth category.</div>';
@@ -2281,7 +2278,7 @@ async function loadPortfolioView() {
                 <td style="cursor: pointer;" onclick="loadFund('${h.code}')">${hasError ? '<span style="color:var(--error);">---</span>' : '₹' + h.currentValue.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</td>
                 <td style="text-align: right; display: flex; align-items: center; justify-content: flex-end; gap: 8px;" class="${hasError ? '' : getPercentClass(absReturnPct / 100)}">
                     ${isLoss ? `
-                        <button onclick="openLossAdvisor('${h.code}', ${absReturnPct}, (window.lastCategoryPeers && window.lastCategoryPeers['${h.code}']) || [])" style="background: rgba(var(--error-rgb), 0.1); border: 1px solid var(--error); color: var(--error); padding: 4px 8px; border-radius: var(--radius-sm); font-size: 11px; cursor: pointer; transition: all 0.2s; white-space: nowrap;">
+                        <button onclick="openLossAdvisor('${h.code}', ${absReturnPct})" style="background: rgba(var(--error-rgb), 0.1); border: 1px solid var(--error); color: var(--error); padding: 4px 8px; border-radius: var(--radius-sm); font-size: 11px; cursor: pointer; transition: all 0.2s; white-space: nowrap;">
                             🤖 Analyze Loss
                         </button>
                     ` : ''}

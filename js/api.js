@@ -383,6 +383,53 @@ async function getPeerRanking(categoryString, currentSchemeCode) {
     return validRankings;
 }
 
+/**
+ * Smart Category Peers Fetcher — IndexedDB Cache-First.
+ * 
+ * Wraps `getPeerRanking` with a daily IndexedDB cache layer.
+ * Both the Advisor and the Fund Dashboard sidebar call this function.
+ * Data is fetched from MFAPI once per day per category, then served
+ * from disk on every subsequent call — regardless of user navigation path.
+ *
+ * @param {string} categoryName - The AMFI category string (e.g., "Equity Scheme - Mid Cap Fund")
+ * @param {string} [currentSchemeCode] - Optional: current fund's code to ensure it's included in ranking
+ * @returns {Promise<Array>} Array of { schemeCode, schemeName, cagr1y } sorted desc by cagr1y
+ */
+async function fetchCategoryPeers(categoryName, currentSchemeCode = null) {
+    if (!categoryName) return [];
+
+    const cacheKey = 'peers_' + categoryName.trim().replace(/\s+/g, '_').toLowerCase();
+
+    // ── 1. Cache-First: Try IndexedDB ──────────────────────────────────────────
+    try {
+        const cached = await CacheManager.get(cacheKey);
+        if (CacheManager.isCacheValid(cached) && cached.peers && cached.peers.length > 0) {
+            console.log(`[Cache Hit] fetchCategoryPeers serving "${categoryName}" from IndexedDB (${cached.peers.length} funds)`);
+            return cached.peers;
+        }
+    } catch (e) {
+        console.warn('[fetchCategoryPeers] Cache retrieval failed, falling back to network:', e);
+    }
+
+    // ── 2. Network Fallback: Full MFAPI Waterfall via getPeerRanking ───────────
+    console.log(`[Cache Miss] fetchCategoryPeers fetching "${categoryName}" from network...`);
+    const peers = await getPeerRanking(categoryName, currentSchemeCode);
+
+    // ── 3. Store & Return ──────────────────────────────────────────────────────
+    if (peers && peers.length > 0) {
+        try {
+            // Store with the same format CacheManager expects, with a lastFetchedAt timestamp.
+            // We use a custom object shape so isCacheValid (which checks lastFetchedAt) works.
+            await CacheManager.set(cacheKey, { peers, lastFetchedAt: Date.now() });
+            console.log(`[Cache Set] fetchCategoryPeers cached "${categoryName}" with ${peers.length} funds`);
+        } catch (e) {
+            console.warn('[fetchCategoryPeers] Cache set failed:', e);
+        }
+    }
+
+    return peers || [];
+}
+
 /* ═══════════════════════════════════════════════════════════════════
    API Waterfall: Platform ID Resolvers & Deep Data Fetchers
    ═══════════════════════════════════════════════════════════════════ */

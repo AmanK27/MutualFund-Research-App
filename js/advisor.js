@@ -36,7 +36,7 @@ function calculate52WeekDrawdown(navData) {
  * @param {number} currentReturn - The current absolute return % (provided by UI)
  * @param {Array} userTransactions - User's txn history (optional for future weighted calc)
  */
-async function analyzeLoss(schemeCode, currentReturn, userTransactions = [], uiCategoryPeers = []) {
+async function analyzeLoss(schemeCode, currentReturn, userTransactions = []) {
     console.log(`[Advisor Engine] Starting diagnosis for ${schemeCode}...`);
 
     // Layer 1: Portfolio Fund Drawdown
@@ -56,17 +56,18 @@ async function analyzeLoss(schemeCode, currentReturn, userTransactions = [], uiC
     const marketDetails = await aggregateFundDetails(NIFTY_50_CODE, "UTI Nifty 50");
     const marketDrawdown = marketDetails ? calculate52WeekDrawdown(marketDetails.data) : 0;
 
-    // Layer 3: Category Peer Analysis — SINGLE SOURCE OF TRUTH
-    // We use the exact same peers that the UI sidebar already fetched and displayed,
-    // rather than making a second independent API call that may return different data.
+    // Layer 3: Category Peer Analysis — Smart API with IndexedDB Cache
+    // Call fetchCategoryPeers() directly. It internally uses IndexedDB (cache-first)
+    // so data is available regardless of whether the user visited the fund dashboard first.
     let topPeer = null;
     let targetFundScore = 0;
 
     try {
-        const peers = uiCategoryPeers;
+        console.log(`[Advisor Engine] Fetching category peers for: "${fundCategory}" via fetchCategoryPeers...`);
+        const peers = await fetchCategoryPeers(fundCategory, schemeCode);
 
         // ── DIAGNOSTIC LOG: RAW PEERS ────────────────────────────────────────────
-        console.log(`%c[ADVISOR DIAG] STEP 1 — RAW UI PEERS (${peers.length} funds) — Same data as sidebar`, 'color:#a78bfa;font-weight:bold');
+        console.log(`%c[ADVISOR DIAG] STEP 1 — RAW PEERS (${peers.length} funds) from fetchCategoryPeers (IndexedDB Cache-First)`, 'color:#a78bfa;font-weight:bold');
         console.table(peers.map(p => ({ Name: p.schemeName, Code: p.schemeCode, 'Raw CAGR 1Y (decimal)': p.cagr1y })));
 
         if (peers.length > 0) {

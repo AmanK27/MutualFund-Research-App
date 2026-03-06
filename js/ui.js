@@ -20,7 +20,7 @@ function closeAdvisorModal() {
     }, 300);
 }
 
-async function openLossAdvisor(schemeCode, currentReturn, uiCategoryPeers = []) {
+async function openLossAdvisor(schemeCode, currentReturn) {
     const modal = document.getElementById('advisorModal');
     const content = document.getElementById('advisorContent');
     const loading = document.getElementById('advisorLoading');
@@ -48,7 +48,7 @@ async function openLossAdvisor(schemeCode, currentReturn, uiCategoryPeers = []) 
         const txns = window.transactions ? window.transactions.filter(t => t.schemeCode === schemeCode) : [];
 
         // Execute Engine (advisor.js)
-        const diagnosis = await analyzeLoss(schemeCode, currentReturn, txns, uiCategoryPeers);
+        const diagnosis = await analyzeLoss(schemeCode, currentReturn, txns);
 
         // Update UI Text
         document.getElementById('advFundName').textContent = diagnosis.fundName;
