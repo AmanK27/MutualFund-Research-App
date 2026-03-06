@@ -72,92 +72,44 @@ async function analyzeLoss(schemeCode, currentReturn, userTransactions = []) {
 
         if (peers.length > 0) {
 
-            // ── STEP A: Force Numerical Sort (null → -999) ───────────────────────
+            // ── STEP A: Sort numerically (fromAmfiSearch winner always goes first) ─
             const parsedPeers = peers.map(p => ({
                 ...p,
-                cagr1y: (p.cagr1y !== null && p.cagr1y !== undefined && !isNaN(p.cagr1y)) ? parseFloat(p.cagr1y) : -999
-            })).sort((a, b) => b.cagr1y - a.cagr1y);
+                cagr1y: (p.cagr1y != null && !isNaN(p.cagr1y)) ? parseFloat(p.cagr1y) : -999
+            })).sort((a, b) => {
+                // AMFI-search-verified winner is always pinned to top regardless of raw CAGR order
+                if (a.fromAmfiSearch && !b.fromAmfiSearch) return -1;
+                if (!a.fromAmfiSearch && b.fromAmfiSearch) return 1;
+                return b.cagr1y - a.cagr1y;
+            });
 
-            console.log('%c[ADVISOR DIAG] STEP 2 — AFTER NUMERICAL SORT (highest → lowest)', 'color:#34d399;font-weight:bold');
+            console.log('%c[ADVISOR DIAG] STEP 2 — SORTED PEERS', 'color:#34d399;font-weight:bold');
             console.table(parsedPeers.map(p => ({
                 Name: p.schemeName,
                 planType: p.planType || 'N/A',
                 optionType: p.optionType || 'N/A',
-                Source: p.fromLiveFunds ? '✅ AMFI-verified' : '⚠️ mfapi name',
+                Source: p.fromAmfiSearch ? '✅ AMFI-Search Verified' : '⚠️ name-filtered',
                 'CAGR (%)': p.cagr1y > 0 ? `+${(p.cagr1y * 100).toFixed(2)}%` : (p.cagr1y === -999 ? 'NULL' : `${(p.cagr1y * 100).toFixed(2)}%`)
             })));
 
-            // ── STEP B: 4-Pass Property-Based Cascading Filter ───────────────────
-            //
-            // Uses explicit `planType` and `optionType` metadata attached by api.js
-            // getPeerRanking — derived from AMFI-verified LIVE_FUNDS names.
-            // This is 100% accurate and independent of display name truncation.
-            //
-            // Pass 1 (AMFI-verified): fromLiveFunds===true means the AMFI NAVAll.txt
-            //   parser already confirmed "DIRECT" AND "GROWTH" in that fund's name.
-            //   This is the most reliable signal available.
-            //
-            // Pass 2 (Strict metadata): planType==='DIRECT' && optionType==='GROWTH'
-            //   Uses explicit metadata even if the fund wasn't in LIVE_FUNDS.
-            //
-            // Pass 3 (Direct-only): planType==='DIRECT' — accepts any option variant.
-            //   Safe fallback when option metadata is UNKNOWN.
-            //
-            // Pass 4 (Name-based last resort): string exclusion filter.
-            //   Only used if all metadata-based passes produce zero results.
-            //   e.g. upstream API returns abbreviated names with no planType metadata.
+            // ── STEP B: Peer Selection ───────────────────────────────────────────
+            // Step 1: prefer AMFI-search-verified peers (fromAmfiSearch:true set by findTrueBestPeer)
+            // Step 2: fall back to name exclusion filter (last resort)
+            let candidatePool = parsedPeers.filter(p => p.fromAmfiSearch === true);
+            let selectionMethod = 'AMFI-search verified';
 
-            // Pass 1: AMFI-verified funds (fromLiveFunds flag set by api.js)
-            let candidatePool = parsedPeers.filter(p => p.fromLiveFunds === true);
-            let passUsed = 1;
-
-            // Pass 2: strict property match — DIRECT + GROWTH
-            if (candidatePool.length === 0) {
-                candidatePool = parsedPeers.filter(p =>
-                    p.planType === 'DIRECT' && p.optionType === 'GROWTH');
-                passUsed = 2;
-            }
-
-            // Pass 3: DIRECT plan only (accepts GROWTH or UNKNOWN option types)
-            if (candidatePool.length === 0) {
-                candidatePool = parsedPeers.filter(p => p.planType === 'DIRECT');
-                passUsed = 3;
-            }
-
-            // Pass 4: name-based exclusion last resort
             if (candidatePool.length === 0) {
                 candidatePool = parsedPeers.filter(p => {
                     const n = (p.schemeName || '').toLowerCase();
                     return !n.includes('regular') && !n.includes('idcw') &&
                         !n.includes('dividend') && !n.includes('bonus');
                 });
-                passUsed = 4;
+                selectionMethod = 'name-exclusion fallback (AMFI search failed)';
             }
 
-            const exclusionFiltered = candidatePool;
+            console.log(`%c[ADVISOR DIAG] STEP 3 — SELECTION (${candidatePool.length} eligible peers via ${selectionMethod})`, 'color:#f59e0b;font-weight:bold');
 
-            console.log(`%c[ADVISOR DIAG] STEP 3 — PASS ${passUsed} FILTER APPLIED (${exclusionFiltered.length} funds pass)`, 'color:#f59e0b;font-weight:bold');
-            const passLabels = {
-                1: 'Pass 1 — AMFI-verified (fromLiveFunds)',
-                2: 'Pass 2 — planType===DIRECT && optionType===GROWTH',
-                3: 'Pass 3 — planType===DIRECT only',
-                4: 'Pass 4 — name-based exclusion (last resort)'
-            };
-            console.log('  →', passLabels[passUsed]);
-            console.table(parsedPeers.map(p => {
-                const passes = exclusionFiltered.includes(p);
-                return {
-                    Name: p.schemeName,
-                    planType: p.planType || 'N/A',
-                    optionType: p.optionType || 'N/A',
-                    Source: p.fromLiveFunds ? '✅ AMFI' : '⚠️ mfapi',
-                    'CAGR (%)': p.cagr1y > 0 ? `+${(p.cagr1y * 100).toFixed(2)}%` : (p.cagr1y === -999 ? 'NULL' : `${(p.cagr1y * 100).toFixed(2)}%`),
-                    Status: passes ? '✅ PASS' : '❌ EXCLUDED'
-                };
-            }));
-
-            // ── STEP C: Exclude self, pick Top 3 & Winner ───────────────────────
-            const candidatePeers = exclusionFiltered
+            const candidatePeers = candidatePool
                 .filter(p => String(p.schemeCode) !== String(schemeCode) && p.cagr1y > 0);
 
             console.log(`%c[ADVISOR DIAG] STEP 4 — TOP 3 PEERS (after self-exclusion & positive-return guard)`, 'color:#7c3aed;font-weight:bold');
