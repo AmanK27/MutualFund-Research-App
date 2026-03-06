@@ -368,7 +368,7 @@ async function getPeerRanking(categoryString, currentSchemeCode) {
         if (currentFromMaster) peers.push(currentFromMaster);
     }
 
-    peers = peers.slice(0, 15); // Reduce to 15 to ease API pressure
+    peers = peers.slice(0, 25); // Top 25 to capture more category performers (was 15)
 
     const validRankings = [];
     for (const peer of peers) {
@@ -446,17 +446,19 @@ async function fetchCategoryPeers(categoryName, currentSchemeCode = null) {
     try {
         const cached = await CacheManager.get(cacheKey);
         if (CacheManager.isCacheValid(cached) && cached.peers && cached.peers.length > 0) {
-            // Schema version check: if the cached peers are from the old format
-            // (before Step 1 added planType/optionType/fromLiveFunds metadata), treat
-            // them as stale and force a network re-fetch. This auto-invalidates any
-            // existing caches that would break the property-based filter in advisor.js.
-            const firstPeer = cached.peers[0];
-            const hasMeta = firstPeer && 'planType' in firstPeer && 'fromLiveFunds' in firstPeer;
-            if (hasMeta) {
+            // Strict schema version check: the new metadata format requires at least
+            // one peer to have fromLiveFunds===true (set only when the peer's code
+            // exists in window.LIVE_FUNDS — the AMFI-verified list).
+            //
+            // Old cached objects have planType/optionType but fromLiveFunds is false
+            // for ALL peers, because they were cached before the liveFundsNameMap
+            // lookup was added. This check auto-invalidates those old caches.
+            const hasVerifiedPeer = cached.peers.some(p => p.fromLiveFunds === true);
+            if (hasVerifiedPeer) {
                 console.log(`[Cache Hit] fetchCategoryPeers serving "${categoryName}" from IndexedDB (${cached.peers.length} funds)`);
                 return cached.peers;
             }
-            console.log(`[Cache Miss — Schema Upgrade] fetchCategoryPeers: cached peers lack planType metadata. Re-fetching fresh data for "${categoryName}"...`);
+            console.log(`[Cache Miss — Schema v2] fetchCategoryPeers: no AMFI-verified peer (fromLiveFunds===true) in cache. Re-fetching for "${categoryName}"...`);
         }
     } catch (e) {
         console.warn('[fetchCategoryPeers] Cache retrieval failed, falling back to network:', e);
