@@ -388,10 +388,12 @@ async function findTrueBestPeer(rawSchemeName, currentSchemeCode, targetSubCateg
         // ── Strict AMFI sub-category enforcement ─────────────────────────────────
         if (targetSubCategory && peerSubCategory) {
             const cleanPeerCategory = window.Normalizer ? window.Normalizer.formatSubCategory(peerSubCategory) : peerSubCategory;
-            if (cleanPeerCategory !== targetSubCategory) {
+            const cleanTargetCategory = window.Normalizer ? window.Normalizer.formatSubCategory(targetSubCategory) : targetSubCategory;
+
+            if (cleanPeerCategory !== cleanTargetCategory) {
                 console.warn(
                     `[Discovery] ❌ Category mismatch for "${directGrowthMatch.schemeName}":` +
-                    ` peer is "${cleanPeerCategory}" but target requires "${targetSubCategory}" — discarded.`
+                    ` peer is "${cleanPeerCategory}" but target requires "${cleanTargetCategory}" — discarded.`
                 );
                 return null; // caller will try the next candidate
             }
