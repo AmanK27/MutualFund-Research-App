@@ -20,11 +20,15 @@
  *     slug:       string|null  // URL slug (Groww/Kuvera)
  *   },
  *   meta: {
- *     cleanName:  string,      // Formatted, human-readable fund name
- *     fundHouse:  string|null, // AMC / Fund House
- *     category:   string|null, // Scheme category (e.g. "Mid Cap Fund")
- *     planType:   string,      // 'DIRECT' | 'REGULAR' | 'UNKNOWN'
- *     optionType: string       // 'GROWTH'  | 'IDCW'   | 'UNKNOWN'
+ *     cleanName:   string,      // Formatted, human-readable fund name
+ *     fundHouse:   string|null, // AMC / Fund House
+ *     category:    string|null, // Short category label (from Kuvera)
+ *     subCategory: string|null, // AMFI-official verbatim category (SOLE AUTHORITY)
+ *                               // e.g. 'Equity Scheme - Mid Cap Fund'
+ *                               // Used for strict === peer-matching in the Advisor.
+ *                               // NEVER sourced from Kuvera/Groww — taxonomy mismatch risk.
+ *     planType:    string,      // 'DIRECT' | 'REGULAR' | 'UNKNOWN'
+ *     optionType:  string       // 'GROWTH'  | 'IDCW'   | 'UNKNOWN'
  *   },
  *   nav: {
  *     current: number|null,              // Latest NAV value
@@ -150,8 +154,9 @@ function normalizeAmfi(rawJson) {
             cleanName: schemeName,
             fundHouse: safeStr(meta.fund_house),
             category: safeStr(meta.scheme_category),
-            planType: inferPlanType(schemeName),   // inferred fallback; overridden by Kuvera
-            optionType: inferOptionType(schemeName)  // inferred fallback; overridden by Kuvera
+            subCategory: safeStr(meta.scheme_category), // AMFI-only, verbatim — no Kuvera override
+            planType: inferPlanType(schemeName),      // inferred fallback; overridden by Kuvera
+            optionType: inferOptionType(schemeName)     // inferred fallback; overridden by Kuvera
         },
         nav: {
             current: latestEntry ? safeNum(latestEntry.nav) : null,
@@ -301,6 +306,7 @@ function createStandardFund(amfiRaw, kuveraRaw = null, growwRaw = null, extras =
             cleanName: amfi.meta?.cleanName || '',
             fundHouse: amfi.meta?.fundHouse || null,
             category: kuvera.meta?.category || amfi.meta?.category || null,
+            subCategory: amfi.meta?.subCategory || null, // AMFI sole authority — never Kuvera
             planType,
             optionType
         },
