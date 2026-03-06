@@ -50,6 +50,11 @@ async function analyzeLoss(schemeCode, currentReturn, userTransactions = []) {
     // with AMFI scheme_category as fallback — no manual mapping needed
     let fundCategory = fundDetails.meta.category || 'Equity';
 
+    // Capture AMFI-exact subCategory for strict peer matching
+    // This is the sole source of truth for category enforcement — never Kuvera
+    const targetSubCategory = fundDetails.meta.subCategory || null;
+    console.log(`[Advisor Engine] Target fund category lock: "${targetSubCategory || 'none (will use fundCategory)'}"`);
+
     // Layer 2: Market proxy (Nifty 50) Drawdown
     console.log(`[Advisor Engine] Fetching Market Proxy (Nifty 50: ${NIFTY_50_CODE})`);
     const marketDetails = await aggregateFundDetails(NIFTY_50_CODE, "UTI Nifty 50");
@@ -62,8 +67,8 @@ async function analyzeLoss(schemeCode, currentReturn, userTransactions = []) {
     let targetFundScore = 0;
 
     try {
-        console.log(`[Advisor Engine] Fetching category peers for: "${fundCategory}" via fetchCategoryPeers...`);
-        const peers = await fetchCategoryPeers(fundCategory, schemeCode);
+        console.log(`[Advisor Engine] Fetching category peers for: "${fundCategory}" via fetchCategoryPeers (subCategory lock: "${targetSubCategory}")...`);
+        const peers = await fetchCategoryPeers(fundCategory, schemeCode, targetSubCategory);
 
         // ── DIAGNOSTIC LOG: RAW PEERS ────────────────────────────────────────────
         console.log(`%c[ADVISOR DIAG] STEP 1 — RAW PEERS (${peers.length} funds) from fetchCategoryPeers (IndexedDB Cache-First)`, 'color:#a78bfa;font-weight:bold');

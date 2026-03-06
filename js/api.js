@@ -311,17 +311,17 @@ function extractBaseName(schemeName) {
 /**
  * Discovery & Verification — Given the raw name of a top-performing fund candidate,
  * searches mfapi.in for its official AMFI scheme listing and extracts the Direct Plan + Growth
- * variant's scheme code. Then fetches its NAV and computes 1Y CAGR.
+ * variant's scheme code. Then fetches its NAV, computes 1Y CAGR, and enforces a strict
+ * AMFI sub-category match to prevent cross-category recommendations.
  *
- * mfapi.in/mf/search has CORS-open headers — no proxy needed.
- * AMFI-standardised names always say "Direct Plan" and "Growth" verbatim (SEBI mandate),
- * so the filter is exact and not subject to truncation/abbreviation issues.
- *
- * @param {string} rawSchemeName - The candidate fund's schemeName (may be truncated)
- * @param {string} currentSchemeCode - Exclude self from results
- * @returns {Promise<Object|null>} Verified peer object or null if not found
+ * @param {string} rawSchemeName      - The candidate fund's schemeName (may be truncated)
+ * @param {string} currentSchemeCode  - Exclude self from results
+ * @param {string|null} targetSubCategory - AMFI scheme_category of the TARGET fund.
+ *   If provided, ONLY a peer whose AMFI scheme_category === targetSubCategory is returned.
+ *   A 'Large & Mid Cap' peer will be discarded when target is 'Mid Cap', etc.
+ * @returns {Promise<Object|null>} Verified peer object or null if not found / wrong category
  */
-async function findTrueBestPeer(rawSchemeName, currentSchemeCode) {
+async function findTrueBestPeer(rawSchemeName, currentSchemeCode, targetSubCategory = null) {
     const baseName = extractBaseName(rawSchemeName);
     if (!baseName) return null;
 
@@ -351,10 +351,52 @@ async function findTrueBestPeer(rawSchemeName, currentSchemeCode) {
         const verifiedCode = String(directGrowthMatch.schemeCode);
         if (verifiedCode === String(currentSchemeCode)) return null; // skip self
 
-        console.log(`[Discovery] ✅ AMFI-Verified: "${directGrowthMatch.schemeName}" (${verifiedCode})`);
+        // ── Fetch full fund detail from mfapi.in to get scheme_category AND nav ──
+        // We call this directly (rather than via getNavHistory) so we can read meta.scheme_category
+        // in the same response without an extra round-trip.
+        let navHistory = null;
+        let peerSubCategory = null;
 
-        const navHistory = await getNavHistory(verifiedCode);
-        if (!navHistory) return null;
+        try {
+            const cached = await CacheManager.get(verifiedCode);
+            if (CacheManager.isCacheValid(cached) && cached.data) {
+                navHistory = cached.data;
+                // subCategory may be stored on the cache object from a prior aggregateFundDetails call
+                peerSubCategory = cached.meta?.subCategory || cached.meta?.scheme_category || null;
+            }
+        } catch (_) { /* cache miss is fine */ }
+
+        // If not in cache (or no subCategory stored), fetch fresh from mfapi.in
+        if (!navHistory || !peerSubCategory) {
+            const fullRes = await fetch(`https://api.mfapi.in/mf/${verifiedCode}`);
+            if (!fullRes.ok) return null;
+            const fullJson = await fullRes.json();
+
+            if (!fullJson.data || fullJson.data.length === 0) return null;
+
+            peerSubCategory = fullJson.meta?.scheme_category || null;
+
+            navHistory = fullJson.data.map(d => {
+                const parts = d.date.split('-');
+                return { date: new Date(+parts[2], +parts[1] - 1, +parts[0]), nav: parseFloat(d.nav) };
+            }).sort((a, b) => a.date - b.date);
+
+            // Cache nav data so getNavHistory / aggregateFundDetails benefit from this fetch
+            try { await CacheManager.set(verifiedCode, { data: navHistory }); } catch (_) { }
+        }
+
+        // ── Strict AMFI sub-category enforcement ─────────────────────────────────
+        if (targetSubCategory && peerSubCategory) {
+            if (peerSubCategory !== targetSubCategory) {
+                console.warn(
+                    `[Discovery] ❌ Category mismatch for "${directGrowthMatch.schemeName}":` +
+                    ` peer is "${peerSubCategory}" but target requires "${targetSubCategory}" — discarded.`
+                );
+                return null; // caller will try the next candidate
+            }
+        }
+
+        console.log(`[Discovery] ✅ AMFI-Verified (category match): "${directGrowthMatch.schemeName}" (${verifiedCode})`);
 
         const cagr1y = getCAGR(navHistory, 1);
         if (cagr1y === null || cagr1y <= 0) return null;
@@ -364,6 +406,7 @@ async function findTrueBestPeer(rawSchemeName, currentSchemeCode) {
             schemeName: formatFundName(directGrowthMatch.schemeName), // official AMFI name
             planType: 'DIRECT',
             optionType: 'GROWTH',
+            subCategory: peerSubCategory, // AMFI-exact, used for strict category matching
             fromAmfiSearch: true,
             cagr1y
         };
@@ -372,6 +415,7 @@ async function findTrueBestPeer(rawSchemeName, currentSchemeCode) {
         return null;
     }
 }
+
 
 /**
  * Cache-first NAV history fetcher for a single scheme code.
@@ -422,7 +466,7 @@ async function getNavHistory(schemeCode) {
  * @param {string} currentSchemeCode - Current fund to exclude from results
  * @returns {Promise<Array>} { schemeCode, schemeName, planType, optionType, fromAmfiSearch, cagr1y }
  */
-async function getPeerRanking(categoryString, currentSchemeCode) {
+async function getPeerRanking(categoryString, currentSchemeCode, targetSubCategory = null) {
     if (!window.allMfFunds || !categoryString) return [];
 
     // Extract category keyword from mfapi scheme_category string
@@ -475,7 +519,7 @@ async function getPeerRanking(categoryString, currentSchemeCode) {
     // This handles edge cases where #1 raw is so niche/closed it has no Direct Growth variant.
     let verifiedWinner = null;
     for (const candidate of rawWithCAGR.slice(0, 5)) {
-        verifiedWinner = await findTrueBestPeer(candidate.schemeName, currentSchemeCode);
+        verifiedWinner = await findTrueBestPeer(candidate.schemeName, currentSchemeCode, targetSubCategory);
         if (verifiedWinner) break;
     }
 
@@ -521,33 +565,34 @@ async function getPeerRanking(categoryString, currentSchemeCode) {
  * @param {string} [currentSchemeCode] - Optional: current fund's code to ensure it's included in ranking
  * @returns {Promise<Array>} Array of { schemeCode, schemeName, cagr1y } sorted desc by cagr1y
  */
-async function fetchCategoryPeers(categoryName, currentSchemeCode = null) {
+async function fetchCategoryPeers(categoryName, currentSchemeCode = null, targetSubCategory = null) {
     if (!categoryName) return [];
 
-    // peers_v3_: new key format guarantees old cached data (without fromLiveFunds:true) is never served.
-    // Any browser on a previous key format will get a cache miss and fetch fresh data automatically.
     const cacheKey = 'peers_v3_' + categoryName.trim().replace(/\s+/g, '_').toLowerCase();
 
     // ── 1. Cache-First: Try IndexedDB ──────────────────────────────────────────
-    try {
-        const cached = await CacheManager.get(cacheKey);
-        if (CacheManager.isCacheValid(cached) && cached.peers && cached.peers.length > 0) {
-            console.log(`[Cache Hit] fetchCategoryPeers serving "${categoryName}" from IndexedDB (${cached.peers.length} funds)`);
-            return cached.peers;
+    // Skip cache when targetSubCategory is provided so the category-lock filter is always applied.
+    // A cached result without category enforcement could serve wrong-category winners.
+    if (!targetSubCategory) {
+        try {
+            const cached = await CacheManager.get(cacheKey);
+            if (CacheManager.isCacheValid(cached) && cached.peers && cached.peers.length > 0) {
+                console.log(`[Cache Hit] fetchCategoryPeers serving "${categoryName}" from IndexedDB (${cached.peers.length} funds)`);
+                return cached.peers;
+            }
+        } catch (e) {
+            console.warn('[fetchCategoryPeers] Cache retrieval failed, falling back to network:', e);
         }
-    } catch (e) {
-        console.warn('[fetchCategoryPeers] Cache retrieval failed, falling back to network:', e);
     }
 
     // ── 2. Network Fallback: Full MFAPI Waterfall via getPeerRanking ───────────
     console.log(`[Cache Miss] fetchCategoryPeers fetching "${categoryName}" from network...`);
-    const peers = await getPeerRanking(categoryName, currentSchemeCode);
+    const peers = await getPeerRanking(categoryName, currentSchemeCode, targetSubCategory);
 
     // ── 3. Store & Return ──────────────────────────────────────────────────────
-    if (peers && peers.length > 0) {
+    // Only cache when no targetSubCategory (general-purpose cache)
+    if (!targetSubCategory && peers && peers.length > 0) {
         try {
-            // Store with the same format CacheManager expects, with a lastFetchedAt timestamp.
-            // We use a custom object shape so isCacheValid (which checks lastFetchedAt) works.
             await CacheManager.set(cacheKey, { peers, lastFetchedAt: Date.now() });
             console.log(`[Cache Set] fetchCategoryPeers cached "${categoryName}" with ${peers.length} funds`);
         } catch (e) {
