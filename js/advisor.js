@@ -81,51 +81,78 @@ async function analyzeLoss(schemeCode, currentReturn, userTransactions = []) {
             console.log('%c[ADVISOR DIAG] STEP 2 — AFTER NUMERICAL SORT (highest → lowest)', 'color:#34d399;font-weight:bold');
             console.table(parsedPeers.map(p => ({
                 Name: p.schemeName,
+                planType: p.planType || 'N/A',
+                optionType: p.optionType || 'N/A',
+                Source: p.fromLiveFunds ? '✅ AMFI-verified' : '⚠️ mfapi name',
                 'CAGR (%)': p.cagr1y > 0 ? `+${(p.cagr1y * 100).toFixed(2)}%` : (p.cagr1y === -999 ? 'NULL' : `${(p.cagr1y * 100).toFixed(2)}%`)
             })));
 
-            // ── STEP B: 2-Tier Filter ────────────────────────────────────────────
-            // TIER 1 (preferred): Require "direct" explicitly in the fund name.
-            //   This is the most accurate signal — a Direct Plan always states "Direct" by SEBI mandate.
-            //   e.g. "ICICI Prudential MidCap Fund - Direct Plan - Growth" → PASSES
-            //        "Nippon India Growth Mid Cap FundPlan"                 → FAILS (no "direct")
+            // ── STEP B: 4-Pass Property-Based Cascading Filter ───────────────────
             //
-            // TIER 2 (fallback): Relax to pure exclusion only if Tier 1 yields zero results.
-            //   Removes obvious non-direct variants (Regular, IDCW, Dividend, Bonus).
-            //   Used as a safety net when the underlying API provides abbreviated fund names.
+            // Uses explicit `planType` and `optionType` metadata attached by api.js
+            // getPeerRanking — derived from AMFI-verified LIVE_FUNDS names.
+            // This is 100% accurate and independent of display name truncation.
+            //
+            // Pass 1 (AMFI-verified): fromLiveFunds===true means the AMFI NAVAll.txt
+            //   parser already confirmed "DIRECT" AND "GROWTH" in that fund's name.
+            //   This is the most reliable signal available.
+            //
+            // Pass 2 (Strict metadata): planType==='DIRECT' && optionType==='GROWTH'
+            //   Uses explicit metadata even if the fund wasn't in LIVE_FUNDS.
+            //
+            // Pass 3 (Direct-only): planType==='DIRECT' — accepts any option variant.
+            //   Safe fallback when option metadata is UNKNOWN.
+            //
+            // Pass 4 (Name-based last resort): string exclusion filter.
+            //   Only used if all metadata-based passes produce zero results.
+            //   e.g. upstream API returns abbreviated names with no planType metadata.
 
-            const tierOneFiltered = parsedPeers.filter(p => {
-                const n = (p.schemeName || '').toLowerCase();
-                return n.includes('direct') &&
-                    !n.includes('idcw') &&
-                    !n.includes('dividend') &&
-                    !n.includes('bonus');
-            });
+            // Pass 1: AMFI-verified funds (fromLiveFunds flag set by api.js)
+            let candidatePool = parsedPeers.filter(p => p.fromLiveFunds === true);
+            let passUsed = 1;
 
-            const tierTwoFiltered = parsedPeers.filter(p => {
-                const n = (p.schemeName || '').toLowerCase();
-                return !n.includes('regular') &&
-                    !n.includes('idcw') &&
-                    !n.includes('dividend') &&
-                    !n.includes('bonus');
-            });
+            // Pass 2: strict property match — DIRECT + GROWTH
+            if (candidatePool.length === 0) {
+                candidatePool = parsedPeers.filter(p =>
+                    p.planType === 'DIRECT' && p.optionType === 'GROWTH');
+                passUsed = 2;
+            }
 
-            const usedTier = tierOneFiltered.length > 0 ? 1 : 2;
-            const exclusionFiltered = usedTier === 1 ? tierOneFiltered : tierTwoFiltered;
+            // Pass 3: DIRECT plan only (accepts GROWTH or UNKNOWN option types)
+            if (candidatePool.length === 0) {
+                candidatePool = parsedPeers.filter(p => p.planType === 'DIRECT');
+                passUsed = 3;
+            }
 
-            console.log(`%c[ADVISOR DIAG] STEP 3 — TIER ${usedTier} FILTER APPLIED (${exclusionFiltered.length} funds pass)`, 'color:#f59e0b;font-weight:bold');
-            console.log(usedTier === 1
-                ? '  → Tier 1: Required "direct" in name'
-                : '  → Tier 2 fallback: No "direct" names found — used pure exclusion (no regular/idcw/dividend/bonus)');
+            // Pass 4: name-based exclusion last resort
+            if (candidatePool.length === 0) {
+                candidatePool = parsedPeers.filter(p => {
+                    const n = (p.schemeName || '').toLowerCase();
+                    return !n.includes('regular') && !n.includes('idcw') &&
+                        !n.includes('dividend') && !n.includes('bonus');
+                });
+                passUsed = 4;
+            }
+
+            const exclusionFiltered = candidatePool;
+
+            console.log(`%c[ADVISOR DIAG] STEP 3 — PASS ${passUsed} FILTER APPLIED (${exclusionFiltered.length} funds pass)`, 'color:#f59e0b;font-weight:bold');
+            const passLabels = {
+                1: 'Pass 1 — AMFI-verified (fromLiveFunds)',
+                2: 'Pass 2 — planType===DIRECT && optionType===GROWTH',
+                3: 'Pass 3 — planType===DIRECT only',
+                4: 'Pass 4 — name-based exclusion (last resort)'
+            };
+            console.log('  →', passLabels[passUsed]);
             console.table(parsedPeers.map(p => {
-                const n = (p.schemeName || '').toLowerCase();
-                const hasDirect = n.includes('direct');
-                const excluded = !hasDirect || n.includes('idcw') || n.includes('dividend') || n.includes('bonus');
+                const passes = exclusionFiltered.includes(p);
                 return {
                     Name: p.schemeName,
+                    planType: p.planType || 'N/A',
+                    optionType: p.optionType || 'N/A',
+                    Source: p.fromLiveFunds ? '✅ AMFI' : '⚠️ mfapi',
                     'CAGR (%)': p.cagr1y > 0 ? `+${(p.cagr1y * 100).toFixed(2)}%` : (p.cagr1y === -999 ? 'NULL' : `${(p.cagr1y * 100).toFixed(2)}%`),
-                    'Has "direct"': hasDirect ? '✅' : '❌',
-                    Status: (usedTier === 1 && excluded) ? '❌ EXCLUDED' : '✅ PASS'
+                    Status: passes ? '✅ PASS' : '❌ EXCLUDED'
                 };
             }));
 
@@ -137,6 +164,8 @@ async function analyzeLoss(schemeCode, currentReturn, userTransactions = []) {
             console.table(candidatePeers.slice(0, 3).map((p, i) => ({
                 Rank: `#${i + 1}${i === 0 ? ' 🏆 WINNER' : ''}`,
                 Name: p.schemeName,
+                planType: p.planType || 'N/A',
+                optionType: p.optionType || 'N/A',
                 'CAGR (%)': `+${(p.cagr1y * 100).toFixed(2)}%`
             })));
 
