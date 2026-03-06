@@ -446,8 +446,17 @@ async function fetchCategoryPeers(categoryName, currentSchemeCode = null) {
     try {
         const cached = await CacheManager.get(cacheKey);
         if (CacheManager.isCacheValid(cached) && cached.peers && cached.peers.length > 0) {
-            console.log(`[Cache Hit] fetchCategoryPeers serving "${categoryName}" from IndexedDB (${cached.peers.length} funds)`);
-            return cached.peers;
+            // Schema version check: if the cached peers are from the old format
+            // (before Step 1 added planType/optionType/fromLiveFunds metadata), treat
+            // them as stale and force a network re-fetch. This auto-invalidates any
+            // existing caches that would break the property-based filter in advisor.js.
+            const firstPeer = cached.peers[0];
+            const hasMeta = firstPeer && 'planType' in firstPeer && 'fromLiveFunds' in firstPeer;
+            if (hasMeta) {
+                console.log(`[Cache Hit] fetchCategoryPeers serving "${categoryName}" from IndexedDB (${cached.peers.length} funds)`);
+                return cached.peers;
+            }
+            console.log(`[Cache Miss — Schema Upgrade] fetchCategoryPeers: cached peers lack planType metadata. Re-fetching fresh data for "${categoryName}"...`);
         }
     } catch (e) {
         console.warn('[fetchCategoryPeers] Cache retrieval failed, falling back to network:', e);
