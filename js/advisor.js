@@ -84,10 +84,25 @@ async function analyzeLoss(schemeCode, currentReturn, userTransactions = []) {
                 'CAGR (%)': p.cagr1y > 0 ? `+${(p.cagr1y * 100).toFixed(2)}%` : (p.cagr1y === -999 ? 'NULL' : `${(p.cagr1y * 100).toFixed(2)}%`)
             })));
 
-            // ── STEP B: Pure Exclusion Filter ────────────────────────────────────
-            // Drop explicit non-Direct-Growth variants. Do NOT require "Direct"/"Growth" in name,
-            // since many valid abbreviated fund names omit these words but are still correct funds.
-            const exclusionFiltered = parsedPeers.filter(p => {
+            // ── STEP B: 2-Tier Filter ────────────────────────────────────────────
+            // TIER 1 (preferred): Require "direct" explicitly in the fund name.
+            //   This is the most accurate signal — a Direct Plan always states "Direct" by SEBI mandate.
+            //   e.g. "ICICI Prudential MidCap Fund - Direct Plan - Growth" → PASSES
+            //        "Nippon India Growth Mid Cap FundPlan"                 → FAILS (no "direct")
+            //
+            // TIER 2 (fallback): Relax to pure exclusion only if Tier 1 yields zero results.
+            //   Removes obvious non-direct variants (Regular, IDCW, Dividend, Bonus).
+            //   Used as a safety net when the underlying API provides abbreviated fund names.
+
+            const tierOneFiltered = parsedPeers.filter(p => {
+                const n = (p.schemeName || '').toLowerCase();
+                return n.includes('direct') &&
+                    !n.includes('idcw') &&
+                    !n.includes('dividend') &&
+                    !n.includes('bonus');
+            });
+
+            const tierTwoFiltered = parsedPeers.filter(p => {
                 const n = (p.schemeName || '').toLowerCase();
                 return !n.includes('regular') &&
                     !n.includes('idcw') &&
@@ -95,14 +110,22 @@ async function analyzeLoss(schemeCode, currentReturn, userTransactions = []) {
                     !n.includes('bonus');
             });
 
-            console.log('%c[ADVISOR DIAG] STEP 3 — AFTER PURE EXCLUSION FILTER (Regular/IDCW/Bonus/Dividend removed)', 'color:#f59e0b;font-weight:bold');
+            const usedTier = tierOneFiltered.length > 0 ? 1 : 2;
+            const exclusionFiltered = usedTier === 1 ? tierOneFiltered : tierTwoFiltered;
+
+            console.log(`%c[ADVISOR DIAG] STEP 3 — TIER ${usedTier} FILTER APPLIED (${exclusionFiltered.length} funds pass)`, 'color:#f59e0b;font-weight:bold');
+            console.log(usedTier === 1
+                ? '  → Tier 1: Required "direct" in name'
+                : '  → Tier 2 fallback: No "direct" names found — used pure exclusion (no regular/idcw/dividend/bonus)');
             console.table(parsedPeers.map(p => {
                 const n = (p.schemeName || '').toLowerCase();
-                const blocked = n.includes('regular') || n.includes('idcw') || n.includes('dividend') || n.includes('bonus');
+                const hasDirect = n.includes('direct');
+                const excluded = !hasDirect || n.includes('idcw') || n.includes('dividend') || n.includes('bonus');
                 return {
                     Name: p.schemeName,
                     'CAGR (%)': p.cagr1y > 0 ? `+${(p.cagr1y * 100).toFixed(2)}%` : (p.cagr1y === -999 ? 'NULL' : `${(p.cagr1y * 100).toFixed(2)}%`),
-                    Status: blocked ? '❌ EXCLUDED' : '✅ PASS'
+                    'Has "direct"': hasDirect ? '✅' : '❌',
+                    Status: (usedTier === 1 && excluded) ? '❌ EXCLUDED' : '✅ PASS'
                 };
             }));
 
@@ -116,6 +139,7 @@ async function analyzeLoss(schemeCode, currentReturn, userTransactions = []) {
                 Name: p.schemeName,
                 'CAGR (%)': `+${(p.cagr1y * 100).toFixed(2)}%`
             })));
+
 
             if (candidatePeers.length > 0) {
                 const winner = candidatePeers[0];
