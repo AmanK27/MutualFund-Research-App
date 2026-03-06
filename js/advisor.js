@@ -36,7 +36,7 @@ function calculate52WeekDrawdown(navData) {
  * @param {number} currentReturn - The current absolute return % (provided by UI)
  * @param {Array} userTransactions - User's txn history (optional for future weighted calc)
  */
-async function analyzeLoss(schemeCode, currentReturn, userTransactions = []) {
+async function analyzeLoss(schemeCode, currentReturn, userTransactions = [], uiCategoryPeers = []) {
     console.log(`[Advisor Engine] Starting diagnosis for ${schemeCode}...`);
 
     // Layer 1: Portfolio Fund Drawdown
@@ -49,8 +49,6 @@ async function analyzeLoss(schemeCode, currentReturn, userTransactions = []) {
     // Attempt Kuvera category first, then fallback to AMFI mapped category
     let fundCategory = fundDetails.meta.kuvera_category ||
         (window.SCHEME_CATEGORY_TO_LIVE_FUNDS ? window.SCHEME_CATEGORY_TO_LIVE_FUNDS[fundDetails.meta.scheme_category] : null);
-
-    // Ultimate fallback if neither works
     if (!fundCategory) fundCategory = "Equity";
 
     // Layer 2: Market proxy (Nifty 50) Drawdown
@@ -58,81 +56,89 @@ async function analyzeLoss(schemeCode, currentReturn, userTransactions = []) {
     const marketDetails = await aggregateFundDetails(NIFTY_50_CODE, "UTI Nifty 50");
     const marketDrawdown = marketDetails ? calculate52WeekDrawdown(marketDetails.data) : 0;
 
-    // Layer 3: Category Peer Analysis & Two-Pass Scoring Engine
-    console.log(`[Advisor Engine] Scanning Universe for top peer in category: ${fundCategory}`);
-
+    // Layer 3: Category Peer Analysis — SINGLE SOURCE OF TRUTH
+    // We use the exact same peers that the UI sidebar already fetched and displayed,
+    // rather than making a second independent API call that may return different data.
     let topPeer = null;
-    let candidatePool = [];
     let targetFundScore = 0;
 
     try {
-        const peers = await getPeerRanking(fundCategory, schemeCode);
-        if (peers && peers.length > 0) {
+        const peers = uiCategoryPeers;
 
-            // STEP 1: Force Numerical Sorting
-            // Ensure every CAGR is treated as a Float. If null, map to -999 to throw it to the bottom.
+        // ── DIAGNOSTIC LOG: RAW PEERS ────────────────────────────────────────────
+        console.log(`%c[ADVISOR DIAG] STEP 1 — RAW UI PEERS (${peers.length} funds) — Same data as sidebar`, 'color:#a78bfa;font-weight:bold');
+        console.table(peers.map(p => ({ Name: p.schemeName, Code: p.schemeCode, 'Raw CAGR 1Y (decimal)': p.cagr1y })));
+
+        if (peers.length > 0) {
+
+            // ── STEP A: Force Numerical Sort (null → -999) ───────────────────────
             const parsedPeers = peers.map(p => ({
                 ...p,
-                cagr1y: p.cagr1y !== null && !isNaN(p.cagr1y) ? parseFloat(p.cagr1y) : -999
-            }));
+                cagr1y: (p.cagr1y !== null && p.cagr1y !== undefined && !isNaN(p.cagr1y)) ? parseFloat(p.cagr1y) : -999
+            })).sort((a, b) => b.cagr1y - a.cagr1y);
 
-            // Sort descending mathematically
-            parsedPeers.sort((a, b) => b.cagr1y - a.cagr1y);
+            console.log('%c[ADVISOR DIAG] STEP 2 — AFTER NUMERICAL SORT (highest → lowest)', 'color:#34d399;font-weight:bold');
+            console.table(parsedPeers.map(p => ({
+                Name: p.schemeName,
+                'CAGR (%)': p.cagr1y > 0 ? `+${(p.cagr1y * 100).toFixed(2)}%` : (p.cagr1y === -999 ? 'NULL' : `${(p.cagr1y * 100).toFixed(2)}%`)
+            })));
 
-            // STEP 2: The Cascading 3-Tier Filter
-            let filteredPeers = [];
-
-            // Pass 1: Strict (Needs Direct & Growth, Rejects IDCW & Bonus)
-            const pass1 = parsedPeers.filter(p => {
-                const n = p.schemeName.toUpperCase();
-                return n.includes('DIRECT') && n.includes('GROWTH') &&
-                    !n.includes('IDCW') && !n.includes('DIVIDEND') && !n.includes('BONUS');
+            // ── STEP B: Pure Exclusion Filter ────────────────────────────────────
+            // Drop explicit non-Direct-Growth variants. Do NOT require "Direct"/"Growth" in name,
+            // since many valid abbreviated fund names omit these words but are still correct funds.
+            const exclusionFiltered = parsedPeers.filter(p => {
+                const n = (p.schemeName || '').toLowerCase();
+                return !n.includes('regular') &&
+                    !n.includes('idcw') &&
+                    !n.includes('dividend') &&
+                    !n.includes('bonus');
             });
 
-            if (pass1.length > 0) {
-                filteredPeers = pass1;
-                console.log("[Advisor Engine] Pass 1 (Strict) Success");
-            } else {
-                // Pass 2: Loose (Just Needs Direct & Growth)
-                const pass2 = parsedPeers.filter(p => {
-                    const n = p.schemeName.toUpperCase();
-                    return n.includes('DIRECT') && n.includes('GROWTH');
-                });
+            console.log('%c[ADVISOR DIAG] STEP 3 — AFTER PURE EXCLUSION FILTER (Regular/IDCW/Bonus/Dividend removed)', 'color:#f59e0b;font-weight:bold');
+            console.table(parsedPeers.map(p => {
+                const n = (p.schemeName || '').toLowerCase();
+                const blocked = n.includes('regular') || n.includes('idcw') || n.includes('dividend') || n.includes('bonus');
+                return {
+                    Name: p.schemeName,
+                    'CAGR (%)': p.cagr1y > 0 ? `+${(p.cagr1y * 100).toFixed(2)}%` : (p.cagr1y === -999 ? 'NULL' : `${(p.cagr1y * 100).toFixed(2)}%`),
+                    Status: blocked ? '❌ EXCLUDED' : '✅ PASS'
+                };
+            }));
 
-                if (pass2.length > 0) {
-                    filteredPeers = pass2;
-                    console.log("[Advisor Engine] Pass 2 (Loose) Success");
-                } else {
-                    // Pass 3: Raw
-                    filteredPeers = parsedPeers;
-                    console.log("[Advisor Engine] Pass 3 (Raw Fallback) Success");
-                }
-            }
+            // ── STEP C: Exclude self, pick Top 3 & Winner ───────────────────────
+            const candidatePeers = exclusionFiltered
+                .filter(p => String(p.schemeCode) !== String(schemeCode) && p.cagr1y > 0);
 
-            // Exclude the current fund from being recommended to itself
-            filteredPeers = filteredPeers.filter(p => String(p.schemeCode) !== String(schemeCode));
+            console.log(`%c[ADVISOR DIAG] STEP 4 — TOP 3 PEERS (after self-exclusion & positive-return guard)`, 'color:#7c3aed;font-weight:bold');
+            console.table(candidatePeers.slice(0, 3).map((p, i) => ({
+                Rank: `#${i + 1}${i === 0 ? ' 🏆 WINNER' : ''}`,
+                Name: p.schemeName,
+                'CAGR (%)': `+${(p.cagr1y * 100).toFixed(2)}%`
+            })));
 
-            const topThreePeers = filteredPeers.slice(0, 3);
+            if (candidatePeers.length > 0) {
+                const winner = candidatePeers[0];
+                console.log(`%c[ADVISOR DIAG] 🏆 FINAL WINNER: ${winner.schemeName} | 1Y Return: +${(winner.cagr1y * 100).toFixed(2)}%`, 'color:#34d399;font-size:14px;font-weight:bold');
 
-            // STEP 3: Output Guaranteed Best Peer
-            if (topThreePeers.length > 0) {
-                const winner = topThreePeers[0];
-
-                // Fetch the drawdown for the winner to satisfy the UI requirement
+                // Fetch drawdown for the winner for the UI
                 const details = await aggregateFundDetails(winner.schemeCode);
                 const drawdown = details ? (calculate52WeekDrawdown(details.data) || 0) : 0;
 
                 topPeer = {
                     code: winner.schemeCode,
                     name: winner.schemeName,
-                    cagr1Y: winner.cagr1y * 100, // Format for UI scaling
-                    drawdown: drawdown,
-                    score: winner.cagr1y * 100 // Legacy compat for the strategy engine
+                    cagr1Y: winner.cagr1y * 100,
+                    drawdown,
+                    score: winner.cagr1y * 100
                 };
+            } else {
+                console.error('[ADVISOR DIAG] ❌ No valid positive-return peers survived — topPeer will be null. Is uiCategoryPeers empty?');
             }
+        } else {
+            console.warn('[ADVISOR DIAG] ⚠️ uiCategoryPeers is empty. Did you open the fund dashboard first to load the sidebar peers?');
         }
     } catch (err) {
-        console.error("Failed to execute Cascading Filter Engine:", err);
+        console.error("Failed to execute Peer Analysis Engine:", err);
     }
 
     const diagnosis = {
@@ -144,12 +150,10 @@ async function analyzeLoss(schemeCode, currentReturn, userTransactions = []) {
         marketDrawdown,
         category: fundCategory,
         topPeer,
-        targetFundScore: fund1yCAGR !== null ? (fund1yCAGR * 100) : 0 // Fallback for UI
+        targetFundScore: fund1yCAGR !== null ? (fund1yCAGR * 100) : 0
     };
 
     console.log("[Advisor Engine] Diagnosis Generated:", diagnosis);
-
-    // Pass to Layer 4 & 5
     return generateStrategyAndSimulation(diagnosis, userTransactions);
 }
 
