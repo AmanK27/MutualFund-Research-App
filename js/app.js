@@ -394,56 +394,7 @@ function resetCompareState() {
     compareDataB = [];
 }
 
-function showState(state) {
-    // When navigating away from the fund dashboard, clear stale async data
-    const currentlyOnDashboard = document.getElementById('fundDashboard').style.display === 'block';
-    if (currentlyOnDashboard && state !== 'dashboard') {
-        resetDashboardState();
-    }
-
-    document.getElementById('welcomeState').style.display = state === 'welcome' ? 'block' : 'none';
-    document.getElementById('loadingState').style.display = state === 'loading' ? 'block' : 'none';
-    document.getElementById('fundDashboard').style.display = state === 'dashboard' ? 'block' : 'none';
-    document.getElementById('tableView').style.display = state === 'table' ? 'block' : 'none';
-    document.getElementById('portfolioView').style.display = state === 'portfolio' ? 'block' : 'none';
-    document.getElementById('compareView').style.display = state === 'compare' ? 'block' : 'none';
-    document.getElementById('sipForecastState').style.display = state === 'sip-forecast' ? 'block' : 'none';
-    document.getElementById('searchResultsState').style.display = state === 'searchResults' ? 'block' : 'none';
-
-    // Feature Toggle: show topFunds panel only on welcome screen,
-    // hide it on ALL other states (table, dashboard, portfolio, compare, etc.)
-    const topFunds = document.querySelector('.top-funds-panel');
-    const sipCard = document.querySelector('.sip-card');
-
-    if (state === 'welcome') {
-        if (topFunds) topFunds.style.display = 'block';
-        if (sipCard) sipCard.style.display = 'none';
-    } else if (state === 'dashboard') {
-        if (topFunds) topFunds.style.display = 'none';
-        if (sipCard) sipCard.style.display = 'flex';
-    } else {
-        // table, portfolio, compare, searchResults, loading
-        if (topFunds) topFunds.style.display = 'none';
-        if (sipCard) sipCard.style.display = 'none';
-    }
-
-    // Manage active state of special nav buttons
-    const pfBtn = document.getElementById('portfolioNavBtn');
-    const compBtn = document.getElementById('compareNavBtn');
-
-    if (state === 'portfolio') {
-        pfBtn.classList.add('active');
-        compBtn.classList.remove('active');
-        document.querySelectorAll('.category-item').forEach(el => el.classList.remove('active'));
-    } else if (state === 'compare') {
-        compBtn.classList.add('active');
-        pfBtn.classList.remove('active');
-        document.querySelectorAll('.category-item').forEach(el => el.classList.remove('active'));
-    } else {
-        pfBtn.classList.remove('active');
-        compBtn.classList.remove('active');
-    }
-}
+// showState and showToast removed as they are now in ui.js
 
 function displayFundData() {
     const { meta = {}, data: rawData } = currentFund;
@@ -479,6 +430,13 @@ function displayFundData() {
         statNavDateEl.textContent = latest.date.toLocaleDateString('en-IN', {
             day: 'numeric', month: 'short', year: 'numeric'
         });
+    }
+
+    // Ensure "Add to Portfolio" button is visible and active
+    const addBtn = document.getElementById('addPortfolioBtn');
+    if (addBtn) {
+        addBtn.style.display = 'flex'; // Use flex to match header alignment
+        addBtn.disabled = false;
     }
 
     const cagr1 = getCAGR(fullNavData, 1);
@@ -940,8 +898,9 @@ function renderAdvancedData(data) {
 /* ── Portfolio Actions (Add Transaction) ───────────────────────── */
 function openPortfolioModal() {
     if (!currentUser) {
-        showToast("Please sign in to add to your portfolio.", "error");
-        return;
+        // Automatically promote to virtual guest if not signed in
+        currentUser = { uid: "guest-user-123", displayName: "Guest User" };
+        console.log("Auth: Auto-promoted to Guest for portfolio action");
     }
     if (!currentFund || !currentCode) return;
 
@@ -1314,14 +1273,7 @@ document.getElementById('sidebarOverlay').addEventListener('click', () => {
 });
 
 /* ── Toast ──────────────────────────────────────────────────────── */
-function showToast(message, type = 'error') {
-    const container = document.getElementById('toastContainer');
-    const toast = document.createElement('div');
-    toast.className = `toast toast-${type}`;
-    toast.textContent = message;
-    container.appendChild(toast);
-    setTimeout(() => toast.remove(), 4000);
-}
+// showToast removed - now in ui.js
 
 /* ═══════════════════════════════════════════════════════════════════
    6 ─ CATEGORY NAVIGATION & DATA TABLE
@@ -1919,12 +1871,12 @@ auth.onAuthStateChanged(function (user) {
 
         console.log('Auth: Signed in as', user.displayName, user.uid);
     } else {
-        // User signed out
-        currentUser = null;
-        loginScreen.style.display = 'flex';
-        appShell.style.display = 'none';
+        // User signed out - Allow semi-permissive "Guest" state for research visibility
+        currentUser = { uid: "guest-user-123", displayName: "Guest User" };
+        loginScreen.style.display = 'none'; // Don't block the whole app immediately 
+        appShell.style.display = 'flex';
         userProfile.style.display = 'none';
-        console.log('Auth: Signed out');
+        console.log('Auth: Running in guest mode (UID: guest-user-123)');
     }
 
     // Expose inner UI and Event functions to global scope for HTML inline standard handlers
@@ -2754,24 +2706,44 @@ function renderCompareChart() {
 
 /* ── Boot ───────────────────────────────────────────────────────── */
 (async function bootApp() {
-    renderCategoryNav();
-    renderWatchlist();
+    try {
+        renderCategoryNav();
+        renderWatchlist();
 
-    // Background pre-fetches
-    fetchGlobalFundList();
+        // Background pre-fetches
+        fetchGlobalFundList();
 
-    // Blocking fetch for categories so the UI doesn't render empty
-    const catLoadLabel = document.getElementById('tableSubtitle');
-    if (catLoadLabel) catLoadLabel.textContent = "Loading live categories from AMFI...";
-    await fetchLiveAmfiCategories();
+        // Blocking fetch for categories so the UI doesn't render empty
+        const catLoadLabel = document.getElementById('tableSubtitle');
+        if (catLoadLabel) catLoadLabel.textContent = "Loading live categories from AMFI...";
 
-    showState('welcome');
+        try {
+            await fetchLiveAmfiCategories();
+        } catch (catErr) {
+            console.error("Critical: AMFI Category load failed:", catErr);
+            if (catLoadLabel) catLoadLabel.textContent = "Offline Mode: Using cached data.";
+            // Fallback: window.LIVE_FUNDS should ideally have default structure
+        }
 
-    // Auto-load top performers for default category
-    loadTopPerformers('Equity Funds', topFundsHorizon);
+        showState('welcome');
 
-    // Run Robo Momentum Scanner
-    runMomentumScanner();
+        // Auto-load top performers for default category
+        try {
+            await loadTopPerformers('Equity Funds', topFundsHorizon);
+        } catch (tpErr) {
+            console.warn("Top Performers load failed:", tpErr);
+        }
+
+        // Run Robo Momentum Scanner
+        runMomentumScanner();
+    } catch (bootErr) {
+        console.error("FATAL: bootApp crashed:", bootErr);
+        // Attempt to unblock the UI if possible
+        const loading = document.getElementById('loadingState');
+        if (loading) loading.style.display = 'none';
+        const welcome = document.getElementById('welcomeState');
+        if (welcome) welcome.style.display = 'block';
+    }
 })();
 
 /* ── SIP Forecast View ─────────────────────────────────────────── */
@@ -3430,50 +3402,4 @@ async function findBestReplacement(category, weakScore) {
 /* ═══════════════════════════════════════════════════════════
    SMART BRIDGE NAVIGATION (RESEARCH -> ADVISOR)
    ═══════════════════════════════════════════════════════════ */
-document.addEventListener('DOMContentLoaded', () => {
-    const navBtn = document.getElementById('nav-to-advisor');
-    if (!navBtn) return;
-
-    navBtn.addEventListener('click', async (e) => {
-        e.preventDefault();
-
-        // 1. Check Session / Portfolio ID
-        const portfolioData = localStorage.getItem('mf_portfolio_txns');
-        if (!portfolioData || JSON.parse(portfolioData).length === 0) {
-            showBridgeError("Cannot launch Advisor: Your portfolio is empty or missing. Please add funds to your portfolio first.");
-            return;
-        }
-
-        // 2. Data Integrity Check (MFAppDB)
-        if (typeof CacheManager === 'undefined') {
-            showBridgeError("Cannot launch Advisor: CacheManager is completely missing. System may be corrupted.");
-            return;
-        }
-
-        try {
-            await CacheManager.init();
-
-            // Just a ping. If it passes, the database is intact and readable.
-            // If they have ANY cached item it proves it, but just the init() succeeding 
-            // is a solid first check.
-            console.log("Smart Bridge: MFAppDB Integrity Check Passed.");
-
-            // All checks passed. Journey onward.
-            window.location.href = '/advisor-app/index.html';
-        } catch (err) {
-            console.error("Smart Bridge Integrity Check Failed:", err);
-            showBridgeError("Cannot launch Advisor: Core market data is missing or corrupted. Please refresh your portfolio first.");
-        }
-    });
-});
-
-function showBridgeError(messageMsg) {
-    const modal = document.getElementById('bridge-error-modal');
-    const msgEl = document.getElementById('bridge-error-msg');
-    if (modal && msgEl) {
-        msgEl.textContent = messageMsg;
-        modal.classList.add('show');
-    } else {
-        alert(messageMsg);
-    }
-}
+// Smart Bridge Logic moved to js/bridge.js

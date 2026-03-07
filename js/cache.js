@@ -123,6 +123,18 @@ const CacheManager = {
         }
 
         return false;
+    },
+
+    /**
+     * Ping the database to ensure it's responsive.
+     */
+    async isAlive() {
+        try {
+            const db = await this.init();
+            return !!db;
+        } catch (e) {
+            return false;
+        }
     }
 };
 
