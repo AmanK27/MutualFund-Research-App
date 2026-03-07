@@ -1888,6 +1888,16 @@ auth.onAuthStateChanged(function (user) {
     window.refreshTopFunds = refreshTopFunds;
     window.setTopFundsHorizon = setTopFundsHorizon;
     window.toggleWatchlist = toggleWatchlist;
+    window.loadCompareView = loadCompareView;
+    window.loadPortfolioView = loadPortfolioView;
+    window.loadForecastView = loadForecastView;
+    window.openQrModal = typeof openQrModal !== 'undefined' ? openQrModal : () => { };
+    window.openGlossary = typeof openGlossary !== 'undefined' ? openGlossary : () => { };
+    window.toggleCategory = toggleCategory;
+    window.selectSubcategory = selectSubcategory;
+    window.renderCategoryNav = renderCategoryNav;
+    window.resetCompareState = resetCompareState;
+    window.goHome = typeof goHome !== 'undefined' ? goHome : () => { window.showState('welcome'); };
 });
 
 
@@ -2829,7 +2839,10 @@ async function runMomentumScanner() {
     const gridEl = document.getElementById('momentumGrid');
     if (!loadingEl || !gridEl) return;
 
-    if (!window.FUND_UNIVERSE || window.FUND_UNIVERSE.length === 0) return;
+    if (!window.FUND_UNIVERSE || window.FUND_UNIVERSE.length === 0) {
+        if (loadingEl) loadingEl.style.display = 'none';
+        return;
+    }
 
     try {
         const momentumResults = [];
@@ -3392,6 +3405,7 @@ async function findBestReplacement(category, weakScore) {
         }
 
         showState('welcome');
+        renderCategoryNav();
 
         // Auto-load top performers for default category
         try {

@@ -7,9 +7,9 @@
     console.group("🚀 App Health Diagnostics");
 
     const checks = [
-        { name: "Sidebar Category Navigation", id: "category-nav" },
-        { name: "Top Funds Panel", selector: ".top-funds-panel" },
-        { name: "Search Bar", id: "searchBar" },
+        { name: "Sidebar Category Navigation", id: "categoryNav" },
+        { name: "Top Funds Panel", selector: ".top-performers-section" },
+        { name: "Search Input", id: "searchInput" },
         { name: "Compare View Section", id: "compareView" },
         { name: "Portfolio View Section", id: "portfolioView" },
         { name: "Robo-Advisor Bridge Button", id: "nav-to-advisor" },
