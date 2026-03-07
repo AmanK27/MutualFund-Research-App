@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Robo-Advisor</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+
+<body>
+    <div class="app-container">
+        <header class="app-header">
+            <h1>Robo-Advisor</h1>
+            <p>Isolated Analysis Engine</p>
+        </header>
+
+        <main class="main-content">
+            <section class="input-section">
+                <div class="input-group">
+                    <label for="targetSchemeCode">Target Scheme Code:</label>
+                    <input type="text" id="targetSchemeCode" placeholder="e.g. 120503" autocomplete="off">
+                </div>
+                <button id="analyzeBtn" class="btn primary">Analyze Portfolio</button>
+            </section>
+
+            <section class="results-section">
+                <div id="loading" class="hidden">
+                    <div class="spinner"></div>
+                    <p>Engine Analyzing...</p>
+                </div>
+                <div id="advisor-results">
+                    <!-- Results injected here -->
+                </div>
+            </section>
+        </main>
+    </div>
+    <script src="js/advisor-db.js"></script>
+    <script src="js/app.js"></script>
+</body>
+
+</html>

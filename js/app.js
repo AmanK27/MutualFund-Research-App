@@ -2428,6 +2428,7 @@ async function loadPortfolioView() {
         document.getElementById('portfolioEmptyState').style.display = 'block';
     }
 }
+window.renderPortfolioHoldings = renderPortfolioHoldings;
 
 /* ── QR CODE MODAL ──────────────────────────────────────── */
 function openQrModal() {
