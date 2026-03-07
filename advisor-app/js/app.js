@@ -103,4 +103,36 @@ document.addEventListener('DOMContentLoaded', () => {
             </div>
         `;
     }
+
+    /* ═══════════════════════════════════════════════════════════
+       SMART BRIDGE NAVIGATION (ADVISOR -> RESEARCH)
+       ═══════════════════════════════════════════════════════════ */
+    const navToResearchBtn = document.getElementById('nav-to-research');
+    if (navToResearchBtn) {
+        navToResearchBtn.addEventListener('click', async (e) => {
+            e.preventDefault();
+
+            try {
+                // 1. Ping local AdvisorDB
+                await AdvisorDB.init();
+
+                // 2. Verify MFAppDB connection active (by grabbing a random key or just trying open)
+                // We'll use the existing getMarketData with a dummy key just to see if it rejects
+                await AdvisorDB.getMarketData('ping_check_only');
+
+                console.log("Smart Bridge: Advisor Return Checks Passed.");
+
+                // Navigate back
+                window.location.href = '../index.html';
+            } catch (err) {
+                console.error("Smart Bridge Integrity Check Failed:", err);
+                const modal = document.getElementById('bridge-error-modal');
+                if (modal) {
+                    modal.classList.add('show');
+                } else {
+                    alert("Warning: Recent analysis failed to save to local storage.");
+                }
+            }
+        });
+    }
 });
