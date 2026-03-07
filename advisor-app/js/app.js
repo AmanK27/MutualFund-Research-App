@@ -1,0 +1,106 @@
+/**
+ * app.js (Advisor Micro-App)
+ * 
+ * Main UI thread controller. Wires the DOM to the background engine worker
+ * and handles isolated data storage.
+ */
+
+document.addEventListener('DOMContentLoaded', () => {
+    // 1. Initialize DBs and Worker
+    const engine = new Worker('./js/engine-worker.js');
+    AdvisorDB.init().catch(console.error);
+
+    // DOM Elements
+    const input = document.getElementById('targetSchemeCode');
+    const analyzeBtn = document.getElementById('analyzeBtn');
+    const loadingDiv = document.getElementById('loading');
+    const resultsDiv = document.getElementById('advisor-results');
+    const loadingText = loadingDiv.querySelector('p');
+
+    // 2. Handle Worker Messages
+    engine.onmessage = async (e) => {
+        const { status, progress, message, result } = e.data;
+
+        if (status === 'PROGRESS') {
+            loadingText.textContent = message;
+        } else if (status === 'COMPLETE') {
+            // Hide loading
+            loadingDiv.classList.add('hidden');
+            analyzeBtn.disabled = false;
+
+            // Render Results
+            renderResults(result);
+
+            // Save log to AdvisorDB
+            try {
+                await AdvisorDB.saveLog(result);
+                console.log("Analysis saved to AdvisorDB.");
+            } catch (err) {
+                console.error("Failed to save log:", err);
+            }
+        }
+    };
+
+    engine.onerror = (err) => {
+        console.error("Worker error:", err);
+        loadingDiv.classList.add('hidden');
+        analyzeBtn.disabled = false;
+        resultsDiv.innerHTML = `<p style="color: #ef4444;">Engine failed to complete analysis.</p>`;
+    };
+
+    // 3. Handle User Input
+    analyzeBtn.addEventListener('click', async () => {
+        const code = input.value.trim();
+        if (!code) {
+            alert("Please enter a scheme code.");
+            return;
+        }
+
+        // Reset UI
+        analyzeBtn.disabled = true;
+        resultsDiv.innerHTML = '';
+        loadingText.textContent = 'Engine Analyzing...';
+        loadingDiv.classList.remove('hidden');
+
+        try {
+            // Attempt to grab market data from the main app's cache (MFAppDB)
+            console.log(`Fetching market data for ${code} from MFAppDB...`);
+            const targetFundData = await AdvisorDB.getMarketData(code);
+
+            // In a full implementation, we would also fetch category peers here
+            // using the category from `targetFundData.meta.scheme_category`.
+            // For now, tracking mock peers.
+            const mockPeersData = [
+                { schemeCode: "111111", schemeName: "Verified Top Peer A" },
+                { schemeCode: "222222", schemeName: "Verified Top Peer B" }
+            ];
+
+            // 4. Dispatch job to worker
+            engine.postMessage({
+                action: 'ANALYZE_FUND',
+                payload: {
+                    targetSchemeCode: code,
+                    targetFundData: targetFundData,
+                    peersData: mockPeersData
+                }
+            });
+
+        } catch (error) {
+            console.error("Failed to dispatch job:", error);
+            loadingDiv.classList.add('hidden');
+            analyzeBtn.disabled = false;
+            resultsDiv.innerHTML = `<p style="color: #ef4444;">Internal error dispatching analysis job.</p>`;
+        }
+    });
+
+    // --- Helper ---
+    function renderResults(strategy) {
+        // Minimal rendering
+        resultsDiv.innerHTML = `
+            <div class="result-card">
+                <h3 style="margin-bottom:12px;color:var(--text-primary);">Diagnosis Complete</h3>
+                <pre>${JSON.stringify(strategy, null, 2)}</pre>
+            </div>
+        `;
+    }
+});
