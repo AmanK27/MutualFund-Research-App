@@ -47,8 +47,8 @@ async function openLossAdvisor(schemeCode, currentReturn) {
         // Collect transactions for this fund from window.transactions if needed
         const txns = window.transactions ? window.transactions.filter(t => t.schemeCode === schemeCode) : [];
 
-        // Execute Engine (advisor.js)
-        const diagnosis = await analyzeLoss(schemeCode, currentReturn, txns);
+        // Execute Engine (advisor.js) removed
+        const diagnosis = {};
 
         // Update UI Text
         document.getElementById('advFundName').textContent = diagnosis.fundName;

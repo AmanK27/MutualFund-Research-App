@@ -764,8 +764,6 @@ async function aggregateFundDetails(schemeCode, cleanFundName) {
     // New code should always use the StandardFundObject keys directly.
     fund.data = fund.nav.history;           // legacy: fund.data[]
     fund.meta.scheme_name = fund.meta.cleanName;             // compare renderCompareTable
-    fund.meta.scheme_category = fund.meta.category;            // advisor.js kuvera fallback
-    fund.meta.kuvera_category = fund.meta.category;            // advisor.js category lookup
     fund.portfolio.equity_percentage = fund.portfolio.equityPct;  // portfolio view
     fund.portfolio.debt_percentage = fund.portfolio.debtPct;
     fund.portfolio.cash_percentage = fund.portfolio.cashPct;
