@@ -1394,6 +1394,18 @@
         </div>
     </div>
 
+    <!-- Smart Bridge UI -->
+    <a href="#" id="nav-to-advisor" class="smart-bridge-btn">
+        <span>🤖</span> Launch Robo-Advisor
+    </a>
+
+    <!-- Smart Bridge Error Popup -->
+    <div id="bridge-error-modal" class="bridge-error-popup">
+        <strong>⚠️ Data Integrity Error</strong>
+        <p id="bridge-error-msg">Cannot launch Advisor: Core market data is missing or corrupted. Please refresh your
+            portfolio first.</p>
+        <button onclick="document.getElementById('bridge-error-modal').classList.remove('show')">Understood</button>
+    </div>
 
     <script src="js/utils.js"></script>
     <script src="js/portfolio.js"></script>

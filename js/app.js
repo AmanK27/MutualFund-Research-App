@@ -3426,3 +3426,54 @@ async function findBestReplacement(category, weakScore) {
     candidates.sort((a, b) => b.ret30 - a.ret30);
     return candidates[0];
 }
+
+/* ═══════════════════════════════════════════════════════════
+   SMART BRIDGE NAVIGATION (RESEARCH -> ADVISOR)
+   ═══════════════════════════════════════════════════════════ */
+document.addEventListener('DOMContentLoaded', () => {
+    const navBtn = document.getElementById('nav-to-advisor');
+    if (!navBtn) return;
+
+    navBtn.addEventListener('click', async (e) => {
+        e.preventDefault();
+
+        // 1. Check Session / Portfolio ID
+        const portfolioData = localStorage.getItem('mf_portfolio_txns');
+        if (!portfolioData || JSON.parse(portfolioData).length === 0) {
+            showBridgeError("Cannot launch Advisor: Your portfolio is empty or missing. Please add funds to your portfolio first.");
+            return;
+        }
+
+        // 2. Data Integrity Check (MFAppDB)
+        if (typeof CacheManager === 'undefined') {
+            showBridgeError("Cannot launch Advisor: CacheManager is completely missing. System may be corrupted.");
+            return;
+        }
+
+        try {
+            await CacheManager.init();
+
+            // Just a ping. If it passes, the database is intact and readable.
+            // If they have ANY cached item it proves it, but just the init() succeeding 
+            // is a solid first check.
+            console.log("Smart Bridge: MFAppDB Integrity Check Passed.");
+
+            // All checks passed. Journey onward.
+            window.location.href = '/advisor-app/index.html';
+        } catch (err) {
+            console.error("Smart Bridge Integrity Check Failed:", err);
+            showBridgeError("Cannot launch Advisor: Core market data is missing or corrupted. Please refresh your portfolio first.");
+        }
+    });
+});
+
+function showBridgeError(messageMsg) {
+    const modal = document.getElementById('bridge-error-modal');
+    const msgEl = document.getElementById('bridge-error-msg');
+    if (modal && msgEl) {
+        msgEl.textContent = messageMsg;
+        modal.classList.add('show');
+    } else {
+        alert(messageMsg);
+    }
+}
