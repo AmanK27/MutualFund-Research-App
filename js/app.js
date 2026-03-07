@@ -2288,11 +2288,6 @@ async function loadPortfolioView() {
                 <td style="cursor: pointer;" onclick="loadFund('${h.code}')">₹${h.totalInvested.toLocaleString('en-IN')}</td>
                 <td style="cursor: pointer;" onclick="loadFund('${h.code}')">${hasError ? '<span style="color:var(--error);">---</span>' : '₹' + h.currentValue.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</td>
                 <td style="text-align: right; display: flex; align-items: center; justify-content: flex-end; gap: 8px;" class="${hasError ? '' : getPercentClass(absReturnPct / 100)}">
-                    ${isLoss ? `
-                        <button onclick="openLossAdvisor('${h.code}', ${absReturnPct})" style="background: rgba(var(--error-rgb), 0.1); border: 1px solid var(--error); color: var(--error); padding: 4px 8px; border-radius: var(--radius-sm); font-size: 11px; cursor: pointer; transition: all 0.2s; white-space: nowrap;">
-                            🤖 Analyze Loss
-                        </button>
-                    ` : ''}
                     <span style="min-width: 60px;">${hasError ? 'Error' : (absReturnPct >= 0 ? '+' : '') + absReturnPct.toFixed(2) + '%'}</span>
                 </td>
             `;
