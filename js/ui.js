@@ -60,7 +60,7 @@ const UI = {
 
         // Feature Toggle: show topFunds panel only on welcome screen
         const topFunds = document.querySelector('.top-funds-panel');
-        const sipCard = document.querySelector('.sip-calculator-card');
+        const sipCard = document.querySelector('.sip-card');
 
         if (state === 'welcome') {
             if (topFunds) topFunds.style.display = 'block';

@@ -1891,7 +1891,8 @@ auth.onAuthStateChanged(function (user) {
 });
 
 
-let guestTxns = [];
+const PORTFOLIO_KEY = 'mf_portfolio_txns';
+let guestTxns = JSON.parse(localStorage.getItem(PORTFOLIO_KEY)) || [];
 
 /* ── Firestore Transaction Helpers ─────────────────────────────── */
 /**
@@ -1932,6 +1933,7 @@ function addTransaction(txn) {
                     createdAt: { toDate: () => new Date() }
                 });
             }
+            localStorage.setItem(PORTFOLIO_KEY, JSON.stringify(guestTxns));
             setTimeout(resolve, 300);
         });
     }
@@ -2002,6 +2004,7 @@ function deleteTransaction(txnId) {
 
     if (currentUser.uid === "guest-user-123") {
         guestTxns = guestTxns.filter(t => t.id !== txnId);
+        localStorage.setItem(PORTFOLIO_KEY, JSON.stringify(guestTxns));
         return Promise.resolve();
     }
 
@@ -2354,6 +2357,8 @@ async function loadPortfolioView() {
         document.getElementById('portfolioStatsGrid').style.display = 'grid';
         document.getElementById('portfolioSummaryBar').style.display = 'flex';
         document.getElementById('portfolioTableCard').style.display = 'block';
+        const toggleBar = document.getElementById('analyticsToggleBar');
+        if (toggleBar) toggleBar.style.display = 'flex';
 
         const freshAlertSettings = loadAlertSettings();
         const analyticsData = { portfolioEquityPct, stcgValue, ltcgValue, holdings };
@@ -2394,6 +2399,12 @@ function closeQrModal() {
 /* ── Compare Funds Logic ───────────────────────────────────────── */
 let compareDataA = [];
 let compareDataB = [];
+
+/* ── Top 5 Performers Logic Constants ─────────────────────────── */
+let topFundsHorizon = '1Y'; // '1Y' | '3Y' | '5Y' | 'Max'
+let topFundsCategory = 'Equity Funds';
+const HORIZON_YEARS_MAP = { '1Y': 1, '3Y': 3, '5Y': 5, 'Max': null };
+const HORIZON_MIN_DAYS = { '1Y': 252, '3Y': 252 * 3, '5Y': 252 * 5, 'Max': 252 };
 let compareChartInstance = null;
 let currentCompareRange = 'MAX';
 
@@ -2704,47 +2715,6 @@ function renderCompareChart() {
     });
 }
 
-/* ── Boot ───────────────────────────────────────────────────────── */
-(async function bootApp() {
-    try {
-        renderCategoryNav();
-        renderWatchlist();
-
-        // Background pre-fetches
-        fetchGlobalFundList();
-
-        // Blocking fetch for categories so the UI doesn't render empty
-        const catLoadLabel = document.getElementById('tableSubtitle');
-        if (catLoadLabel) catLoadLabel.textContent = "Loading live categories from AMFI...";
-
-        try {
-            await fetchLiveAmfiCategories();
-        } catch (catErr) {
-            console.error("Critical: AMFI Category load failed:", catErr);
-            if (catLoadLabel) catLoadLabel.textContent = "Offline Mode: Using cached data.";
-            // Fallback: window.LIVE_FUNDS should ideally have default structure
-        }
-
-        showState('welcome');
-
-        // Auto-load top performers for default category
-        try {
-            await loadTopPerformers('Equity Funds', topFundsHorizon);
-        } catch (tpErr) {
-            console.warn("Top Performers load failed:", tpErr);
-        }
-
-        // Run Robo Momentum Scanner
-        runMomentumScanner();
-    } catch (bootErr) {
-        console.error("FATAL: bootApp crashed:", bootErr);
-        // Attempt to unblock the UI if possible
-        const loading = document.getElementById('loadingState');
-        if (loading) loading.style.display = 'none';
-        const welcome = document.getElementById('welcomeState');
-        if (welcome) welcome.style.display = 'block';
-    }
-})();
 
 /* ── SIP Forecast View ─────────────────────────────────────────── */
 async function loadForecastView() {
@@ -2938,11 +2908,7 @@ async function runMomentumScanner() {
 }
 
 /* ── Top 5 Performers Logic ─────────────────────────────────────── */
-let topFundsHorizon = '1Y'; // '1Y' | '3Y' | '5Y' | 'Max'
-let topFundsCategory = 'Equity Funds';
-
-const HORIZON_YEARS_MAP = { '1Y': 1, '3Y': 3, '5Y': 5, 'Max': null };
-const HORIZON_MIN_DAYS = { '1Y': 252, '3Y': 252 * 3, '5Y': 252 * 5, 'Max': 252 };
+// Variables moved to top for proper initialization
 
 function setTopFundsHorizon(horizon) {
     topFundsHorizon = horizon;
@@ -3403,3 +3369,45 @@ async function findBestReplacement(category, weakScore) {
    SMART BRIDGE NAVIGATION (RESEARCH -> ADVISOR)
    ═══════════════════════════════════════════════════════════ */
 // Smart Bridge Logic moved to js/bridge.js
+
+/* ── Boot ───────────────────────────────────────────────────────── */
+(async function bootApp() {
+    try {
+        renderCategoryNav();
+        renderWatchlist();
+
+        // Background pre-fetches
+        fetchGlobalFundList();
+
+        // Blocking fetch for categories so the UI doesn't render empty
+        const catLoadLabel = document.getElementById('tableSubtitle');
+        if (catLoadLabel) catLoadLabel.textContent = "Loading live categories from AMFI...";
+
+        try {
+            await fetchLiveAmfiCategories();
+        } catch (catErr) {
+            console.error("Critical: AMFI Category load failed:", catErr);
+            if (catLoadLabel) catLoadLabel.textContent = "Offline Mode: Using cached data.";
+            // Fallback: window.LIVE_FUNDS should ideally have default structure
+        }
+
+        showState('welcome');
+
+        // Auto-load top performers for default category
+        try {
+            await loadTopPerformers('Equity Funds', topFundsHorizon);
+        } catch (tpErr) {
+            console.warn("Top Performers load failed:", tpErr);
+        }
+
+        // Run Robo Momentum Scanner
+        runMomentumScanner();
+    } catch (bootErr) {
+        console.error("FATAL: bootApp crashed:", bootErr);
+        // Attempt to unblock the UI if possible
+        const loading = document.getElementById('loadingState');
+        if (loading) loading.style.display = 'none';
+        const welcome = document.getElementById('welcomeState');
+        if (welcome) welcome.style.display = 'block';
+    }
+})();
