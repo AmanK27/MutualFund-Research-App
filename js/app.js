@@ -611,10 +611,13 @@ async function initPeerRanking(category, schemeCode) {
             return;
         }
 
-        // Render Top 5
-        const topPeers = rankedPeers.slice(0, 5);
+        // Force numerical sort 
+        rankedPeers.sort((a, b) => parseFloat(b.cagr1y) - parseFloat(a.cagr1y));
 
-        // Check if current fund is in top 5
+        // Render Top 10
+        const topPeers = rankedPeers.slice(0, 10);
+
+        // Check if current fund is in top 10
         let currentInTop = topPeers.findIndex(p => p.schemeCode === String(schemeCode));
 
         // Function to build row HTML
@@ -644,7 +647,7 @@ async function initPeerRanking(category, schemeCode) {
 
         let html = topPeers.map((p, i) => buildRow(p, i)).join('');
 
-        // Step 3 logic: if current fund is not in top 5, append it to the bottom
+        // Step 3 logic: if current fund is not in top 10, append it to the bottom
         if (currentInTop === -1) {
             const actualIndex = rankedPeers.findIndex(p => p.schemeCode === String(schemeCode));
             if (actualIndex !== -1) {
