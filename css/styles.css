@@ -2436,3 +2436,113 @@ body::before {
 :root {
     --radius: var(--radius-md);
 }
+
+/* ═══════════════════════════════════════════════════════════
+   SMART BRIDGE NAVIGATION
+   ═══════════════════════════════════════════════════════════ */
+.smart-bridge-btn {
+    position: fixed;
+    bottom: 24px;
+    left: 24px;
+    z-index: 1000;
+    padding: 12px 24px;
+    border-radius: 99px;
+    background: linear-gradient(135deg, #8b5cf6, #3b82f6);
+    color: white;
+    font-size: 14px;
+    font-weight: 600;
+    font-family: 'Inter', sans-serif;
+    border: none;
+    cursor: pointer;
+    box-shadow: 0 4px 15px rgba(59, 130, 246, 0.4);
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    text-decoration: none;
+    animation: pulseGlow 2s infinite;
+}
+
+.smart-bridge-btn:hover {
+    transform: translateY(-2px) scale(1.05);
+    box-shadow: 0 8px 25px rgba(59, 130, 246, 0.6);
+}
+
+@keyframes pulseGlow {
+    0% {
+        box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.4);
+    }
+
+    70% {
+        box-shadow: 0 0 0 10px rgba(59, 130, 246, 0);
+    }
+
+    100% {
+        box-shadow: 0 0 0 0 rgba(59, 130, 246, 0);
+    }
+}
+
+.bridge-error-popup {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: #1e293b;
+    border: 2px solid #ef4444;
+    border-radius: 12px;
+    padding: 24px;
+    z-index: 9999;
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.8), 0 0 0 100vw rgba(0, 0, 0, 0.6);
+    text-align: center;
+    max-width: 400px;
+    width: 90%;
+    display: none;
+    flex-direction: column;
+    gap: 16px;
+    color: #f8fafc;
+}
+
+.bridge-error-popup.show {
+    display: flex;
+    animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+@keyframes popIn {
+    0% {
+        transform: translate(-50%, -40%) scale(0.9);
+        opacity: 0;
+    }
+
+    100% {
+        transform: translate(-50%, -50%) scale(1);
+        opacity: 1;
+    }
+}
+
+.bridge-error-popup strong {
+    font-size: 18px;
+    color: #f87171;
+    display: block;
+}
+
+.bridge-error-popup p {
+    font-size: 14px;
+    color: #cbd5e1;
+    line-height: 1.5;
+}
+
+.bridge-error-popup button {
+    background: #ef4444;
+    color: white;
+    border: none;
+    padding: 10px 16px;
+    border-radius: 6px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s;
+    align-self: center;
+}
+
+.bridge-error-popup button:hover {
+    background: #dc2626;
+}
