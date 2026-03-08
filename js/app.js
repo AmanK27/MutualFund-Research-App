@@ -3470,60 +3470,91 @@ async function findBestReplacement(category, weakScore) {
    ═══════════════════════════════════════════════════════════ */
 // Smart Bridge Logic moved to js/bridge.js
 
+window.showSyncToast = function (message) {
+    const toast = document.getElementById('sync-toast');
+    const msgEl = document.getElementById('sync-toast-message');
+    if (toast && msgEl) {
+        toast.style.display = 'flex';
+        msgEl.textContent = message;
+    }
+};
+
 /* ── Boot ───────────────────────────────────────────────────────── */
 (async function bootApp() {
     try {
         // ── AUTO-GUEST SIGN IN (Bypass Firebase) ─────────────
         handleGuestSignIn();
 
-        // ── SYNC ENGINE CHECK ──────────────────────────────────────
+        // ── SYNC ENGINE CHECK (SWR Fire & Forget) ───────────────
         const state = await MFDB.getSyncState();
         const todayDate = new Date().toISOString().split('T')[0];
 
         if (!state || state.date !== todayDate || state.status !== 'COMPLETE') {
-            document.getElementById('global-sync-warning').style.display = 'block';
-            console.warn('[Boot] Data is not synced for today. Halting standard boot sequence.');
-            document.getElementById('welcomeState').style.display = 'block';
-            document.getElementById('welcomeState').innerHTML = `
-                <div style="text-align: center; padding: 40px;">
-                    <h2>⚠️ Daily Sync Required</h2>
-                    <p style="color: var(--text-muted); margin-bottom: 20px;">Your market data for today has not been downloaded. Please click the "Sync Daily Data" button in the sidebar to initialize the app.</p>
-                </div>
-            `;
-            // Do NOT proceed with rendering standard UI components
+            console.log('[Boot] Data is stale. Initiating Background SWR Sync.');
+
+            const portfolioStr = localStorage.getItem(PORTFOLIO_KEY) || "[]";
+            const portfolio = JSON.parse(portfolioStr);
+            const codes = [...new Set(portfolio.map(t => t.code))];
+
+            const watchStr = localStorage.getItem(WATCHLIST_KEY) || "[]";
+            const watchlist = JSON.parse(watchStr);
+            codes.push(...watchlist);
+
+            const categories = [
+                'Equity Scheme - Flexi Cap Fund',
+                'Equity Scheme - Mid Cap Fund',
+                'Equity Scheme - Small Cap Fund',
+                'Equity Scheme - Large Cap Fund',
+                'Hybrid Scheme - Aggressive Hybrid Fund',
+                'Other Scheme - Index Funds'
+            ];
+
+            window.showSyncToast("🔄 Syncing latest market data...");
+
+            // Fire & Forget
+            runBackgroundSync(codes, categories, (msg) => {
+                window.showSyncToast(msg);
+                if (msg.includes("✅")) {
+                    const spinner = document.getElementById('sync-toast-spinner');
+                    const btn = document.getElementById('sync-toast-action');
+                    if (spinner) spinner.style.display = 'none';
+                    if (btn) btn.style.display = 'block';
+                }
+            });
         } else {
-            console.log('[Boot] Data is synced. Proceeding with standard boot sequence.');
-            renderCategoryNav();
-            renderWatchlist();
-
-            // Background pre-fetches
-            fetchGlobalFundList();
-
-            // Blocking fetch for categories so the UI doesn't render empty
-            const catLoadLabel = document.getElementById('tableSubtitle');
-            if (catLoadLabel) catLoadLabel.textContent = "Loading live categories from AMFI...";
-
-            try {
-                await fetchLiveAmfiCategories();
-            } catch (catErr) {
-                console.error("Critical: AMFI Category load failed:", catErr);
-                if (catLoadLabel) catLoadLabel.textContent = "Offline Mode: Using cached data.";
-                // Fallback: window.LIVE_FUNDS should ideally have default structure
-            }
-
-            showState('welcome');
-            renderCategoryNav();
-
-            // Auto-load top performers for default category
-            try {
-                await loadTopPerformers('Equity Funds', topFundsHorizon);
-            } catch (tpErr) {
-                console.warn("Top Performers load failed:", tpErr);
-            }
-
-            // Run Robo Momentum Scanner
-            runMomentumScanner();
+            console.log('[Boot] Data is already synced for today.');
         }
+
+        // ── ALWAYS PROCEED WITH STANDARD BOOT (Using cached data) ──
+        renderCategoryNav();
+        renderWatchlist();
+
+        // Background pre-fetches
+        fetchGlobalFundList();
+
+        // Blocking fetch for categories so the UI doesn't render empty
+        const catLoadLabel = document.getElementById('tableSubtitle');
+        if (catLoadLabel) catLoadLabel.textContent = "Loading live categories from AMFI...";
+
+        try {
+            await fetchLiveAmfiCategories();
+        } catch (catErr) {
+            console.error("Critical: AMFI Category load failed:", catErr);
+            if (catLoadLabel) catLoadLabel.textContent = "Offline Mode: Using cached data.";
+        }
+
+        showState('welcome');
+        renderCategoryNav();
+
+        // Auto-load top performers for default category
+        try {
+            await loadTopPerformers('Equity Funds', topFundsHorizon);
+        } catch (tpErr) {
+            console.warn("Top Performers load failed:", tpErr);
+        }
+
+        // Run Robo Momentum Scanner
+        runMomentumScanner();
 
         // ── WIRE UP MANUAL SYNC BUTTON ─────────────────────────────
         const syncBtn = document.getElementById('trigger-sync-btn');

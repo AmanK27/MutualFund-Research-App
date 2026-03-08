@@ -67,10 +67,15 @@
         </div>
     </div>
 
-    <!-- ── GLOBAL SYNC WARNING ────────────────────────────────── -->
-    <div id="global-sync-warning"
-        style="display:none; background:red; color:white; text-align:center; padding:10px; z-index:9999; font-weight:bold;">
-        ⚠️ Data is out of date. Please run Daily Sync to use the app.
+    <!-- ── SWR SYNC TOAST ──────────────────────────────────────── -->
+    <div id="sync-toast"
+        style="display:none; position:fixed; bottom:24px; right:24px; background:var(--bg-card); border:1px solid var(--border-glass); border-radius:var(--radius-lg); padding:16px 24px; box-shadow:0 8px 32px rgba(0,0,0,0.5); z-index:1100; align-items:center; gap:16px; backdrop-filter:blur(12px);">
+        <div id="sync-toast-spinner" class="spinner" style="width:20px; height:20px; border-width:2px; margin:0;"></div>
+        <div id="sync-toast-message" style="font-size:14px; color:var(--text-primary); font-weight:500;">Syncing latest
+            market data...</div>
+        <button id="sync-toast-action"
+            style="display:none; margin-left:8px; padding:6px 12px; background:var(--accent); color:white; border:none; border-radius:var(--radius-sm); cursor:pointer; font-weight:600; font-size:12px;"
+            onclick="window.location.reload()">Reload</button>
     </div>
 
     <div id="app">
