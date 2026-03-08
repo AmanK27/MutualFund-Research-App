@@ -281,20 +281,49 @@ function formatCompareData(value, suffix = '') {
  * @returns {Promise<{ instalments: Array, totalUnits: number, totalInvested: number }>}
  */
 async function generateSipLedger(schemeCode, monthlyAmount, startDate, endDate, stepUpConfig = {}) {
-    // 1. Fetch full NAV history
-    const res = await fetch(`https://api.mfapi.in/mf/${schemeCode}`);
-    if (!res.ok) throw new Error(`Failed to fetch NAVs for scheme ${schemeCode}`);
-    const json = await res.json();
+    // 1. Fetch full NAV history — use IndexedDB cache first (PERF-02)
+    let navEntries = null;
 
-    if (!json.data || json.data.length === 0) {
-        throw new Error(`No NAV data available for scheme ${schemeCode}`);
+    if (window.MFDB) {
+        try {
+            const cached = await window.MFDB.getFund(schemeCode);
+            if (cached) {
+                // StandardFundObject stores history at nav.history; legacy alias at data
+                navEntries = cached.nav?.history || cached.data || null;
+            }
+        } catch (_) { /* cache miss — fall through to network */ }
+    }
+
+    if (!navEntries) {
+        // Cache miss: fetch from mfapi.in and convert to internal format
+        const res = await fetch(`https://api.mfapi.in/mf/${schemeCode}`);
+        if (!res.ok) throw new Error(`Failed to fetch NAVs for scheme ${schemeCode}`);
+        const json = await res.json();
+
+        if (!json.data || json.data.length === 0) {
+            throw new Error(`No NAV data available for scheme ${schemeCode}`);
+        }
+        // Convert mfapi.in format { date: 'DD-MM-YYYY', nav: '123.45' }
+        // into the same ISO-keyed navMap we build below
+        navEntries = json.data;
     }
 
     // 2. Build YYYY-MM-DD → nav lookup map + sorted ascending key list
+    //    Handles two entry formats:
+    //      • Cached (StandardFundObject): { date: Date | number(ms), nav: number }
+    //      • Raw mfapi.in:               { date: 'DD-MM-YYYY',       nav: '123.45' }
     const navMap = new Map();
-    json.data.forEach(entry => {
-        const [dd, mm, yyyy] = entry.date.split('-');
-        const isoKey = `${yyyy}-${mm}-${dd}`;
+    navEntries.forEach(entry => {
+        let isoKey;
+        if (entry.date instanceof Date) {
+            isoKey = entry.date.toISOString().slice(0, 10);
+        } else if (typeof entry.date === 'number') {
+            isoKey = new Date(entry.date).toISOString().slice(0, 10);
+        } else {
+            // mfapi.in raw string: 'DD-MM-YYYY'
+            const parts = entry.date.split('-');
+            isoKey = parts.length === 3 ? `${parts[2]}-${parts[1]}-${parts[0]}` : entry.date;
+        }
         const navVal = parseFloat(entry.nav);
         if (!isNaN(navVal) && navVal > 0) navMap.set(isoKey, navVal);
     });

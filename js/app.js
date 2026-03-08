@@ -63,6 +63,8 @@ function loadWatchlist() {
 
 function saveWatchlist(list) {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
+    // Reset momentum flag so any new additions are evaluated on next render
+    window.momentumCalculated = false;
 }
 
 function addToWatchlist(code, name) {
@@ -608,7 +610,7 @@ function updateSIPCalculator() {
     // Final flow is the corpus withdrawal (positive)
     cashflows.push({ amount: finalValue, date: latestData.date });
 
-    const xirr = calcXIRR(cashflows);
+    const xirr = computeXIRR(cashflows);
 
     const elInv = document.getElementById('sipInvested');
     if (elInv) elInv.textContent = '₹' + totalInvested.toLocaleString('en-IN');
@@ -1779,15 +1781,17 @@ auth.onAuthStateChanged(function (user) {
         document.getElementById('userEmail').textContent = user.email || '';
         userProfile.style.display = 'flex';
 
-        // Ensure user doc exists in Firestore
-        db.collection('users').doc(user.uid).set({
-            displayName: user.displayName,
-            email: user.email,
-            photoURL: user.photoURL,
-            lastLogin: firebase.firestore.FieldValue.serverTimestamp()
-        }, { merge: true }).catch(function (e) {
-            console.warn('Firestore user doc update failed:', e);
-        });
+        // Ensure user doc exists in Firestore (only when Firestore is available)
+        if (db) {
+            db.collection('users').doc(user.uid).set({
+                displayName: user.displayName,
+                email: user.email,
+                photoURL: user.photoURL,
+                lastLogin: firebase.firestore.FieldValue.serverTimestamp()
+            }, { merge: true }).catch(function (e) {
+                console.warn('Firestore user doc update failed:', e);
+            });
+        }
 
         console.log('Auth: Signed in as', user.displayName, user.uid);
     } else {
@@ -1933,6 +1937,7 @@ function addTransaction(txn) {
 
     /* ── Firestore: SIP Config ──────────────────────────────────── */
     if (txn.type === 'sip_config') {
+        if (!db) return Promise.reject(new Error('Firestore is not available (db is null). Use guest mode.'));
         return db.collection('users').doc(currentUser.uid)
             .collection('transactions').add({
                 type: 'sip_config',
@@ -1950,6 +1955,7 @@ function addTransaction(txn) {
     }
 
     /* ── Firestore: Lump Sum / Sell ─────────────────────────────── */
+    if (!db) return Promise.reject(new Error('Firestore is not available (db is null). Use guest mode.'));
     return db.collection('users').doc(currentUser.uid)
         .collection('transactions').add({
             type: txn.type,              // 'buy' | 'sell'
@@ -1976,6 +1982,7 @@ function getTransactions() {
         return Promise.resolve([...guestTxns].reverse());
     }
 
+    if (!db) return Promise.resolve([]);
     return db.collection('users').doc(currentUser.uid)
         .collection('transactions')
         .orderBy('createdAt', 'desc')   // all docs have createdAt; sip_config has no 'date' field
@@ -2001,8 +2008,8 @@ function deleteTransaction(txnId) {
         return Promise.resolve();
     }
 
+    if (!db) return Promise.reject(new Error('Firestore is not available (db is null). Use guest mode.'));
     return db.collection('users').doc(currentUser.uid)
-
         .collection('transactions').doc(txnId).delete();
 }
 

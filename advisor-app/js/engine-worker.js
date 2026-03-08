@@ -29,7 +29,11 @@ self.onmessage = function (e) {
                 return postError('Fund data not found in local cache. Please sync the app first.');
             }
 
-            const navHistory = targetFundData.navHistory || [];
+            // Support both StandardFundObject shape (nav.history) and legacy alias (data / navHistory)
+            const navHistory = targetFundData?.nav?.history
+                || targetFundData?.data
+                || targetFundData?.navHistory
+                || [];
             if (navHistory.length < 30) {
                 return postError('Insufficient NAV history to perform analysis (< 30 data points).');
             }
@@ -61,7 +65,10 @@ self.onmessage = function (e) {
             postProgress(95, 'Finalizing report...');
             const result = {
                 analyzedFund: targetSchemeCode,
-                fundName: targetFundData.meta?.schemeName || 'Unknown Fund',
+                fundName: targetFundData.meta?.cleanName
+                    || targetFundData.meta?.schemeName
+                    || targetFundData.meta?.scheme_name
+                    || 'Unknown Fund',
                 subCategory: targetFundData.meta?.subCategory || 'N/A',
                 metrics: {
                     cagr1Y: cagr1Y != null ? (cagr1Y * 100).toFixed(2) + '%' : 'N/A',
