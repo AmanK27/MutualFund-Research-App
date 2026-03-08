@@ -67,6 +67,12 @@
         </div>
     </div>
 
+    <!-- ── GLOBAL SYNC WARNING ────────────────────────────────── -->
+    <div id="global-sync-warning"
+        style="display:none; background:red; color:white; text-align:center; padding:10px; z-index:9999; font-weight:bold;">
+        ⚠️ Data is out of date. Please run Daily Sync to use the app.
+    </div>
+
     <div id="app">
         <!-- ── SIDEBAR ──────────────────────────────────────────── -->
         <aside id="sidebar">
@@ -119,6 +125,12 @@
                 style="background: linear-gradient(135deg, rgba(168, 85, 247, 0.15), rgba(139, 92, 246, 0.15)); border-color: rgba(168, 85, 247, 0.3);">
                 <span>📖</span>
                 <span>MF Glossary</span>
+            </div>
+
+            <div id="trigger-sync-btn" class="portfolio-nav-item"
+                style="background: linear-gradient(135deg, rgba(220, 38, 38, 0.15), rgba(185, 28, 28, 0.15)); border-color: rgba(220, 38, 38, 0.3); margin-top: 10px;">
+                <span>🔄</span>
+                <span>Sync Daily Data</span>
             </div>
 
             <nav class="category-nav" id="categoryNav"></nav>
@@ -1424,6 +1436,22 @@
         <button onclick="document.getElementById('bridge-error-modal').classList.remove('show')">Understood</button>
     </div>
 
+    <!-- ── SYNC PROGRESS MODAL ──────────────────────────────── -->
+    <div id="sync-progress-modal" class="modal-overlay">
+        <div class="modal">
+            <h2 class="modal-title">Daily Data Sync</h2>
+            <div id="sync-progress-text" style="font-size: 14px; color: var(--text-base); margin-bottom: 20px;">
+                Initializing sync engine...
+            </div>
+            <div class="spinner" id="sync-progress-spinner"
+                style="width: 30px; height: 30px; border-width: 3px; border-top-color: var(--accent); margin: 0 auto;">
+            </div>
+            <button id="close-sync-modal-btn" class="btn primary" style="display:none; width:100%; margin-top:20px;"
+                onclick="closeSyncModal()">Complete & Reload</button>
+        </div>
+    </div>
+
+    <script src="js/data-manager.js?v=2"></script>
     <script src="js/portfolio.js?v=2"></script>
     <script src="js/robo.js?v=2"></script>
     <script src="js/ui.js?v=2"></script>

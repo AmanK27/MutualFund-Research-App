@@ -889,6 +889,39 @@ body::before {
     flex-shrink: 0;
 }
 
+/* ── MODALS (Sync Progress & General) ── */
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(0, 0, 0, 0.75);
+    backdrop-filter: blur(4px);
+    z-index: 99999;
+    display: none; /* hidden by default */
+    align-items: center;
+    justify-content: center;
+}
+
+.modal {
+    background: var(--surface);
+    border: 1px solid var(--border-glass);
+    border-radius: var(--radius-lg);
+    padding: 30px;
+    width: 90%;
+    max-width: 400px;
+    text-align: center;
+    box-shadow: 0 20px 40px rgba(0,0,0,0.5);
+}
+
+.modal-title {
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: 15px;
+}
+
 /* ── LOADING STATE ───────────────────────────────────────── */
 #loadingState {
     display: none;
