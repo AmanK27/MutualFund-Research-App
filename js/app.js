@@ -137,8 +137,9 @@ async function calculateWatchlistMomentum() {
         for (let i = 0; i < list.length; i++) {
             const fund = list[i];
             try {
-                const json = await fetchFundData(fund.code);
-                const data = prepareNavData(json.data);
+                const jsonObj = await MFDB.getFund(fund.code);
+                if (!jsonObj) throw new Error("Missing in DB");
+                const data = prepareNavData(jsonObj.data);
                 const ret30 = calc30DayReturn(data);
                 if (ret30 !== null) {
                     results.push({ code: fund.code, ret30 });
@@ -778,7 +779,13 @@ async function loadFund(code) {
     document.getElementById('sidebarOverlay').classList.remove('active');
 
     try {
-        const data = await fetchFundData(code);
+        let data = await MFDB.getFund(code);
+        if (!data) {
+            console.log(`[App] Fund ${code} not in DB. Triggering on-demand sync...`);
+            const synced = await window.syncSingleFund(code);
+            if (!synced) throw new Error(`Failed to sync data for ${code} from AMFI`);
+            data = await MFDB.getFund(code);
+        }
         currentFund = data;
         displayFundData();
 
@@ -2441,10 +2448,16 @@ document.getElementById('runCompareBtn').addEventListener('click', async () => {
     document.getElementById('compareLoadingState').style.display = 'block';
 
     try {
-        const [fundA, fundB] = await Promise.all([
-            aggregateFundDetails(codeA, inputA),
-            aggregateFundDetails(codeB, inputB)
-        ]);
+        let fundA = await MFDB.getFund(codeA);
+        if (!fundA) {
+            await window.syncSingleFund(codeA);
+            fundA = await MFDB.getFund(codeA);
+        }
+        let fundB = await MFDB.getFund(codeB);
+        if (!fundB) {
+            await window.syncSingleFund(codeB);
+            fundB = await MFDB.getFund(codeB);
+        }
 
         if (!fundA || !fundB) {
             throw new Error("Failed to load aggregated fund details.");
@@ -2747,7 +2760,8 @@ async function runSIPForecast() {
 
     try {
         // 1. Market Crash Detector (Nifty 50 - 120716)
-        const niftyJson = await fetchFundData('120716');
+        const niftyJson = await MFDB.getFund('120716');
+        if (!niftyJson) throw new Error("Nifty 50 base data missing in DB");
         const niftyData = prepareNavData(niftyJson.data);
         if (niftyData.length > 10) {
             const recent = niftyData.slice(-10);
@@ -2779,7 +2793,8 @@ async function runSIPForecast() {
         const opportunities = [];
         for (const code of uniqueCodes) {
             try {
-                const json = await fetchFundData(code);
+                const json = await MFDB.getFund(code);
+                if (!json) continue;
                 const data = prepareNavData(json.data);
                 if (data.length >= 200) {
                     const dma200 = calcDMA(data, 200);
@@ -2851,7 +2866,8 @@ async function runMomentumScanner() {
             const batch = window.FUND_UNIVERSE.slice(i, i + batchSize);
 
             const results = await Promise.allSettled(batch.map(async (code) => {
-                const json = await fetchFundData(code);
+                const json = await MFDB.getFund(code);
+                if (!json) return null;
                 const data = prepareNavData(json.data);
                 if (data.length < 2) return null;
 
@@ -3304,7 +3320,8 @@ async function runSmartPortfolioDiagnosis(holdings) {
 
         for (const h of holdings) {
             try {
-                const json = await fetchFundData(h.code);
+                const json = await MFDB.getFund(h.code);
+                if (!json) continue;
                 const data = prepareNavData(json.data);
                 const score = getFundHealthScore(data, null);
 
@@ -3363,7 +3380,8 @@ async function findBestReplacement(category, weakScore) {
     const candidates = [];
     for (const code of window.FUND_UNIVERSE) {
         try {
-            const json = await fetchFundData(code);
+            const json = await MFDB.getFund(code);
+            if (!json) continue;
             if (json.meta.scheme_category === category) {
                 const data = prepareNavData(json.data);
                 const ret30 = calc30DayReturn(data);

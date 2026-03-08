@@ -80,4 +80,15 @@ async function runDailySync(portfolioCodes, categories, onProgress) {
     }
 }
 
+export async function syncSingleFund(code) {
+    console.log(`[DataManager] On-demand sync for ${code}`);
+    const freshFund = await aggregateFundDetails(code);
+    if (freshFund) {
+        await MFDB.setFund(freshFund);
+        return true;
+    }
+    return false;
+}
+
 window.runDailySync = runDailySync;
+window.syncSingleFund = syncSingleFund;

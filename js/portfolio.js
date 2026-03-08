@@ -263,20 +263,23 @@ async function autofetchPfNav() {
     navInput.value = '';
 
     try {
-        const res = await fetch(`https://api.mfapi.in/mf/${pfModalSelectedCode}`);
-        const data = await res.json();
-        if (data && data.data && data.data.length > 0) {
+        const json = await MFDB.getFund(String(pfModalSelectedCode));
+        if (json && json.data && json.data.length > 0) {
             // Find the NAV closest to but not after the selected date
             const targetDate = new Date(dateStr);
             let bestNav = null;
-            for (const entry of data.data) {
-                const parts = entry.date.split('-');
-                const entryDate = new Date(`${parts[2]}-${parts[1]}-${parts[0]}`);
+            // Iterate backwards since MFDB data is oldest-to-newest
+            for (let i = json.data.length - 1; i >= 0; i--) {
+                const entry = json.data[i];
+                // Handle both ISO strings and parsed dates
+                const entryDate = new Date(entry.date);
                 if (entryDate <= targetDate) { bestNav = entry.nav; break; }
             }
             navInput.value = bestNav ? parseFloat(bestNav).toFixed(4) : '';
             navInput.placeholder = 'NAV at purchase date';
             recomputePfUnits();
+        } else {
+            navInput.placeholder = 'Enter NAV manually (un-synced fund)';
         }
     } catch (e) {
         navInput.placeholder = 'Enter NAV manually';
@@ -563,14 +566,12 @@ async function runInsightAlerts(holdings, alertSettings, analyticsData = {}) {
     // ── Rule B: Market Timing ────────────────────────────────────
     if (rules.enableMarketTimingAlert) {
         try {
-            const ctrl = new AbortController();
-            const t = setTimeout(() => ctrl.abort(), 4000);
             // UTI Nifty 50 Index Fund Direct Growth (scheme 120716)
-            const res = await fetch('https://api.mfapi.in/mf/120716', { signal: ctrl.signal });
-            clearTimeout(t);
-            if (res.ok) {
-                const data = await res.json();
-                const navs = (data.data || []).slice(0, 365).map(d => parseFloat(d.nav)).filter(n => isFinite(n));
+            const json = await MFDB.getFund('120716');
+            if (json && json.data && json.data.length > 0) {
+                // MFDB data is chronological (oldest to newest). We reverse it to get newest first.
+                const recentNavs = [...json.data].reverse().slice(0, 365);
+                const navs = recentNavs.map(d => parseFloat(d.nav)).filter(n => isFinite(n));
                 if (navs.length >= 2) {
                     const currentNav = navs[0];
                     const peakNav = Math.max(...navs);
@@ -586,7 +587,7 @@ async function runInsightAlerts(holdings, alertSettings, analyticsData = {}) {
                     }
                 }
             }
-        } catch (_) { /* network error or timeout — skip silently */ }
+        } catch (_) { /* gracefully skip */ }
     }
 
     // ── Rule C: Tax Loss Harvest ─────────────────────────────────
