@@ -3467,66 +3467,6 @@ window.showSyncToast = function (message) {
         // Run Robo Momentum Scanner
         runMomentumScanner();
 
-        // ── WIRE UP MANUAL SYNC BUTTON ─────────────────────────────
-        const syncBtn = document.getElementById('trigger-sync-btn');
-        if (syncBtn) {
-            syncBtn.addEventListener('click', async () => {
-                const modal = document.getElementById('sync-progress-modal');
-                const progressText = document.getElementById('sync-progress-text');
-                const spinner = document.getElementById('sync-progress-spinner');
-                const closeBtn = document.getElementById('close-sync-modal-btn');
-
-                modal.style.display = 'flex';
-                spinner.style.display = 'block';
-                closeBtn.style.display = 'none';
-
-                try {
-                    // Gather required categories + active user portfolio/watchlist codes
-                    // (For now, we sync a hardcore list of top amfi categories and the user's local watchlist as proxy for portfolio)
-                    const categories = [
-                        'Equity Scheme - Flexi Cap Fund',
-                        'Equity Scheme - Mid Cap Fund',
-                        'Equity Scheme - Small Cap Fund',
-                        'Equity Scheme - Large Cap Fund',
-                        'Hybrid Scheme - Aggressive Hybrid Fund',
-                        'Other Scheme - Index Funds'
-                    ];
-
-                    const watchlist = loadWatchlist();
-                    const portfolioCodes = watchlist.map(item => item.code);
-
-                    // Execute ETL Pipeline
-                    await runDailySync(portfolioCodes, categories, (msg) => {
-                        progressText.textContent = msg;
-                    });
-
-                    // Verification
-                    progressText.textContent = "Sync Complete. Verifying Data Integrity...";
-                    const mandatoryFund = await MFDB.getFund('120716');
-                    if (!mandatoryFund) throw new Error("Verification failed! Mandatory Index data (Nifty 50) was not saved.");
-
-                    if (portfolioCodes.length > 0) {
-                        const verifyDb = await MFDB.getFund(portfolioCodes[0]);
-                        if (!verifyDb) console.warn(`[Sync] Portfolio fund ${portfolioCodes[0]} was not stored, but core sync passed.`);
-                    }
-
-                    spinner.style.display = 'none';
-                    progressText.innerHTML = `<span style="color:#10b981">✅ Sync Verified and Complete!</span>`;
-                    closeBtn.style.display = 'block';
-
-                    closeBtn.onclick = () => {
-                        window.location.reload();
-                    };
-
-                } catch (e) {
-                    spinner.style.display = 'none';
-                    progressText.innerHTML = `<span style="color:red">❌ Sync Failed: ${e.message}</span>`;
-                    closeBtn.textContent = "Close";
-                    closeBtn.style.display = 'block';
-                    closeBtn.onclick = () => { modal.style.display = 'none'; };
-                }
-            });
-        }
 
     } catch (bootErr) {
         console.error("FATAL: bootApp crashed:", bootErr);
