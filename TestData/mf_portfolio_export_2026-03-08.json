@@ -1,0 +1,21 @@
+{
+  "version": "1.0",
+  "timestamp": "2026-03-08T11:42:03.201Z",
+  "portfolio": [
+    {
+      "id": "guest-txn-1772970106531",
+      "type": "sip_config",
+      "schemeCode": "127042",
+      "schemeName": "Motilal Oswal Midcap Fund",
+      "amount": 5000,
+      "startDate": "2024-10-03",
+      "sipStatus": "paused",
+      "endDate": "2026-01-01",
+      "isStepUp": false,
+      "stepUpAmount": 0,
+      "stepUpFrequency": "annually"
+    }
+  ],
+  "watchlist": [],
+  "rules": {}
+}

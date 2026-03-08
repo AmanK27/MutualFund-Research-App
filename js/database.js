@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════════════════════
-   database.js — MFAppDB v2 ETL strictly-typed IndexedDB
+   database.js — MFAppDB v2 SWR strictly-typed IndexedDB
    ═══════════════════════════════════════════════════════════════════ */
 
 const DB_NAME = 'MFAppDB';
