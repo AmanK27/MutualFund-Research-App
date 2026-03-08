@@ -95,7 +95,7 @@ Alerts Engine (runInsightAlerts):
 
 Portfolio Persistence:
   - Transactions in localStorage (mf_portfolio_txns)
-  - Export/Import as JSON (TestData/ sample file format)
+  - Export/Import as JSON (data/ sample file format)
   - addTransaction() / deleteTransaction() functions in app.js
 ```
 

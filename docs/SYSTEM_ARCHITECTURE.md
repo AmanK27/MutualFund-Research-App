@@ -47,7 +47,7 @@ MutualFund Research App/
 │       ├── advisor-db.js       ← Isolated AdvisorDB + bridge to main app MFDB
 │       └── engine-worker.js    ← Web Worker: risk metrics + recommendation engine
 │
-├── TestData/
+├── data/
 │   └── mf_portfolio_export_2026-03-08.json   ← Sample export file
 │
 └── changelog/                  ← Versioned changelogs (v1.0.0 → v1.6.2)

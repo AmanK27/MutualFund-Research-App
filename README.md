@@ -16,143 +16,95 @@
 
 ---
 
-## ✨ Features
+## 🏗️ Architecture & Documentation
 
-### 🔍 Smart Search
-- Real-time autocomplete by fund name or code
-- Trending Direct Growth funds shown on focus
-- Selects fund name (not raw scheme code) in input field
+All deep architectural documentation, feature flow maps, and forensic audits are stored in the `/docs` directory.
 
-### 📊 Fund Dashboard
-- **NAV Chart** — interactive, zoomable Chart.js with 1Y / 3Y / 5Y / Max range toggles
-- **Performance KPIs** — 1Y, 3Y, 5Y, Max CAGR computed client-side from raw NAV data
-- **Volatility (σ)** — annualised standard deviation of daily returns
-- **Sharpe Ratio** — risk-adjusted return score (uses 6% risk-free rate)
-- **Fund Health Score** — composite 0–100 score blending CAGR, Volatility, Sharpe, and Expense Ratio
-- **52-Week Drawdown** — max peak-to-trough loss over the last year
-- **AUM** — fetched from a community-maintained AMFI CSV mirror
-- **Top 10 Holdings** — from Groww's public API with retry fallback
-- **Expense Ratio & Category** — resolved from the AMFI master list
-
-### 🏆 Category Peer Ranking
-- Sidebar panel ranking the top funds in the same AMFI category by 1Y CAGR
-- Powered by `fetchCategoryPeers()` — an IndexedDB-cached smart fetcher (12-hour TTL)
-- Highlights the current fund's position vs. its peers
-- Updates Category Rank KPI (`#N of M`)
-
-### 📋 Fund Comparison
-- Dynamic side-by-side comparison for 2–4 funds simultaneously
-- Shared time range selector with Chart.js multi-line overlay
-- Per-fund CAGR badges rendered inline
-
-### 💼 My Portfolio
-- Add / delete transactions (Buy / SIP) per fund scheme
-- Real-time P&L: invested vs. current value, absolute return %, overall XIRR
-- Portfolio holdings table with per-fund "Analyze Loss" smart triggers
-- **Insights & Alerts** panel — automated alerts for consecutive-loss streaks, tracking error, and more
-
-### 🤖 Multi-Layer Loss Recovery Advisor
-The flagship AI-style diagnostic tool:
-1. **Drawdown Analysis** — fund's 52-week max drawdown
-2. **Market Comparison** — benchmarked against Nifty 50 (UTI proxy)
-3. **Category Peer Analysis** — uses `fetchCategoryPeers()` with IndexedDB cache to identify the best-performing Direct Growth peer fund via a **Pure Exclusion Filter** (removes IDCW, Bonus, Regular plan variants)
-4. **Recommendation Engine** — outputs one of three strategies: **HOLD**, **COST AVERAGE**, or **SWITCH FUND**
-5. **"With Swap" Simulation** — Chart.js projection of portfolio if switched to the recommended fund
-
-### 📱 SIP Calculator & Forecast
-- Configurable amount and duration
-- Real compounding simulation on actual NAV history
-
-### 📱 Mobile Handoff
-- QR code generation of the live session URL for seamless cross-device use
-
-### 📖 MF Glossary
-- Built-in glossary of common mutual fund terms
+- **[System Architecture](docs/SYSTEM_ARCHITECTURE.md)**: Details the SWR caching pattern, StandardFundObject data contract, and component structure.
+- **[Feature Flow Map](docs/FEATURE_FLOW_MAP.md)**: End-to-end execution paths for all app features.
+- **[Project Full Audit](docs/PROJECT_FULL_AUDIT.md)**: A comprehensive forensic review of bugs, security risks, and optimization targets.
 
 ---
 
-## 🏗️ Architecture
+## 📜 JavaScript Modules & Use Cases
 
+The application is structured into targeted, specialized modules to separate concerns and manage complexity:
+
+| Script | Responsibility / Use Case |
+|--------|---------------------------|
+| **`js/database.js`** | IndexedDB wrapper (`MFAppDB`). Persists cache data to prevent rate-limiting and enable offline operation. |
+| **`js/normalizer.js`** | Anti-Corruption Layer (ACL). Transforms unstable external JSON structures from `mfapi.in` and `groww.in` into the reliable `StandardFundObject`. |
+| **`js/api.js`** | Network layer. Executes `fetch()` requests and handles caching logic. Responsible for fetching NAV histories, peer categories, and holdings via CORS proxies. |
+| **`js/data-manager.js`** | Orchestrates background synchronization using a Stale-While-Revalidate (SWR) pattern. Refreshes stale data without blocking the UI. |
+| **`js/utils.js`** | Pure mathematical core. Calculates CAGR, Volatility, standard deviations, moving averages, and generates expanded SIP cash flow ledgers. |
+| **`js/portfolio.js`** | Manages user holdings, aggregates transactions (Lump Sum/SIP), calculates portfolio XIRR using Newton-Raphson, and categorizes capital gains (STCG/LTCG). |
+| **`js/ui.js`** | Pure DOM manipulation, event listener binding, and alert/modal rendering. Translates state changes into HTML updates. |
+| **`js/app.js`** | The main application orchestrator. Initializes the app, handles Firebase mock authentication, renders Chart.js elements, and dictates the core app state machine. |
+| **`js/bridge.js`** | Navigational interop layer. Verifies session state and safely routes users between the main app and the standalone `advisor-app`. |
+| **`js/dev-diagnostics.js`** | Localhost-only script that visually flags basic health anomalies (missing APIs, missing DB indices). |
+| **`advisor-app/js/engine-worker.js`** | A dedicated Web Worker for the Robo-Advisor. Runs heavy risk-scoring and peer-filtering algorithms off the main thread to keep the UI fluid. |
+
+---
+
+## 🕸️ Module Dependency Chart
+
+```mermaid
+graph TD
+    UI(index.html UI) --> APP[app.js]
+    APP --> PORT[portfolio.js]
+    APP --> UT[utils.js]
+    APP --> UI_JS[ui.js]
+    
+    PORT --> UT
+    
+    APP --> DM[data-manager.js]
+    DM --> API[api.js]
+    API --> NORM[normalizer.js]
+    API --> DB[(database.js / IndexedDB)]
+    
+    APP --> BR[bridge.js]
+    BR --> ADV[advisor-app / app.js]
+    ADV --> WRKR[[engine-worker.js]]
+    WRKR --> ADV_DB[(advisor-db.js)]
 ```
-MutualFund Research App/
-├── index.html          # Full app shell — auth, modals, layout markup
-├── css/
-│   └── styles.css      # Premium dark-mode UI, glassmorphism, CSS variables
-├── js/
-│   ├── utils.js        # Math engine: CAGR, XIRR, Volatility, Sharpe, formatting
-│   ├── cache.js        # IndexedDB CacheManager (get / set / isCacheValid — 12-hr TTL)
-│   ├── api.js          # Network layer: AMFI, mfapi.in, Groww, AUM CSV
-│   │                   #   └── fetchCategoryPeers() — smart IndexedDB-backed peer fetcher
-│   ├── app.js          # Core orchestration, state, dashboard, portfolio, peer ranking UI
-│   ├── advisor.js      # Loss Recovery Advisor engine (diagnostic + recommendation)
-│   ├── robo.js         # Robo-advisor / SIP simulation helpers
-│   ├── ui.js           # Advisor modal, openLossAdvisor(), chart rendering
-│   └── portfolio.js    # Portfolio logic, XIRR engine, alert rules
-├── package.json        # Metadata / dependency tracking
-├── changelog/          # Iterative version notes (v1.0.0 → v1.6.1)
-└── README.md
-```
 
-### Key Architectural Decisions
+---
 
-| Decision | Rationale |
-|---|---|
-| **Zero backend** | No server to maintain; all logic runs in the browser |
-| **IndexedDB cache (12-hr TTL)** | Avoids rate-limiting from mfapi.in; peer data fetched once/day |
-| **`fetchCategoryPeers()` centralized** | Both the sidebar UI and Loss Advisor share one smart, cached fetch function — no state threading |
-| **Pure Exclusion Filter** | Excludes Regular / IDCW / Bonus / Dividend by name rather than requiring "Direct + Growth" keywords — handles abbreviated fund names |
-| **Firebase Auth + Firestore** | Lightweight, free-tier identity and portfolio persistence without any custom backend |
-| **Client-side math** | XIRR, CAGR, Sharpe, Volatility — all computed offline on raw NAV data arrays |
+## 🏛️ Architectural Evolutions
+
+1. **v1.0.0 (Monolith)**: The initial build. A massive standalone `app.js` directly executed DOM manipulation, fetch requests, and math operations. Data was completely un-cached.
+2. **v1.2.0 (Peer Ranking)**: Added advanced categorization logic. This created the first major performance bottleneck, proving the need for a persistence layer.
+3. **v1.5.0 (Loss Advisor & Web Workers)**: The Robo-Advisor micro-app was born. It introduced Web Workers `engine-worker.js` to handle intense risk-scoring loops without freezing the main application thread.
+4. **v1.6.0 (Modular Extraction)**: Began carving the monolith. `api.js`, `utils.js`, `ui.js`, and `cache.js` were split into their own domains.
+5. **v1.6.3 (Strict Segregation & Contract Enforcement)**: Codebase fully segregated by structural purpose (docs, data, frontend assets). The `StandardFundObject` schema was enforced across all modules, and deep forensic auditing paved the foundation for long-term scalability.
 
 ---
 
 ## 🚀 Running Locally
 
-The app runs on any static file server. The included Python server is recommended:
+The app runs on any static file server. A simple Python server is recommended:
 
 ```bash
 cd "MutualFund Research App"
 python3 -m http.server 8082
 ```
 
-Then open `http://localhost:8082` in your browser.
-
-> ⚠️ **Note:** CORS restrictions from AMFI endpoints may cause some data fetches to fail when running fully offline. The GitHub Pages deployment handles proxy routing automatically. For local dev, use the **Guest Mode** bypass to skip Firebase login.
+Navigate to `http://localhost:8082`.
+*Note: Due to CORS, some remote APIs may require a localhost bypass or proxy when developing locally.*
 
 ---
 
 ## 📦 Tech Stack
 
-| Layer | Technology |
-|---|---|
-| Structure | HTML5, Semantic DOM |
-| Styling | Vanilla CSS — CSS Variables, Glassmorphism, Dark Mode |
-| Logic | Vanilla ES6+ JavaScript (no framework) |
-| Charts | Chart.js v4.4.1 + `chartjs-adapter-date-fns` |
-| Storage | Firebase Firestore (portfolio), IndexedDB (NAV + peer cache) |
-| Auth | Firebase Authentication (Google Sign-In + Guest Mode) |
-| Data | `mfapi.in`, AMFI master list CSV, Groww public API |
-| CI/CD | GitHub Actions → GitHub Pages auto-deploy |
-
----
-
-## 📋 Changelog Summary
-
-| Version | Highlights |
-|---|---|
-| **v1.6.1** | Fix: Critical JS syntax error breaking Google Sign-In |
-| **v1.6.0** | Modular refactor: extracted `utils.js`, `api.js`, `cache.js`; Guest Mode added |
-| **v1.5.x** | Loss Recovery Advisor: Cascading filter, CAGR fix, Pure Exclusion Filter, IndexedDB peer cache |
-| **v1.4.0** | Fund Comparison module |
-| **v1.2.0** | Category Peer Ranking sidebar |
-| **v1.1.0** | Portfolio tracking, XIRR, alerts |
-| **v1.0.0** | Core dashboard: search, NAV chart, CAGR KPIs, Sharpe, SIP calculator |
-
-> Full version notes in [`/changelog`](./changelog/)
+- **Core**: HTML5, Vanilla CSS (Variables, Glassmorphism), Vanilla ES6+ JavaScript.
+- **Charts**: Chart.js v4.4.1 + `chartjs-adapter-date-fns`.
+- **Storage/Persistence**: Firebase Firestore (user mock/real), IndexedDB `LocalForage` style (caching).
+- **Data Providers**: `mfapi.in` (official wrapper), AMFI master CSV, Groww public REST.
+- **CI/CD Pipeline**: GitHub Actions (deploy to Pages).
 
 ---
 
 ## 📄 License & Restrictions
 
-Private repository. All intellectual and structural rights reserved.  
+Private repository. All intellectual and structural rights reserved.
 Do not clone, distribute, or deploy without explicit authorization.

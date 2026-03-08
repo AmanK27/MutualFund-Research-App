@@ -31,7 +31,7 @@ Root:
   js/utils.js         14 KB — math utilities + SIP ledger
   advisor-app/        separate sub-page micro-app
   changelog/          15 versioned changelogs (v1.0.0 → v1.6.2)
-  TestData/           1 sample JSON file
+  data/           1 sample JSON file
   .github/workflows/  1 disabled YML pipeline
 ```
 
