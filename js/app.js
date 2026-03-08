@@ -475,8 +475,8 @@ function displayFundData() {
     updateSIPCalculator();
 
     // Load category peers asynchronously
-    if (meta.scheme_category) {
-        initPeerRanking(meta.scheme_category, currentCode);
+    if (currentFund?.meta?.subCategory) {
+        UI.initPeerRanking(currentFund);
     } else {
         const prCard = document.getElementById('peerRankingCard');
         if (prCard) prCard.style.display = 'none';
@@ -543,97 +543,6 @@ function renderFundHealthScore() {
     }
 }
 
-/**
- * Dynamic Rendering for Peer Comparison (Step 2 & 3)
- */
-async function initPeerRanking(category, schemeCode) {
-    const card = document.getElementById('peerRankingCard');
-    const listEl = document.getElementById('peerRankingList');
-    const loading = document.getElementById('peerRankingLoading');
-    const label = document.getElementById('peerCategoryLabel');
-
-    if (!card || !listEl || !loading) return;
-
-    // Optional UI reset
-    card.style.display = 'flex';
-    listEl.innerHTML = '';
-    label.textContent = category.replace(/Equity Scheme\s*-?\s*/ig, '').replace(/Open Ended Schemes/ig, '').trim();
-    loading.style.display = 'block';
-
-    try {
-        // Use the smart IndexedDB-cached fetcher — same function the advisor uses
-        const rankedPeers = await MFDB.getPeers(category) || [];
-        loading.style.display = 'none';
-
-        if (!rankedPeers || rankedPeers.length === 0) {
-            listEl.innerHTML = '<div style="color:var(--text-muted);font-size:13px;text-align:center;">No peers found for strictly Direct Growth category.</div>';
-            return;
-        }
-
-        // Force numerical sort 
-        rankedPeers.sort((a, b) => parseFloat(b.cagr1y) - parseFloat(a.cagr1y));
-
-        // Render Top 10
-        const topPeers = rankedPeers.slice(0, 10);
-
-        // Check if current fund is in top 10
-        let currentInTop = topPeers.findIndex(p => p.schemeCode === String(schemeCode));
-
-        // Function to build row HTML
-        const buildRow = (peer, index) => {
-            const isCurrent = peer.schemeCode === String(schemeCode);
-            const highlightClass = isCurrent ? 'peer-highlight' : '';
-            return `
-                <div class="peer-item ${highlightClass}" onclick="loadFund('${peer.schemeCode}')" title="Click to view details">
-                    <div class="peer-info">
-                        <span class="peer-rank">#${index + 1}</span>
-                        <span class="peer-name">${(() => {
-                    const n = peer.schemeName || '';
-                    if (n.toLowerCase().includes('direct')) return n;
-                    const badge = (peer.planType && peer.optionType && peer.planType !== 'UNKNOWN')
-                        ? `${peer.planType} ${peer.optionType}`
-                        : 'DIRECT GROWTH';
-                    return `${n} <span style="font-size:9px;opacity:0.65;font-weight:500;">[${badge}]</span>`;
-                })()}</span>
-                    </div>
-                    <div class="peer-metric">
-                        <span class="peer-metric-label">1Y CAGR</span>
-                        <span class="peer-metric-value ${getPercentClass(peer.cagr1y)}">${formatPercent(peer.cagr1y)}</span>
-                    </div>
-                </div>
-            `;
-        };
-
-        let html = topPeers.map((p, i) => buildRow(p, i)).join('');
-
-        // Step 3 logic: if current fund is not in top 10, append it to the bottom
-        if (currentInTop === -1) {
-            const actualIndex = rankedPeers.findIndex(p => p.schemeCode === String(schemeCode));
-            if (actualIndex !== -1) {
-                html += `
-                    <div style="text-align:center;color:var(--text-muted);font-size:18px;line-height:10px;">⋮</div>
-                    ${buildRow(rankedPeers[actualIndex], actualIndex)}
-                `;
-            }
-        }
-
-        listEl.innerHTML = html;
-
-        // Update Category Rank in UI
-        const myRank = rankedPeers.findIndex(p => p.schemeCode === String(schemeCode));
-        const rankValueEl = document.getElementById('categoryRankValue');
-        if (rankValueEl && myRank !== -1) {
-            rankValueEl.textContent = `#${myRank + 1} of ${rankedPeers.length}`;
-        } else if (rankValueEl) {
-            rankValueEl.textContent = 'Not Ranked';
-        }
-
-    } catch (err) {
-        console.error("Peer rendering failed", err);
-        loading.style.display = 'none';
-        listEl.innerHTML = '<div style="color:var(--red);font-size:13px;text-align:center;">Error loading peer data.</div>';
-    }
-}
 
 function updateSIPCalculator() {
     if (!fullNavData || fullNavData.length === 0) return;

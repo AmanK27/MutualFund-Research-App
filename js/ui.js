@@ -104,6 +104,102 @@ const UI = {
             if (compBtn) compBtn.classList.remove('active');
             if (forecastBtn) forecastBtn.classList.remove('active');
         }
+    },
+
+    /**
+     * Restore Category Peers & Rank UI logic
+     */
+    async initPeerRanking(fund) {
+        const card = document.getElementById('peerRankingCard');
+        const listEl = document.getElementById('peerRankingList');
+        const loading = document.getElementById('peerRankingLoading');
+        const label = document.getElementById('peerCategoryLabel');
+        const rankValueEl = document.getElementById('categoryRankValue');
+
+        if (!card || !listEl || !loading) return;
+
+        // Reset UI
+        card.style.display = 'flex';
+        listEl.innerHTML = '';
+        loading.style.display = 'block';
+        if (rankValueEl) rankValueEl.textContent = '—';
+
+        const category = fund?.meta?.subCategory;
+        const currentCode = String(fund?.identifiers?.schemeCode || '');
+
+        if (label) {
+            label.textContent = (window.Normalizer)
+                ? Normalizer.formatSubCategory(category)
+                : (category || '—');
+        }
+
+        try {
+            // Fetch peers from IndexedDB using strict sub-category
+            const peers = await MFDB.getPeers(category) || [];
+            loading.style.display = 'none';
+
+            if (peers.length === 0) {
+                listEl.innerHTML = '<div style="color:var(--text-muted);font-size:12px;text-align:center;padding:10px;">No peer data available.</div>';
+                if (rankValueEl) rankValueEl.textContent = 'Not Ranked';
+                return;
+            }
+
+            // Sort by 1Y CAGR (descending)
+            peers.sort((a, b) => (parseFloat(b.cagr1y) || 0) - (parseFloat(a.cagr1y) || 0));
+
+            // Calculate current fund rank
+            const myRank = peers.findIndex(p => String(p.schemeCode) === currentCode);
+            if (rankValueEl) {
+                rankValueEl.textContent = (myRank !== -1) ? `#${myRank + 1} in Category` : 'Not Ranked';
+            }
+
+            // Render top 5 peers
+            const top5 = peers.slice(0, 5);
+            let html = '';
+
+            top5.forEach((peer, idx) => {
+                const isCurrent = String(peer.schemeCode) === currentCode;
+                const highlightClass = isCurrent ? 'peer-highlight' : '';
+                const cagr = parseFloat(peer.cagr1y) || 0;
+
+                html += `
+                    <div class="peer-item ${highlightClass}" onclick="loadFund('${peer.schemeCode}')" title="Click to view details">
+                        <div class="peer-info">
+                            <span class="peer-rank">#${idx + 1}</span>
+                            <span class="peer-name">${peer.schemeName || 'Unknown'}</span>
+                        </div>
+                        <div class="peer-metric">
+                            <span class="peer-metric-value ${cagr >= 0 ? 'stat-positive' : 'stat-negative'}">
+                                ${cagr.toFixed(2)}%
+                            </span>
+                        </div>
+                    </div>
+                `;
+            });
+
+            // If current fund is not in top 5, append it at the bottom
+            if (myRank >= 5) {
+                html += `
+                    <div style="text-align:center;color:var(--text-muted);font-size:14px;margin:4px 0;">⋮</div>
+                    <div class="peer-item peer-highlight" onclick="loadFund('${currentCode}')">
+                        <div class="peer-info">
+                            <span class="peer-rank">#${myRank + 1}</span>
+                            <span class="peer-name">${fund.meta?.cleanName || 'Current Fund'}</span>
+                        </div>
+                        <div class="peer-metric">
+                            <span class="peer-metric-value">${(peers[myRank].cagr1y * 100).toFixed(2)}%</span>
+                        </div>
+                    </div>
+                `;
+            }
+
+            listEl.innerHTML = html;
+
+        } catch (err) {
+            console.error("Peer rendering failed:", err);
+            loading.style.display = 'none';
+            listEl.innerHTML = '<div style="color:var(--red);font-size:12px;text-align:center;">Error loading.</div>';
+        }
     }
 };
 
