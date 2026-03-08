@@ -1,94 +1,88 @@
 /* ═══════════════════════════════════════════════════════════════════
-   data-manager.js — The ETL Orchestrator
+   data-manager.js — The SWR ETL Orchestrator
    ═══════════════════════════════════════════════════════════════════ */
 
-async function runDailySync(portfolioCodes, categories, onProgress) {
+/**
+ * Silent Background Sync Engine for SWR Architecture.
+ * Catches all errors to prevent crashing the main thread.
+ */
+async function runBackgroundSync(portfolioCodes, categories, onProgress = () => { }) {
     const todayDate = new Date().toISOString().split('T')[0];
 
     try {
-        // 0. Ensure Global Fund List is loaded (required for Peer Ranking)
+        console.log("[DataManager] Starting Background SWR Sync...");
+        onProgress("🔄 Syncing latest market data...");
+
+        // 0. Ensure Global Context is loaded
         await fetchGlobalFundList();
-
-        // 1. Mark Sync as In Progress
         await MFDB.setSyncState(todayDate, 'IN_PROGRESS');
-        if (onProgress) onProgress('Sync started...');
 
-        // 2. Sync Categories (Peers)
+        // 1. Sync Categories (Peers) silently
         for (let i = 0; i < categories.length; i++) {
             const cat = categories[i];
-            if (onProgress) onProgress(`Syncing category peers: ${cat} (${i + 1}/${categories.length})`);
-
-            // fetchCategoryPeers from api.js directly
-            const peers = await fetchCategoryPeers(cat);
-            if (peers && peers.length > 0) {
-                await MFDB.setPeers(cat, peers);
+            try {
+                const peers = await fetchCategoryPeers(cat);
+                if (peers && peers.length > 0) {
+                    await MFDB.setPeers(cat, peers);
+                }
+            } catch (peerErr) {
+                console.warn(`[DataManager] Failed to sync category ${cat}:`, peerErr);
             }
         }
 
-        // 3. Sync Portfolio Funds (Incremental Merge)
+        // 2. Sync Portfolio Funds (Incremental Merge)
         for (let i = 0; i < portfolioCodes.length; i++) {
             const code = portfolioCodes[i];
-            if (onProgress) onProgress(`Syncing fund: ${code} (${i + 1}/${portfolioCodes.length})`);
+            try {
+                const existingFund = await MFDB.getFund(code);
+                const freshFund = await aggregateFundDetails(code);
 
-            // Read existing from DB
-            const existingFund = await MFDB.getFund(code);
+                if (!freshFund) continue;
 
-            // Fetch fresh from API
-            const freshFund = await aggregateFundDetails(code);
+                if (existingFund && existingFund.nav && existingFund.nav.history && freshFund.nav && freshFund.nav.history) {
+                    // Incremental Merge: Find highest date in existing DB
+                    let maxDate = 0;
+                    for (const entry of existingFund.nav.history) {
+                        const ts = new Date(entry.date).getTime();
+                        if (ts > maxDate) maxDate = ts;
+                    }
 
-            if (!freshFund) {
-                console.warn(`[DataManager] Failed to fetch fresh data for ${code}`);
-                continue;
-            }
+                    // Append only newer dates
+                    const newEntries = freshFund.nav.history.filter(e => new Date(e.date).getTime() > maxDate);
 
-            // Incremental Merge logic for NAV history
-            if (existingFund && existingFund.nav && existingFund.nav.history && freshFund.nav && freshFund.nav.history) {
-                // Find highest date in existing History
-                let maxDate = 0;
-                for (const entry of existingFund.nav.history) {
-                    const ts = new Date(entry.date).getTime();
-                    if (ts > maxDate) maxDate = ts;
+                    if (newEntries.length > 0) {
+                        console.log(`[DataManager] Incremental merge for ${code}: adding ${newEntries.length} new NAV entries.`);
+                        freshFund.nav.history = [...existingFund.nav.history, ...newEntries].sort((a, b) => new Date(a.date) - new Date(b.date));
+                        freshFund.data = freshFund.nav.history; // legacy alias
+                    } else {
+                        // Preserves existing history if no new dates
+                        freshFund.nav.history = existingFund.nav.history;
+                        freshFund.data = existingFund.data;
+                    }
                 }
+                await MFDB.setFund(freshFund);
 
-                // Filter fresh dates that are newer than maxDate
-                const newEntries = freshFund.nav.history.filter(e => new Date(e.date).getTime() > maxDate);
-
-                if (newEntries.length > 0) {
-                    console.log(`[DataManager] Incremental merge for ${code}: adding ${newEntries.length} new NAV entries.`);
-                    freshFund.nav.history = [...existingFund.nav.history, ...newEntries].sort((a, b) => new Date(a.date) - new Date(b.date));
-                    // Update legacy data array alias
-                    freshFund.data = freshFund.nav.history;
-                } else {
-                    // No new dates, but we keep the fresh metadata/portfolio
-                    freshFund.nav.history = existingFund.nav.history;
-                    freshFund.data = existingFund.data;
-                }
+            } catch (fundErr) {
+                console.warn(`[DataManager] Failed to sync fund ${code}:`, fundErr);
             }
-
-            // Save merged object back to DB
-            await MFDB.setFund(freshFund);
         }
 
-        // 4. Explicitly Sync Nifty 50 (120716) for Market Timing Dashboard
-        if (onProgress) onProgress('Syncing Mandatory Indices (Nifty 50)...');
-        await syncSingleFund('120716');
+        // 3. Mandatory Explicit Sync (Nifty 50)
+        try { await syncSingleFund('120716'); } catch (e) { /* ignore */ }
 
         // 4. Mark Sync as Complete
         await MFDB.setSyncState(todayDate, 'COMPLETE');
-        if (onProgress) onProgress('Sync completed successfully!');
+        console.log("[DataManager] Background SWR Sync Completed Successfully.");
+        onProgress("✅ Market data updated. Refresh to see changes.");
 
-        return true;
-
-    } catch (error) {
-        console.error('[DataManager] Sync failed:', error);
+    } catch (criticalErr) {
+        console.error('[DataManager] Critical Sync failure:', criticalErr);
         await MFDB.setSyncState(todayDate, 'FAILED');
-        if (onProgress) onProgress(`Sync failed: ${error.message}`);
-        throw error;
+        onProgress("⚠️ Background sync failed. Retry later.");
     }
 }
 
 async function syncSingleFund(code) {
-    console.log(`[DataManager] On-demand sync for ${code}`);
     const freshFund = await aggregateFundDetails(code);
     if (freshFund) {
         await MFDB.setFund(freshFund);
@@ -97,5 +91,5 @@ async function syncSingleFund(code) {
     return false;
 }
 
-window.runDailySync = runDailySync;
+window.runBackgroundSync = runBackgroundSync;
 window.syncSingleFund = syncSingleFund;
