@@ -64,46 +64,20 @@ const AdvisorDB = {
     },
 
     /**
-     * Read-only access to the main app's public market data cache
+     * Read-only access to the main app's public market data cache via MFDB
      */
     async getMarketData(schemeCode) {
-        return new Promise((resolve, reject) => {
-            const request = indexedDB.open(MFAPP_DB_NAME, MFAPP_DB_VERSION);
+        if (typeof MFDB === 'undefined') {
+            console.warn("MFDB is not loaded.");
+            return null;
+        }
 
-            // We do NOT handle onupgradeneeded here. If the DB doesn't exist, we just fail gracefully.
-            request.onsuccess = (event) => {
-                const db = event.target.result;
-
-                // If the store doesn't exist (e.g., main app hasn't run yet), return null
-                if (!db.objectStoreNames.contains(MFAPP_STORE)) {
-                    resolve(null);
-                    return;
-                }
-
-                try {
-                    const transaction = db.transaction([MFAPP_STORE], 'readonly');
-                    const store = transaction.objectStore(MFAPP_STORE);
-                    const getRequest = store.get(String(schemeCode));
-
-                    getRequest.onsuccess = () => {
-                        db.close();
-                        resolve(getRequest.result);
-                    };
-                    getRequest.onerror = () => {
-                        db.close();
-                        reject(getRequest.error);
-                    };
-                } catch (e) {
-                    db.close();
-                    reject(e);
-                }
-            };
-
-            request.onerror = (event) => {
-                console.warn("Could not connect to MFAppDB:", event.target.error);
-                resolve(null); // Fail gracefully, worker can fetch from network if missing
-            };
-        });
+        try {
+            return await MFDB.getFund(schemeCode);
+        } catch (e) {
+            console.warn("Could not retrieve fund from MFDB:", e);
+            return null;
+        }
     }
 };
 
