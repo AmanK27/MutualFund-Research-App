@@ -728,6 +728,7 @@ async function aggregateFundDetails(schemeCode, cleanFundName) {
     fund.portfolio.exit_load = fund.details.exitLoad;
     fund.portfolio.holdings = fund.portfolio.topHoldings;
     fund.schemeCode = String(schemeCode);
+    fund.name = fund.meta.cleanName; // legacy alias for search/split logic
 
     return fund;
 }

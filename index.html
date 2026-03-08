@@ -138,21 +138,8 @@
                 <span>Sync Daily Data</span>
             </div>
 
-            <!-- Portfolio Portability -->
-            <div class="sidebar-section-title" style="margin-top: 20px;">
-                <h3>Portability</h3>
-            </div>
-            <div class="portfolio-nav-item" onclick="exportPortfolioData()"
-                style="border-color: rgba(255,255,255,0.1);">
-                <span>📤</span>
-                <span>Export Portfolio</span>
-            </div>
-            <div class="portfolio-nav-item" onclick="document.getElementById('importPortfolioFile').click()"
-                style="border-color: rgba(255,255,255,0.1);">
-                <span>📥</span>
-                <span>Import JSON</span>
-            </div>
-            <input type="file" id="importPortfolioFile" style="display:none" accept=".json"
+            <!-- Hidden file input for import -->
+            <input type="file" id="importPortfolioFile" style="display: none;" accept=".json"
                 onchange="importPortfolioData(event)">
 
             <nav class="category-nav" id="categoryNav"></nav>
@@ -594,8 +581,8 @@
                     </button>
                 </div>
 
-                <!-- Automation Settings button -->
-                <div style="margin-top:16px;">
+                <!-- Action Buttons: Automation & Portability -->
+                <div style="margin-top:16px; display: flex; gap: 12px; flex-wrap: wrap;">
                     <button onclick="openAutomationModal()"
                         style="display:inline-flex;align-items:center;gap:8px;padding:10px 18px;background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.2);border-radius:var(--radius);font-size:13px;font-weight:600;color:#fbbf24;cursor:pointer;font-family:inherit;transition:background 0.2s;"
                         onmouseover="this.style.background='rgba(245,158,11,0.15)'"
@@ -603,6 +590,20 @@
                         ⚙️ Alert Settings
                         <span id="alertsBadge"
                             style="display:none;background:#ef4444;color:#fff;border-radius:999px;padding:2px 7px;font-size:11px;font-weight:700;">0</span>
+                    </button>
+
+                    <button onclick="exportPortfolioData()"
+                        style="display:inline-flex;align-items:center;gap:8px;padding:10px 18px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.1);border-radius:var(--radius);font-size:13px;font-weight:500;color:var(--text-secondary);cursor:pointer;font-family:inherit;transition:all 0.2s;"
+                        onmouseover="this.style.background='rgba(255,255,255,0.08)'; this.style.color='white'"
+                        onmouseout="this.style.background='rgba(255,255,255,0.03)'; this.style.color='var(--text-secondary)'">
+                        📤 Export JSON
+                    </button>
+
+                    <button onclick="document.getElementById('importPortfolioFile').click()"
+                        style="display:inline-flex;align-items:center;gap:8px;padding:10px 18px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.1);border-radius:var(--radius);font-size:13px;font-weight:500;color:var(--text-secondary);cursor:pointer;font-family:inherit;transition:all 0.2s;"
+                        onmouseover="this.style.background='rgba(255,255,255,0.08)'; this.style.color='white'"
+                        onmouseout="this.style.background='rgba(255,255,255,0.03)'; this.style.color='var(--text-secondary)'">
+                        📥 Import JSON
                     </button>
                 </div>
 

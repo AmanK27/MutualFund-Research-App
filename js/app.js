@@ -1687,6 +1687,7 @@ function populateFundHouseFilter(funds) {
         if (match) {
             houses.add(match[1].trim());
         } else {
+            if (typeof f.name !== 'string') continue;
             const parts = f.name.split(' ');
             if (parts.length >= 2) houses.add(parts.slice(0, 2).join(' '));
         }
@@ -3113,6 +3114,7 @@ async function loadTopPerformers(categoryStr, horizon) {
         }
 
         grid.innerHTML = top5.map(f => {
+            if (typeof f.name !== 'string') return;
             const words = f.name.split(' ').filter(w => w.length > 0);
             const init1 = words[0] ? words[0][0].toUpperCase() : '';
             const init2 = words[1] && !words[1].toLowerCase().includes('fund') ? words[1][0].toUpperCase() : '';

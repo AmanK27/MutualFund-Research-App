@@ -24,6 +24,8 @@ window.FUND_UNIVERSE = [
  * Parse the API date format "dd-mm-yyyy" → JS Date
  */
 function parseDate(str) {
+    if (str instanceof Date) return str;
+    if (!str || typeof str !== 'string') return new Date();
     const [d, m, y] = str.split('-').map(Number);
     return new Date(y, m - 1, d);
 }

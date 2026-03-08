@@ -17,21 +17,24 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        // 2. Data Integrity Check (MFAppDB)
-        if (typeof CacheManager === 'undefined') {
-            showBridgeError("Cannot launch Advisor: CacheManager is completely missing. System may be corrupted.");
+        // 2. Data Integrity Check (MFDB)
+        if (typeof MFDB === 'undefined') {
+            showBridgeError("Cannot launch Advisor: MFDB is missing. System may be corrupted.");
             return;
         }
 
         try {
             console.log("Smart Bridge: Initiating pre-flight verification...");
-            await CacheManager.init();
+            await MFDB.init();
 
-            // Check if we can at least ping the DB
-            const isAlive = await CacheManager.isAlive();
-            if (!isAlive) throw new Error("Database Ping Failed");
+            // Check if we have any synced data
+            const state = await MFDB.getSyncState();
+            if (!state || state.status !== 'COMPLETE') {
+                showBridgeError("Cannot launch Advisor: Market data is not yet synced for today. Please run Daily Sync first.");
+                return;
+            }
 
-            console.log("Smart Bridge: MFAppDB Integrity Check Passed.");
+            console.log("Smart Bridge: MFDB Integrity Check Passed.");
 
             // Short delay to ensure browser doesn't block the rapid context change
             setTimeout(() => {
