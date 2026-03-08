@@ -562,7 +562,7 @@ async function initPeerRanking(category, schemeCode) {
 
     try {
         // Use the smart IndexedDB-cached fetcher — same function the advisor uses
-        const rankedPeers = await fetchCategoryPeers(category, schemeCode);
+        const rankedPeers = await MFDB.getPeers(category) || [];
         loading.style.display = 'none';
 
         if (!rankedPeers || rankedPeers.length === 0) {
@@ -2274,7 +2274,7 @@ async function loadPortfolioView() {
         // 3. Fetch latest NAV & Metrics for each holding in parallel (Cache-First)
         await Promise.all(Object.keys(holdings).map(async code => {
             try {
-                const fundDetails = await aggregateFundDetails(code, holdings[code].name);
+                const fundDetails = await MFDB.getFund(code);
                 if (fundDetails) {
                     // Map standardize schema back to portfolio view expectations
                     // data is sorted oldest -> newest via utils.js; take last element
