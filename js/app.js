@@ -1687,7 +1687,7 @@ function populateFundHouseFilter(funds) {
         if (match) {
             houses.add(match[1].trim());
         } else {
-            if (typeof f.name !== 'string') continue;
+            if (typeof f.name !== 'string') return;
             const parts = f.name.split(' ');
             if (parts.length >= 2) houses.add(parts.slice(0, 2).join(' '));
         }
@@ -3489,9 +3489,9 @@ window.showSyncToast = function (message) {
 
         // ── SYNC ENGINE CHECK (SWR Fire & Forget) ───────────────
         const state = await MFDB.getSyncState();
-        const todayDate = new Date().toISOString().split('T')[0];
+        const todayStr = new Date().toLocaleDateString('en-CA');
 
-        if (!state || state.date !== todayDate || state.status !== 'COMPLETE') {
+        if (!state || state.date !== todayStr || state.status !== 'COMPLETE') {
             console.log('[Boot] Data is stale. Initiating Background SWR Sync.');
 
             const portfolioStr = localStorage.getItem(PORTFOLIO_KEY) || "[]";

@@ -6,8 +6,8 @@
  * Silent Background Sync Engine for SWR Architecture.
  * Catches all errors to prevent crashing the main thread.
  */
-async function runBackgroundSync(portfolioCodes, categories, onProgress = () => { }) {
-    const todayDate = new Date().toISOString().split('T')[0];
+async function runBackgroundSync(portfolioCodes = [], categories = [], onProgress = () => { }) {
+    const todayStr = new Date().toLocaleDateString('en-CA');
 
     try {
         console.log("[DataManager] Starting Background SWR Sync...");
@@ -15,7 +15,7 @@ async function runBackgroundSync(portfolioCodes, categories, onProgress = () => 
 
         // 0. Ensure Global Context is loaded
         await fetchGlobalFundList();
-        await MFDB.setSyncState(todayDate, 'IN_PROGRESS');
+        await MFDB.setSyncState(todayStr, 'IN_PROGRESS');
 
         // 1. Sync Categories (Peers) silently
         for (let i = 0; i < categories.length; i++) {
@@ -71,13 +71,13 @@ async function runBackgroundSync(portfolioCodes, categories, onProgress = () => 
         try { await syncSingleFund('120716'); } catch (e) { /* ignore */ }
 
         // 4. Mark Sync as Complete
-        await MFDB.setSyncState(todayDate, 'COMPLETE');
+        await MFDB.setSyncState(todayStr, 'COMPLETE');
         console.log("[DataManager] Background SWR Sync Completed Successfully.");
         onProgress("✅ Market data updated. Refresh to see changes.");
 
     } catch (criticalErr) {
         console.error('[DataManager] Critical Sync failure:', criticalErr);
-        await MFDB.setSyncState(todayDate, 'FAILED');
+        await MFDB.setSyncState(todayStr, 'FAILED');
         onProgress("⚠️ Background sync failed. Retry later.");
     }
 }
@@ -92,4 +92,5 @@ async function syncSingleFund(code) {
 }
 
 window.runBackgroundSync = runBackgroundSync;
+window.runDailySync = runBackgroundSync;
 window.syncSingleFund = syncSingleFund;
