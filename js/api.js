@@ -349,7 +349,7 @@ async function findTrueBestPeer(rawSchemeName, currentSchemeCode, targetSubCateg
         }
 
         const verifiedCode = String(directGrowthMatch.schemeCode);
-        if (verifiedCode === String(currentSchemeCode)) return null; // skip self
+        // We no longer skip self here so that the current fund can be verified as a top performer for ranking purposes
 
         // ── Fetch full fund detail from mfapi.in to get scheme_category AND nav ──
         // We call this directly (rather than via getNavHistory) so we can read meta.scheme_category
@@ -492,17 +492,19 @@ async function getPeerRanking(categoryString, currentSchemeCode, targetSubCatego
 
     // ── Step 1: DISCOVERY ─────────────────────────────────────────────────────────────
     // Raw pool: all variants in the category from allMfFunds, excluding clear traps.
-    // We intentionally include Regular/IDCW/etc. here because we want the top
-    // performer BY RAW RETURN, then verify its Direct Growth counterpart.
     const rawPool = window.allMfFunds.filter(f => {
         if (!f.schemeName) return false;
         const n = f.schemeName.toUpperCase();
-        // Spacing-agnostic match for "Midcap" vs "Mid Cap"
         if (!n.replace(/\s+/g, '').includes(keywordNoSpaces)) return false;
-        // Exclude structural traps (dividend-adjusted returns are misleading)
         if (n.includes('BONUS') || n.includes('ETF') || n.includes('INDEX')) return false;
         return true;
-    }).slice(0, 40); // reasonable cap to limit API pressure on first run
+    }).slice(0, 120); // increased cap to ensure current fund and more peers are caught
+
+    // Ensure current scheme is definitely in the pool if it exists in master list
+    if (!rawPool.some(f => String(f.schemeCode) === String(currentSchemeCode))) {
+        const self = window.allMfFunds.find(f => String(f.schemeCode) === String(currentSchemeCode));
+        if (self) rawPool.push(self);
+    }
 
     console.log(`[getPeerRanking] Discovery pool: ${rawPool.length} raw funds for keyword "${keyword}"`);
 
@@ -510,7 +512,7 @@ async function getPeerRanking(categoryString, currentSchemeCode, targetSubCatego
     const rawWithCAGR = [];
     for (const peer of rawPool) {
         const code = String(peer.schemeCode);
-        if (code === String(currentSchemeCode)) continue; // skip self
+        // Include self so we can calculate rank relative to peers
         try {
             const navHistory = await getNavHistory(code);
             if (!navHistory) continue;
