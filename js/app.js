@@ -2097,7 +2097,7 @@ async function loadPortfolioView() {
         document.getElementById('portfolioEmptyState').textContent = 'Expanding SIP history…';
 
         // Reset to Holdings tab by default
-        switchPortfolioTab('holdings');
+        if (typeof switchPortfolioTab === 'function') switchPortfolioTab('holdings');
 
         let expandedTxns = []; // used for XIRR and holdings math
 
