@@ -3281,11 +3281,15 @@ window.toggleAnalyticsPanel = function (show) {
 
     if (window.Chart) {
         const resizeInterval = setInterval(() => {
-            Chart.instances.forEach(c => c.resize());
+            if (Chart.instances) {
+                Object.values(Chart.instances).filter(c => c).forEach(c => c.resize());
+            }
         }, 50);
         setTimeout(() => {
             clearInterval(resizeInterval);
-            Chart.instances.forEach(c => c.resize());
+            if (Chart.instances) {
+                Object.values(Chart.instances).filter(c => c).forEach(c => c.resize());
+            }
         }, 450);
     }
 };
