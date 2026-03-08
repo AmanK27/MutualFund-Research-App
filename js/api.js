@@ -358,12 +358,9 @@ async function findTrueBestPeer(rawSchemeName, currentSchemeCode, targetSubCateg
         let peerSubCategory = null;
 
         try {
-            const cached = await CacheManager.get(verifiedCode);
-            if (CacheManager.isCacheValid(cached) && cached.data) {
-                navHistory = cached.data;
-                // subCategory may be stored on the cache object from a prior aggregateFundDetails call
-                peerSubCategory = cached.meta?.subCategory || cached.meta?.scheme_category || null;
-            }
+            // Deprecated: Cache layer removed. 
+            // In a future step, this method might be called by data-manager.js which could 
+            // supply a full list, but for now we expect a cache miss and run the full fetch below.
         } catch (_) { /* cache miss is fine */ }
 
         // If not in cache (or no subCategory stored), fetch fresh from mfapi.in
@@ -381,8 +378,7 @@ async function findTrueBestPeer(rawSchemeName, currentSchemeCode, targetSubCateg
                 return { date: new Date(+parts[2], +parts[1] - 1, +parts[0]), nav: parseFloat(d.nav) };
             }).sort((a, b) => a.date - b.date);
 
-            // Cache nav data so getNavHistory / aggregateFundDetails benefit from this fetch
-            try { await CacheManager.set(verifiedCode, { data: navHistory }); } catch (_) { }
+            // Removed cache injection
         }
 
         // ── Strict AMFI sub-category enforcement ─────────────────────────────────
@@ -429,10 +425,6 @@ async function findTrueBestPeer(rawSchemeName, currentSchemeCode, targetSubCateg
  */
 async function getNavHistory(schemeCode) {
     try {
-        const cached = await CacheManager.get(schemeCode);
-        if (CacheManager.isCacheValid(cached) && cached.data) {
-            return cached.data; // already sorted Date objects from prior fetch
-        }
         const res = await fetch(`https://api.mfapi.in/mf/${schemeCode}`);
         if (!res.ok) return null;
         const json = await res.json();
@@ -441,9 +433,6 @@ async function getNavHistory(schemeCode) {
             const parts = d.date.split('-');
             return { date: new Date(+parts[2], +parts[1] - 1, +parts[0]), nav: parseFloat(d.nav) };
         }).sort((a, b) => a.date - b.date);
-        // Persist to individual fund cache (shared with the dashboard, so browsing a fund
-        // pre-warms the advisor data for free)
-        await CacheManager.set(schemeCode, { data: navHistory });
         return navHistory;
     } catch (e) {
         console.warn(`[getNavHistory] Failed for ${schemeCode}:`, e);
@@ -582,35 +571,11 @@ async function fetchCategoryPeers(categoryName, currentSchemeCode = null, target
 
     const cacheKey = 'peers_v3_' + categoryName.trim().replace(/\s+/g, '_').toLowerCase();
 
-    // ── 1. Cache-First: Try IndexedDB ──────────────────────────────────────────
-    // Skip cache when targetSubCategory is provided so the category-lock filter is always applied.
-    // A cached result without category enforcement could serve wrong-category winners.
-    if (!targetSubCategory) {
-        try {
-            const cached = await CacheManager.get(cacheKey);
-            if (CacheManager.isCacheValid(cached) && cached.peers && cached.peers.length > 0) {
-                console.log(`[Cache Hit] fetchCategoryPeers serving "${categoryName}" from IndexedDB (${cached.peers.length} funds)`);
-                return cached.peers;
-            }
-        } catch (e) {
-            console.warn('[fetchCategoryPeers] Cache retrieval failed, falling back to network:', e);
-        }
-    }
+    // ── 1. Network Fetch via getPeerRanking ───────────
 
     // ── 2. Network Fallback: Full MFAPI Waterfall via getPeerRanking ───────────
     console.log(`[Cache Miss] fetchCategoryPeers fetching "${categoryName}" from network...`);
     const peers = await getPeerRanking(categoryName, currentSchemeCode, targetSubCategory);
-
-    // ── 3. Store & Return ──────────────────────────────────────────────────────
-    // Only cache when no targetSubCategory (general-purpose cache)
-    if (!targetSubCategory && peers && peers.length > 0) {
-        try {
-            await CacheManager.set(cacheKey, { peers, lastFetchedAt: Date.now() });
-            console.log(`[Cache Set] fetchCategoryPeers cached "${categoryName}" with ${peers.length} funds`);
-        } catch (e) {
-            console.warn('[fetchCategoryPeers] Cache set failed:', e);
-        }
-    }
 
     return peers || [];
 }
@@ -681,19 +646,7 @@ async function fetchTERFromGithub(isin) {
 async function aggregateFundDetails(schemeCode, cleanFundName) {
     if (!schemeCode) return null;
 
-    // 1. Check local IndexedDB cache first
-    try {
-        const cached = await CacheManager.get(schemeCode);
-        // Schema check: Ensure it's the new StandardFundObject with .nav.history AND .meta.subCategory
-        if (CacheManager.isCacheValid(cached) && cached.nav && cached.nav.history && cached.meta && 'subCategory' in cached.meta) {
-            console.log(`[Cache Hit] Serving ${schemeCode} from IndexedDB`);
-            return cached;
-        } else if (cached) {
-            console.log(`[Cache Miss] Ignoring old-schema cache (missing subCategory or nav) for ${schemeCode}`);
-        }
-    } catch (e) {
-        console.warn("Cache retrieval failed, falling back to network:", e);
-    }
+    // 1. Fetch remote API
 
     // 2. Cache Miss — Execute standard fetch sequence
     console.log(`[Cache Miss] Fetching ${schemeCode} from remote APIs...`);
@@ -773,13 +726,6 @@ async function aggregateFundDetails(schemeCode, cleanFundName) {
     fund.portfolio.aum = fund.details.aum;
     fund.portfolio.exit_load = fund.details.exitLoad;
     fund.portfolio.holdings = fund.portfolio.topHoldings;
-
-    // 3. Cache the StandardFundObject for next time
-    try {
-        await CacheManager.set(schemeCode, fund);
-    } catch (e) {
-        console.error("Failed to update cache:", e);
-    }
 
     return fund;
 }
