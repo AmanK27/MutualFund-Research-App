@@ -453,11 +453,15 @@ function computeXIRR(cashFlows, guess = 0.1) {
  */
 function buildCashFlows(txns, totalCurrentValue) {
     const flows = txns
-        .filter(t => t.type === 'buy' || t.type === 'sip')
-        .map(t => ({
-            date: t.date && t.date.toDate ? t.date.toDate() : new Date(t.date),
-            amount: -Math.abs(t.amount)   // outflow = negative
-        }))
+        .filter(t => t.type === 'buy' || t.type === 'sip' || t.type === 'sip_config')
+        .map(t => {
+            // sip_config stores purchase date in 'startDate'; buy/sell use 'date'
+            const rawDate = t.type === 'sip_config' ? t.startDate : t.date;
+            return {
+                date: rawDate && rawDate.toDate ? rawDate.toDate() : new Date(rawDate),
+                amount: -Math.abs(t.amount)   // outflow = negative
+            };
+        })
         .sort((a, b) => a.date - b.date);
 
     if (flows.length === 0) return null;
@@ -646,28 +650,35 @@ async function runInsightAlerts(holdings, alertSettings, analyticsData = {}) {
             });
         }
 
-        // D — Peer Underperformance (now reads peerTolerance from automation rules)
+        // D — Peer Underperformance
+        // Uses MFDB-cached fund data for subCategory and MFDB.getPeers() for ranked peer list.
+        // allMfFunds only contains schemeCode + schemeName — it never has category or returns1Y.
         if (rules.enablePeerAlert) {
-            const fundMeta = master.find(f => String(f.schemeCode) === String(h.code));
-            if (fundMeta && fundMeta.category) {
-                const category = fundMeta.category;
-                const peers = master.filter(f => f.category === category && f.returns1Y != null);
-                if (peers.length > 1) {
-                    const topPeer = peers.reduce((best, f) =>
-                        (f.returns1Y > (best.returns1Y || -Infinity)) ? f : best, peers[0]);
-                    const myReturn1Y = fundMeta.returns1Y || 0;
-                    const gap = topPeer.returns1Y - myReturn1Y;
-                    if (gap > rules.peerTolerance) {
-                        alerts.push({
-                            type: 'peer_lag',
-                            severity: 'warning',
-                            icon: '📊',
-                            title: `Peer Underperformance: ${h.name}`,
-                            message: `Your fund's 1Y return (<strong>${myReturn1Y.toFixed(2)}%</strong>) lags the top peer <em>${topPeer.schemeName}</em> (<strong>${topPeer.returns1Y.toFixed(2)}%</strong>) by <strong>${gap.toFixed(2)}%</strong>.`
-                        });
+            try {
+                const cachedFund = await MFDB.getFund(String(h.code));
+                const subCategory = cachedFund?.meta?.subCategory;
+                if (subCategory) {
+                    const peers = (await MFDB.getPeers(subCategory)) || [];
+                    if (peers.length > 1) {
+                        // Peers are sorted by cagr1y (desc) by the sidebar renderer, but sort here too
+                        const sorted = [...peers].sort((a, b) => (parseFloat(b.cagr1y) || 0) - (parseFloat(a.cagr1y) || 0));
+                        const topPeer = sorted[0];
+                        const myPeer = sorted.find(p => String(p.schemeCode) === String(h.code));
+                        const myReturn1Y = myPeer ? (parseFloat(myPeer.cagr1y) * 100) : 0;
+                        const topReturn1Y = parseFloat(topPeer.cagr1y) * 100;
+                        const gap = topReturn1Y - myReturn1Y;
+                        if (gap > rules.peerTolerance && topPeer.schemeCode !== String(h.code)) {
+                            alerts.push({
+                                type: 'peer_lag',
+                                severity: 'warning',
+                                icon: '📊',
+                                title: `Peer Underperformance: ${h.name}`,
+                                message: `Your fund's 1Y return (<strong>${myReturn1Y.toFixed(2)}%</strong>) lags the top peer <em>${topPeer.schemeName}</em> (<strong>${topReturn1Y.toFixed(2)}%</strong>) by <strong>${gap.toFixed(2)}%</strong>.`
+                            });
+                        }
                     }
                 }
-            }
+            } catch (_) { /* skip if MFDB unavailable */ }
         }
     }
 
@@ -742,15 +753,19 @@ function renderTransactionHistory(txns) {
     }
 
     container.innerHTML = txns.map(t => {
-        const date = t.date && t.date.toDate ? t.date.toDate() : new Date(t.date);
+        const rawDate = t.type === 'sip_config' ? t.startDate : t.date;
+        const date = rawDate && rawDate.toDate ? rawDate.toDate() : new Date(rawDate);
         const dateStr = date.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
         const typeBadge = t.type === 'buy' ? '🟢 Buy' : t.type === 'sell' ? '🔴 Sell' : '🔵 SIP';
+        const unitsDisplay = t.units != null && !isNaN(Number(t.units))
+            ? Number(t.units).toFixed(4)
+            : (t.type === 'sip_config' ? `₹${Number(t.amount).toLocaleString('en-IN')}/mo` : '—');
         return `<tr>
             <td style="font-size:12px;color:var(--text-muted);">${dateStr}</td>
             <td style="font-size:12px;">${typeBadge}</td>
             <td style="font-size:12px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${t.schemeName}">${t.schemeName}</td>
             <td style="font-size:12px;">₹${Number(t.amount).toLocaleString('en-IN')}</td>
-            <td style="font-size:12px;">${Number(t.units).toFixed(4)}</td>
+            <td style="font-size:12px;">${unitsDisplay}</td>
             <td style="text-align:right;">
                 <button onclick="deleteTxnAndRefresh('${t.id}')"
                     style="background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);color:#ef4444;padding:4px 10px;border-radius:6px;font-size:11px;cursor:pointer;">

@@ -1,9 +1,12 @@
 {
   "name": "mutualfund-research-app",
-  "version": "1.5.0",
+  "version": "1.6.2",
   "description": "Mutual Fund Research Dashboard",
   "scripts": {
     "start": "node serve.js"
+  },
+  "devDependencies": {
+    "serve": "^14.2.4"
   },
   "author": "",
   "license": "MIT"

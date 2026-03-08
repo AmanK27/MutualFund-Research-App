@@ -38,6 +38,10 @@ document.addEventListener('DOMContentLoaded', () => {
             } catch (err) {
                 console.error("Failed to save log:", err);
             }
+        } else if (status === 'ERROR') {
+            loadingDiv.classList.add('hidden');
+            analyzeBtn.disabled = false;
+            resultsDiv.innerHTML = `<p style="color:#ef4444;padding:16px;">⚠ ${message}</p>`;
         }
     };
 
@@ -67,13 +71,19 @@ document.addEventListener('DOMContentLoaded', () => {
             console.log(`Fetching market data for ${code} from MFAppDB...`);
             const targetFundData = await AdvisorDB.getMarketData(code);
 
-            // In a full implementation, we would also fetch category peers here
-            // using the category from `targetFundData.meta.scheme_category`.
-            // For now, tracking mock peers.
-            const mockPeersData = [
-                { schemeCode: "111111", schemeName: "Verified Top Peer A" },
-                { schemeCode: "222222", schemeName: "Verified Top Peer B" }
-            ];
+            // Fetch real category peers from MFDB cache
+            let peersData = [];
+            const subCategory = targetFundData?.meta?.subCategory;
+            if (subCategory && typeof MFDB !== 'undefined') {
+                try {
+                    peersData = (await MFDB.getPeers(subCategory)) || [];
+                    console.log(`Loaded ${peersData.length} peers for category: "${subCategory}"`);
+                } catch (e) {
+                    console.warn('Could not load peers from MFDB — proceeding without peer comparison:', e);
+                }
+            } else {
+                console.warn('No subCategory on fund or MFDB unavailable. Peer ranking will be skipped.');
+            }
 
             // 4. Dispatch job to worker
             engine.postMessage({
@@ -81,7 +91,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 payload: {
                     targetSchemeCode: code,
                     targetFundData: targetFundData,
-                    peersData: mockPeersData
+                    peersData: peersData
                 }
             });
 

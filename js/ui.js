@@ -166,7 +166,7 @@ const UI = {
                     <div class="peer-item ${highlightClass}" onclick="loadFund('${peer.schemeCode}')" title="Click to view details">
                         <div class="peer-info">
                             <span class="peer-rank">#${idx + 1}</span>
-                            <span class="peer-name">${peer.schemeName || 'Unknown'}</span>
+                            <span class="peer-name">${escapeHtml(peer.schemeName || 'Unknown')}</span>
                         </div>
                         <div class="peer-metric">
                             <span class="peer-metric-value ${cagr >= 0 ? 'stat-positive' : 'stat-negative'}">

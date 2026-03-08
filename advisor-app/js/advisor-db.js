@@ -9,9 +9,7 @@ const ADVISOR_DB_NAME = 'AdvisorDB';
 const ADVISOR_DB_VERSION = 1;
 const ADVISOR_STORE = 'analysisLogs';
 
-const MFAPP_DB_NAME = 'MFAppDB';
-const MFAPP_DB_VERSION = 1;
-const MFAPP_STORE = 'marketData';
+
 
 const AdvisorDB = {
     _db: null,

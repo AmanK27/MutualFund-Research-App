@@ -92,5 +92,4 @@ async function syncSingleFund(code) {
 }
 
 window.runBackgroundSync = runBackgroundSync;
-window.runDailySync = runBackgroundSync;
 window.syncSingleFund = syncSingleFund;

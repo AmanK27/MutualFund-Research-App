@@ -85,7 +85,7 @@ function getCAGR(data, yearsBack) {
  * Get CAGR for exactly N years back from latest data point.
  */
 function getCagrForYears(data, years) {
-    if (data.length < 252 * years) return null;
+    if (data.length < 365 * years) return null; // mfapi.in returns calendar-day NAVs, not trading-day only
     const latestDate = data[data.length - 1].date;
     const targetDate = new Date(latestDate);
     targetDate.setFullYear(latestDate.getFullYear() - years);
@@ -158,50 +158,9 @@ function calcSharpe(cagr, volatility) {
     return (cagr - RISK_FREE) / volatility;
 }
 
-/**
- * XIRR Calculation using Newton-Raphson method
- * Cashflows: [{ amount: -5000, date: Date }, { amount: 15000, date: Date }]
- */
-function calcXIRR(cashflows) {
-    if (!cashflows || cashflows.length < 2) return null;
-
-    const xnpv = (rate, cfs) => {
-        let pv = 0;
-        const d0 = cfs[0].date.getTime();
-        for (let i = 0; i < cfs.length; i++) {
-            const t = (cfs[i].date.getTime() - d0) / (1000 * 3600 * 24 * 365);
-            pv += cfs[i].amount / Math.pow(1 + rate, t);
-        }
-        return pv;
-    };
-
-    const xnpvPrime = (rate, cfs) => {
-        let pvPrime = 0;
-        const d0 = cfs[0].date.getTime();
-        for (let i = 0; i < cfs.length; i++) {
-            const t = (cfs[i].date.getTime() - d0) / (1000 * 3600 * 24 * 365);
-            pvPrime -= (t * cfs[i].amount) / Math.pow(1 + rate, t + 1);
-        }
-        return pvPrime;
-    };
-
-    let rate = 0.1;
-    let iteration = 0;
-    let err = 1e+100;
-
-    while (err > 0.00001 && iteration < 100) {
-        const f = xnpv(rate, cashflows);
-        const df = xnpvPrime(rate, cashflows);
-        const nextRate = rate - f / df;
-        err = Math.abs(nextRate - rate);
-        rate = nextRate;
-        iteration++;
-    }
-
-    // Final sanity check for runaway results or non-convergence
-    if (iteration >= 100 || isNaN(rate) || Math.abs(rate) > 1000) return null;
-    return rate;
-}
+// NOTE: XIRR calculation has been consolidated into computeXIRR() in portfolio.js.
+// computeXIRR includes the -0.999 rate clamp guard that this implementation was missing.
+// Do not re-add calcXIRR here — use computeXIRR() directly.
 
 /**
  * Calculate Rolling Returns (Avg, Min, Max for a specific period)

@@ -241,7 +241,7 @@ window.SCHEME_CATEGORY_TO_LIVE_FUNDS = {
     'Equity Scheme - Mid Cap Fund': 'Mid Cap',
     'Equity Scheme - Small Cap Fund': 'Small Cap',
     'Equity Scheme - Flexi Cap Fund': 'Flexi Cap',
-    'Equity Scheme - Large & Mid Cap Fund': 'Large Cap',
+    'Equity Scheme - Large & Mid Cap Fund': 'Large & Mid Cap', // distinct SEBI category — not Large Cap
     'Equity Scheme - Multi Cap Fund': 'Flexi Cap',
     'Equity Scheme - ELSS': 'ELSS',
     'Equity Scheme - Focused Fund': 'Flexi Cap',
@@ -264,7 +264,6 @@ window.SCHEME_CATEGORY_TO_LIVE_FUNDS = {
     'Other Scheme - Index Funds': 'Index Funds',
     'Other Scheme - ETFs': 'ETFs',
     'Other Scheme - FOF (Overseas)': 'Index Funds',
-    'Index Funds - Other Scheme': 'Index Funds', // Reverse mapping for some API variations
 };
 
 /**
@@ -358,14 +357,7 @@ async function findTrueBestPeer(rawSchemeName, currentSchemeCode, targetSubCateg
         let navHistory = null;
         let peerSubCategory = null;
 
-        try {
-            // Deprecated: Cache layer removed. 
-            // In a future step, this method might be called by data-manager.js which could 
-            // supply a full list, but for now we expect a cache miss and run the full fetch below.
-        } catch (_) { /* cache miss is fine */ }
-
-
-        // If not in cache (or no subCategory stored), fetch fresh from mfapi.in
+        // Fetch fresh from mfapi.in
         if (!navHistory || !peerSubCategory) {
             const fullRes = await fetch(`https://api.mfapi.in/mf/${verifiedCode}`);
             if (!fullRes.ok) return null;
@@ -379,8 +371,6 @@ async function findTrueBestPeer(rawSchemeName, currentSchemeCode, targetSubCateg
                 const parts = d.date.split('-');
                 return { date: new Date(+parts[2], +parts[1] - 1, +parts[0]), nav: parseFloat(d.nav) };
             }).sort((a, b) => a.date - b.date);
-
-            // Removed cache injection
         }
 
         // ── Strict AMFI sub-category enforcement ─────────────────────────────────
@@ -511,7 +501,6 @@ async function getPeerRanking(categoryString, currentSchemeCode, targetSubCatego
             if (cagr1y === null || cagr1y <= 0) continue;
             rawWithCAGR.push({ schemeCode: code, schemeName: peer.schemeName, cagr1y });
         } catch (e) { /* skip failed peers */ }
-        await new Promise(r => setTimeout(r, 80));
     }
 
     rawWithCAGR.sort((a, b) => b.cagr1y - a.cagr1y);
@@ -571,13 +560,40 @@ async function getPeerRanking(categoryString, currentSchemeCode, targetSubCatego
 async function fetchCategoryPeers(categoryName, currentSchemeCode = null, targetSubCategory = null) {
     if (!categoryName) return [];
 
-    const cacheKey = 'peers_v3_' + categoryName.trim().replace(/\s+/g, '_').toLowerCase();
+    const cacheKey = categoryName.trim();
 
-    // ── 1. Network Fetch via getPeerRanking ───────────
+    // ── 1. Serve from IndexedDB cache if fresh (< 24 hours old) ───────────────
+    try {
+        const cached = await MFDB.getPeers(cacheKey);
+        if (cached && cached.length > 0) {
+            // Check staleness via the 'updated_at' timestamp stored alongside peers
+            // MFDB.getPeers returns the raw peers array; we need to check updated_at via a direct lookup
+            const db = await MFDB.init();
+            const record = await new Promise((res, rej) => {
+                const tx = db.transaction(['category_peers'], 'readonly');
+                const req = tx.objectStore('category_peers').get(String(cacheKey));
+                req.onsuccess = () => res(req.result);
+                req.onerror = () => rej(req.error);
+            });
+            const ageMs = record ? (Date.now() - (record.updated_at || 0)) : Infinity;
+            const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+            if (ageMs < ONE_DAY_MS) {
+                console.log(`[Cache Hit] fetchCategoryPeers: "${categoryName}" (${cached.length} peers, ${Math.round(ageMs / 60000)}min old)`);
+                return cached;
+            }
+        }
+    } catch (_) { /* cache read failure is non-fatal; fall through to network */ }
 
-    // ── 2. Network Fallback: Full MFAPI Waterfall via getPeerRanking ───────────
+    // ── 2. Network fetch via getPeerRanking ────────────────────────────────────
     console.log(`[Cache Miss] fetchCategoryPeers fetching "${categoryName}" from network...`);
     const peers = await getPeerRanking(categoryName, currentSchemeCode, targetSubCategory);
+
+    // ── 3. Persist fresh results to IndexedDB ─────────────────────────────────
+    if (peers && peers.length > 0) {
+        try {
+            await MFDB.setPeers(cacheKey, peers);
+        } catch (_) { /* cache write failure is non-fatal */ }
+    }
 
     return peers || [];
 }
@@ -618,27 +634,8 @@ async function fetchAUMFromGithub(schemeCode) {
     }
 }
 
-/**
- * Helper to fetch and parse TER (Total Expense Ratio) CSV data from captn3m0 Github.
- * Matches on the ISIN since this dataset uses ISINs primarily, or string matching.
- */
-async function fetchTERFromGithub(isin) {
-    if (!isin) return null;
-    try {
-        const url = 'https://raw.githubusercontent.com/captn3m0/india-mutual-fund-ter-tracker/master/data.csv';
-        const res = await fetch(url);
-        if (!res.ok) return null;
-        const csvText = await res.text();
 
-        // Since we don't have ISIN from MFAPI by default, we will do a rough regex/string match 
-        // against the scheme name if ISIN isn't passed, or look for the ISIN if we extract it.
-        // For simplicity, we'll return null here if we can't reliably map it, but we can try string matching.
-        return null; // Implementation pending precise string mapping
-    } catch (e) {
-        console.warn(`TER Github fetch failed:`, e);
-        return null;
-    }
-}
+
 
 /**
  * Master Aggregator: Fetches core NAV data and concurrently resolves/fetches deep metrics
