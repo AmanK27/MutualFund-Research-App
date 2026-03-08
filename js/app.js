@@ -1871,12 +1871,12 @@ auth.onAuthStateChanged(function (user) {
 
         console.log('Auth: Signed in as', user.displayName, user.uid);
     } else {
-        // User signed out - Allow semi-permissive "Guest" state for research visibility
-        currentUser = { uid: "guest-user-123", displayName: "Guest User" };
-        loginScreen.style.display = 'none'; // Don't block the whole app immediately 
-        appShell.style.display = 'flex';
+        // User signed out - Show login screen
+        currentUser = null;
+        loginScreen.style.display = 'flex';
+        appShell.style.display = 'none';
         userProfile.style.display = 'none';
-        console.log('Auth: Running in guest mode (UID: guest-user-123)');
+        console.log('Auth: User is signed out, showing login screen');
     }
 
     // Expose inner UI and Event functions to global scope for HTML inline standard handlers

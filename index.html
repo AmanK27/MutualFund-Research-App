@@ -18,10 +18,27 @@
     <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
     <link rel="stylesheet" href="css/styles.css">
     <!-- JS Modules: load utils first, then api (depends on utils) -->
-    <script src="js/utils.js"></script>
-    <script src="js/cache.js"></script>
-    <script src="js/normalizer.js"></script>
-    <script src="js/api.js"></script>
+    <script src="js/utils.js?v=2"></script>
+    <script src="js/cache.js?v=2"></script>
+    <script src="js/normalizer.js?v=2"></script>
+    <script src="js/api.js?v=2"></script>
+    <script>
+        window.onerror = function (msg, url, line, col, error) {
+            alert("JS Error: " + msg + " at " + line + ":" + col);
+            console.error("Uncaught error:", msg, url, line, col, error);
+            // Don't overwrite the whole body, prepend to it so we see it
+            const errDiv = document.createElement('div');
+            errDiv.style = "background:red;color:white;padding:20px;position:fixed;top:0;left:0;z-index:99999;width:100%;font-family:monospace;";
+            errDiv.innerHTML = `<strong>ERROR:</strong> ${msg}<br>${url}:${line}:${col}<br><pre>${error && error.stack}</pre>`;
+            document.body ? document.body.appendChild(errDiv) : window.addEventListener('DOMContentLoaded', () => document.body.appendChild(errDiv));
+        };
+        window.addEventListener("unhandledrejection", function (event) {
+            const errDiv = document.createElement('div');
+            errDiv.style = "background:orange;color:white;padding:20px;position:fixed;top:100px;left:0;z-index:99999;width:100%;font-family:monospace;";
+            errDiv.innerHTML = `<strong>PROMISE REJECTION:</strong> ${event.reason}<br><pre>${event.reason && event.reason.stack}</pre>`;
+            document.body ? document.body.appendChild(errDiv) : window.addEventListener('DOMContentLoaded', () => document.body.appendChild(errDiv));
+        });
+    </script>
 </head>
 
 <body>
@@ -1407,12 +1424,12 @@
         <button onclick="document.getElementById('bridge-error-modal').classList.remove('show')">Understood</button>
     </div>
 
-    <script src="js/portfolio.js"></script>
-    <script src="js/robo.js"></script>
-    <script src="js/ui.js"></script>
-    <script src="js/bridge.js"></script>
-    <script src="js/app.js"></script>
-    <script src="js/dev-diagnostics.js"></script>
+    <script src="js/portfolio.js?v=2"></script>
+    <script src="js/robo.js?v=2"></script>
+    <script src="js/ui.js?v=2"></script>
+    <script src="js/bridge.js?v=2"></script>
+    <script src="js/app.js?v=2"></script>
+    <script src="js/dev-diagnostics.js?v=2"></script>
 
 </body>
 
