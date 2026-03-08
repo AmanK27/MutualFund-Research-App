@@ -2356,10 +2356,6 @@ async function loadPortfolioView() {
         const freshAlertSettings = loadAlertSettings();
         const analyticsData = { portfolioEquityPct, stcgValue, ltcgValue, holdings };
 
-        // 7b. Run Robo-Advisor Suggestions Lab (non-blocking, uses analyticsData)
-        if (typeof runRoboAdvisor === 'function') {
-            runRoboAdvisor(holdings, analyticsData);
-        }
 
         // 8. Render Transaction History
         const txnDetails = document.getElementById('txnHistoryDetails');
@@ -3208,38 +3204,6 @@ function searchGlossary(query) {
 }
 
 /* ── Portfolio Tab Switching ────────────────────────────────────── */
-function switchPortfolioTab(tab) {
-    const holdingsTab = document.getElementById('portfolioTableCard');
-    const suggestionsTab = document.getElementById('suggestionsTab');
-    const btnHoldings = document.getElementById('tabHoldings');
-    const btnSuggestions = document.getElementById('tabSuggestions');
-
-    if (!holdingsTab || !suggestionsTab) return;
-
-    if (tab === 'holdings') {
-        holdingsTab.style.display = 'block';
-        suggestionsTab.style.display = 'none';
-        if (btnHoldings) {
-            btnHoldings.style.color = 'var(--accent)';
-            btnHoldings.style.borderBottom = '2px solid var(--accent)';
-        }
-        if (btnSuggestions) {
-            btnSuggestions.style.color = 'var(--text-muted)';
-            btnSuggestions.style.borderBottom = '2px solid transparent';
-        }
-    } else {
-        holdingsTab.style.display = 'none';
-        suggestionsTab.style.display = 'block';
-        if (btnHoldings) {
-            btnHoldings.style.color = 'var(--text-muted)';
-            btnHoldings.style.borderBottom = '2px solid transparent';
-        }
-        if (btnSuggestions) {
-            btnSuggestions.style.color = 'var(--accent)';
-            btnSuggestions.style.borderBottom = '2px solid var(--accent)';
-        }
-    }
-}
 
 // Close on Escape key
 document.addEventListener('keydown', (e) => {
