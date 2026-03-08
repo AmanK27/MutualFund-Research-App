@@ -6,6 +6,9 @@ async function runDailySync(portfolioCodes, categories, onProgress) {
     const todayDate = new Date().toISOString().split('T')[0];
 
     try {
+        // 0. Ensure Global Fund List is loaded (required for Peer Ranking)
+        await fetchGlobalFundList();
+
         // 1. Mark Sync as In Progress
         await MFDB.setSyncState(todayDate, 'IN_PROGRESS');
         if (onProgress) onProgress('Sync started...');
@@ -66,6 +69,10 @@ async function runDailySync(portfolioCodes, categories, onProgress) {
             await MFDB.setFund(freshFund);
         }
 
+        // 4. Explicitly Sync Nifty 50 (120716) for Market Timing Dashboard
+        if (onProgress) onProgress('Syncing Mandatory Indices (Nifty 50)...');
+        await syncSingleFund('120716');
+
         // 4. Mark Sync as Complete
         await MFDB.setSyncState(todayDate, 'COMPLETE');
         if (onProgress) onProgress('Sync completed successfully!');
@@ -80,7 +87,7 @@ async function runDailySync(portfolioCodes, categories, onProgress) {
     }
 }
 
-export async function syncSingleFund(code) {
+async function syncSingleFund(code) {
     console.log(`[DataManager] On-demand sync for ${code}`);
     const freshFund = await aggregateFundDetails(code);
     if (freshFund) {

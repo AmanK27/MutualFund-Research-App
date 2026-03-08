@@ -264,6 +264,7 @@ window.SCHEME_CATEGORY_TO_LIVE_FUNDS = {
     'Other Scheme - Index Funds': 'Index Funds',
     'Other Scheme - ETFs': 'ETFs',
     'Other Scheme - FOF (Overseas)': 'Index Funds',
+    'Index Funds - Other Scheme': 'Index Funds', // Reverse mapping for some API variations
 };
 
 /**
@@ -477,15 +478,15 @@ async function getPeerRanking(categoryString, currentSchemeCode, targetSubCatego
     if (!keyword) return [];
 
     // Remove Spaces from keyword for matching ("Mid Cap" -> "MIDCAP")
-    const keywordNoSpaces = keyword.toUpperCase().replace(/\s+/g, '');
+    const keywordNoSpaces = keyword.toUpperCase().replace(/[\s-]+/g, ''); // Handle dashes too
 
     // ── Step 1: DISCOVERY ─────────────────────────────────────────────────────────────
     // Raw pool: all variants in the category from allMfFunds, excluding clear traps.
     const rawPool = window.allMfFunds.filter(f => {
         if (!f.schemeName) return false;
-        const n = f.schemeName.toUpperCase();
-        if (!n.replace(/\s+/g, '').includes(keywordNoSpaces)) return false;
-        if (n.includes('BONUS') || n.includes('ETF') || n.includes('INDEX')) return false;
+        const n = f.schemeName.toUpperCase().replace(/[\s-]+/g, '');
+        if (!n.includes(keywordNoSpaces)) return false;
+        if (n.includes('BONUS') || n.includes('ETF')) return false; // Allowed Index Funds to pass if requested
         return true;
     }).slice(0, 120); // increased cap to ensure current fund and more peers are caught
 
@@ -726,6 +727,7 @@ async function aggregateFundDetails(schemeCode, cleanFundName) {
     fund.portfolio.aum = fund.details.aum;
     fund.portfolio.exit_load = fund.details.exitLoad;
     fund.portfolio.holdings = fund.portfolio.topHoldings;
+    fund.schemeCode = String(schemeCode);
 
     return fund;
 }
