@@ -364,6 +364,7 @@ async function findTrueBestPeer(rawSchemeName, currentSchemeCode, targetSubCateg
             // supply a full list, but for now we expect a cache miss and run the full fetch below.
         } catch (_) { /* cache miss is fine */ }
 
+
         // If not in cache (or no subCategory stored), fetch fresh from mfapi.in
         if (!navHistory || !peerSubCategory) {
             const fullRes = await fetch(`https://api.mfapi.in/mf/${verifiedCode}`);
@@ -642,7 +643,6 @@ async function fetchTERFromGithub(isin) {
 /**
  * Master Aggregator: Fetches core NAV data and concurrently resolves/fetches deep metrics
  * from external sources. Merges all into a rigid standardized schema.
- * Now integrated with IndexedDB CacheManager for ultra-fast subsequent loads.
  */
 async function aggregateFundDetails(schemeCode, cleanFundName) {
     if (!schemeCode) return null;
