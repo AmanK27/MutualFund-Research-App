@@ -120,7 +120,7 @@ High-impact fixes that affect everyday usage — data correctness, boot reliabil
 
 ---
 
-### TASK-05: Fix localStorage Parsing — Add Null Guards to Prevent Blank Boot Screen
+### TASK-05: [COMPLETED] Fix localStorage Parsing — Add Null Guards to Prevent Blank Boot Screen
 
 | Field | Detail |
 |-------|--------|
@@ -151,7 +151,7 @@ In `app.js`, `guestTxns` and `WATCHLIST_KEY` are parsed with `JSON.parse()` with
 
 ---
 
-### TASK-06: Cache Parsed AMFI NAVAll.txt in IndexedDB with Daily TTL
+### TASK-06: [COMPLETED] Cache Parsed AMFI NAVAll.txt in IndexedDB with Daily TTL
 
 | Field | Detail |
 |-------|--------|
@@ -175,7 +175,7 @@ In `app.js`, `guestTxns` and `WATCHLIST_KEY` are parsed with `JSON.parse()` with
 
 ---
 
-### TASK-07: Cache AUM GitHub CSV in Memory and IndexedDB
+### TASK-07: [COMPLETED] Cache AUM GitHub CSV in Memory and IndexedDB
 
 | Field | Detail |
 |-------|--------|
@@ -199,7 +199,7 @@ In `app.js`, `guestTxns` and `WATCHLIST_KEY` are parsed with `JSON.parse()` with
 
 ---
 
-### TASK-08: Remove Dead portfolioModal HTML and saveTransaction() Dead Code
+### TASK-08: [COMPLETED] Remove Dead portfolioModal HTML and saveTransaction() Dead Code
 
 | Field | Detail |
 |-------|--------|
@@ -223,7 +223,7 @@ The original 3-field `portfolioModal` (txnDate, txnAmount, txnUnits) and its `sa
 
 ---
 
-### TASK-09: Fix Sharpe Ratio Inconsistency Between Table Rows and Utils
+### TASK-09: [COMPLETED] Fix Sharpe Ratio Inconsistency Between Table Rows and Utils
 
 | Field | Detail |
 |-------|--------|
@@ -246,7 +246,7 @@ The original 3-field `portfolioModal` (txnDate, txnAmount, txnUnits) and its `sa
 
 ---
 
-### TASK-10: Consolidate Duplicate derivePlanType / inferPlanType Functions
+### TASK-10: [COMPLETED] Consolidate Duplicate derivePlanType / inferPlanType Functions
 
 | Field | Detail |
 |-------|--------|
