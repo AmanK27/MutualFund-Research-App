@@ -72,6 +72,28 @@ const MFDB = {
         });
     },
 
+    async getMetadata(id) {
+        const db = await this.init();
+        return new Promise((resolve, reject) => {
+            const tx = db.transaction([STORE_SYNC], 'readonly');
+            const store = tx.objectStore(STORE_SYNC);
+            const request = store.get(id);
+            request.onsuccess = () => resolve(request.result || null);
+            request.onerror = () => reject(request.error);
+        });
+    },
+
+    async setMetadata(id, data) {
+        const db = await this.init();
+        return new Promise((resolve, reject) => {
+            const tx = db.transaction([STORE_SYNC], 'readwrite');
+            const store = tx.objectStore(STORE_SYNC);
+            const request = store.put({ id, ...data, timestamp: Date.now() });
+            request.onsuccess = () => resolve(true);
+            request.onerror = () => reject(request.error);
+        });
+    },
+
     async getFund(code) {
         if (!code) return null;
         const db = await this.init();

@@ -1281,46 +1281,6 @@
         </main>
     </div>
 
-    <!-- Portfolio Transaction Modal -->
-    <div class="modal" id="portfolioModal"
-        style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); backdrop-filter: blur(8px); z-index: 1000; align-items: center; justify-content: center;">
-        <div class="modal-content"
-            style="background: var(--bg-card); border: 1px solid var(--border-glass); border-radius: var(--radius-lg); padding: 32px; width: 90%; max-width: 400px; box-shadow: 0 24px 48px rgba(0,0,0,0.4);">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
-                <h3 style="margin: 0; font-size: 18px;">Add Transaction</h3>
-                <button onclick="closePortfolioModal()"
-                    style="background: none; border: none; color: var(--text-muted); font-size: 20px; cursor: pointer;">✕</button>
-            </div>
-
-            <div style="margin-bottom: 16px;">
-                <label
-                    style="display: block; font-size: 12px; color: var(--text-muted); margin-bottom: 8px;">Transaction
-                    Date</label>
-                <input type="date" id="txnDate"
-                    style="width: 100%; box-sizing: border-box; background: rgba(0,0,0,0.2); border: 1px solid var(--border-glass); color: white; padding: 12px; border-radius: var(--radius-md); font-family: inherit;">
-            </div>
-
-            <div style="margin-bottom: 16px;">
-                <label style="display: block; font-size: 12px; color: var(--text-muted); margin-bottom: 8px;">Investment
-                    Amount (₹)</label>
-                <input type="number" id="txnAmount" placeholder="e.g. 5000"
-                    style="width: 100%; box-sizing: border-box; background: rgba(0,0,0,0.2); border: 1px solid var(--border-glass); color: white; padding: 12px; border-radius: var(--radius-md); font-family: inherit;">
-            </div>
-
-            <div style="margin-bottom: 24px;">
-                <label style="display: block; font-size: 12px; color: var(--text-muted); margin-bottom: 8px;">Units
-                    Allotted (Auto-calculated)</label>
-                <input type="number" id="txnUnits" step="0.001" placeholder="e.g. 145.672"
-                    style="width: 100%; box-sizing: border-box; background: rgba(0,0,0,0.2); border: 1px solid var(--border-glass); color: white; padding: 12px; border-radius: var(--radius-md); font-family: inherit;">
-                <div id="navHelperText" style="font-size: 11px; margin-top: 6px; color: var(--text-secondary);">Select a
-                    date above to fetch historical NAV.</div>
-            </div>
-
-            <button id="saveTxnBtn" onclick="saveTransaction()"
-                style="width: 100%; background: var(--accent); color: var(--bg-surface); padding: 14px; font-weight: 600; font-size: 15px; border-radius: var(--radius-md); border: none; cursor: pointer; transition: opacity 0.2s;">Save
-                Transaction</button>
-        </div>
-    </div>
 
     <button class="mobile-toggle" id="mobileToggle" onclick="toggleSidebar()">☰</button>
 

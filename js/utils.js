@@ -52,7 +52,7 @@ function calcCAGR(startNAV, endNAV, startDate, endDate) {
     const diffMs = endDate - startDate;
     const years = diffMs / (365.25 * 24 * 60 * 60 * 1000);
     if (years <= 0 || startNAV <= 0) return null;
-    return Math.pow(endNAV / startNAV, 1 / years) - 1;
+    return (Math.pow(endNAV / startNAV, 1 / years) - 1) * 100;
 }
 
 /**
@@ -153,7 +153,7 @@ function calc30DayReturn(data) {
  * Risk-free rate ≈ 6.5% (approximate Indian T-bill rate)
  */
 function calcSharpe(cagr, volatility) {
-    const RISK_FREE = 0.065;
+    const RISK_FREE = 6.5;
     if (volatility === null || volatility === 0) return null;
     return (cagr - RISK_FREE) / volatility;
 }
@@ -412,3 +412,25 @@ function toIsoDateString(date) {
 /* ── Expose to global scope ─────────────────────────────────────── */
 window.generateSipLedger = generateSipLedger;
 window.toIsoDateString = toIsoDateString;
+
+/**
+ * Detect plan type from fund name.
+ */
+function planTypeFromName(name) {
+    if (!name) return 'UNKNOWN';
+    const n = name.toUpperCase();
+    if (n.includes('DIRECT')) return 'DIRECT';
+    if (n.includes('REGULAR')) return 'REGULAR';
+    return 'UNKNOWN';
+}
+
+/**
+ * Detect option type from fund name.
+ */
+function optionTypeFromName(name) {
+    if (!name) return 'UNKNOWN';
+    const n = name.toUpperCase();
+    if (n.includes('IDCW') || n.includes('DIVIDEND')) return 'IDCW';
+    if (n.includes('GROWTH')) return 'GROWTH';
+    return 'UNKNOWN';
+}

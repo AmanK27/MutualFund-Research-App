@@ -837,31 +837,6 @@ function renderAdvancedData(data) {
 }
 
 /* ── Portfolio Actions (Add Transaction) ───────────────────────── */
-function openPortfolioModal() {
-    if (!currentUser) {
-        // Automatically promote to virtual guest if not signed in
-        currentUser = { uid: "guest-user-123", displayName: "Guest User" };
-        console.log("Auth: Auto-promoted to Guest for portfolio action");
-    }
-    if (!currentFund || !currentCode) return;
-
-    document.getElementById('portfolioModal').style.display = 'flex';
-
-    // Set default date to today, padded properly
-    const today = new Date();
-    const yyyy = today.getFullYear();
-    const mm = String(today.getMonth() + 1).padStart(2, '0');
-    const dd = String(today.getDate()).padStart(2, '0');
-    document.getElementById('txnDate').value = `${yyyy}-${mm}-${dd}`;
-
-    document.getElementById('txnAmount').value = '';
-    document.getElementById('txnUnits').value = '';
-    document.getElementById('navHelperText').textContent = 'Select a date above to fetch historical NAV.';
-}
-
-function closePortfolioModal() {
-    document.getElementById('portfolioModal').style.display = 'none';
-}
 
 function calculateUnitsForTxn() {
     if (!fullNavData || fullNavData.length === 0) return;
@@ -2037,48 +2012,6 @@ function deleteTransaction(txnId) {
 }
 
 /* ── Portfolio Aggregation & UI ────────────────────────────────── */
-async function saveTransaction() {
-    if (!currentUser) return;
-
-    const btn = document.getElementById('saveTxnBtn');
-    const dateStr = document.getElementById('txnDate').value;
-    const amount = parseFloat(document.getElementById('txnAmount').value);
-    const units = parseFloat(document.getElementById('txnUnits').value);
-
-    if (!dateStr || isNaN(amount) || isNaN(units)) {
-        showToast("Please fill all fields correctly to calculate units.", "error");
-        return;
-    }
-
-    btn.textContent = 'Saving...';
-    btn.disabled = true;
-
-    const txn = {
-        type: 'buy',
-        schemeCode: currentCode,
-        schemeName: document.getElementById('fundName').textContent,
-        amount: amount,
-        units: units,
-        navAtDate: amount / units,
-        date: dateStr // YYYY-MM-DD
-    };
-
-    try {
-        await addTransaction(txn);
-        showToast("Added to portfolio successfully!", "success");
-        closePortfolioModal();
-        // Refresh portfolio if that view is active
-        if (document.getElementById('portfolioView').style.display === 'block') {
-            loadPortfolioView();
-        }
-    } catch (err) {
-        console.error("Save Txn:", err);
-        showToast("Failed to save transaction.", "error");
-    } finally {
-        btn.textContent = 'Save Transaction';
-        btn.disabled = false;
-    }
-}
 
 async function loadPortfolioView() {
     showState('portfolio');
@@ -2317,9 +2250,9 @@ async function loadPortfolioView() {
             // STCG / LTCG unrealised gains based on current NAV and cost basis
             if (h.taxBuckets && nav > 0) {
                 const stUnits = h.taxBuckets.STCG?.units || 0;
-                const stCost  = h.taxBuckets.STCG?.cost  || 0;
+                const stCost = h.taxBuckets.STCG?.cost || 0;
                 const ltUnits = h.taxBuckets.LTCG?.units || 0;
-                const ltCost  = h.taxBuckets.LTCG?.cost  || 0;
+                const ltCost = h.taxBuckets.LTCG?.cost || 0;
 
                 const stCurrent = stUnits * nav;
                 const ltCurrent = ltUnits * nav;

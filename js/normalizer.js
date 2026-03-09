@@ -84,33 +84,6 @@ function safeStr(value) {
     return (typeof value === 'string' && value.trim().length > 0) ? value.trim() : null;
 }
 
-/**
- * Derives 'DIRECT' | 'REGULAR' | 'UNKNOWN' from a fund scheme name string.
- * Used only as a last-resort fallback when no explicit API field is available.
- * @param {string} name
- * @returns {'DIRECT'|'REGULAR'|'UNKNOWN'}
- */
-function inferPlanType(name) {
-    if (!name) return 'UNKNOWN';
-    const n = name.toUpperCase();
-    if (n.includes('DIRECT')) return 'DIRECT';
-    if (n.includes('REGULAR')) return 'REGULAR';
-    return 'UNKNOWN';
-}
-
-/**
- * Derives 'GROWTH' | 'IDCW' | 'UNKNOWN' from a fund scheme name string.
- * Used only as a last-resort fallback when no explicit API field is available.
- * @param {string} name
- * @returns {'GROWTH'|'IDCW'|'UNKNOWN'}
- */
-function inferOptionType(name) {
-    if (!name) return 'UNKNOWN';
-    const n = name.toUpperCase();
-    if (n.includes('IDCW') || n.includes('DIVIDEND')) return 'IDCW';
-    if (n.includes('GROWTH')) return 'GROWTH';
-    return 'UNKNOWN';
-}
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Step 2 — API-Specific Adapters (added in Step 2 of implementation)
@@ -155,8 +128,8 @@ function normalizeAmfi(rawJson) {
             fundHouse: safeStr(meta.fund_house),
             category: safeStr(meta.scheme_category),
             subCategory: safeStr(meta.scheme_category), // AMFI-only, verbatim — no Kuvera override
-            planType: inferPlanType(schemeName),      // inferred fallback; overridden by Kuvera
-            optionType: inferOptionType(schemeName)     // inferred fallback; overridden by Kuvera
+            planType: planTypeFromName(schemeName),      // inferred fallback; overridden by Kuvera
+            optionType: optionTypeFromName(schemeName)     // inferred fallback; overridden by Kuvera
         },
         nav: {
             current: latestEntry ? safeNum(latestEntry.nav) : null,

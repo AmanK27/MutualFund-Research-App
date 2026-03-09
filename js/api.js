@@ -45,6 +45,17 @@ async function fetchFundData(schemeCode) {
  */
 async function fetchLiveAmfiCategories() {
     try {
+        const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+        const cached = await MFDB.getMetadata('amfi_categories');
+
+        if (cached && (Date.now() - (cached.timestamp || 0)) < ONE_DAY_MS) {
+            console.log('[Cache Hit] AMFI Categories loaded from IndexedDB');
+            window.LIVE_FUNDS = cached.liveFunds;
+            window.activeSchemeCodesSet = new Set(cached.activeCodes);
+            return;
+        }
+
+        console.log('[Cache Miss] Fetching AMFI Categories from amfiindia.com...');
         const proxyUrl = 'https://corsproxy.io/?url=' + encodeURIComponent('https://www.amfiindia.com/spages/NAVAll.txt');
         const res = await fetch(proxyUrl);
         if (!res.ok) throw new Error("AMFI fetch failed");
@@ -143,6 +154,12 @@ async function fetchLiveAmfiCategories() {
         }
 
         console.log('AMFI Live Categories Built Successfully');
+
+        // Persist to Cache
+        await MFDB.setMetadata('amfi_categories', {
+            liveFunds: window.LIVE_FUNDS,
+            activeCodes: Array.from(window.activeSchemeCodesSet)
+        });
     } catch (e) {
         console.error('fetchLiveAmfiCategories failed:', e);
         throw e;
@@ -266,31 +283,6 @@ window.SCHEME_CATEGORY_TO_LIVE_FUNDS = {
     'Other Scheme - FOF (Overseas)': 'Index Funds',
 };
 
-/**
- * Derive plan type from a fund scheme name string.
- * @param {string} name
- * @returns {'DIRECT'|'REGULAR'|'UNKNOWN'}
- */
-function derivePlanType(name) {
-    if (!name) return 'UNKNOWN';
-    const n = name.toUpperCase();
-    if (n.includes('DIRECT')) return 'DIRECT';
-    if (n.includes('REGULAR')) return 'REGULAR';
-    return 'UNKNOWN';
-}
-
-/**
- * Derive option type from a fund scheme name string.
- * @param {string} name
- * @returns {'GROWTH'|'IDCW'|'UNKNOWN'}
- */
-function deriveOptionType(name) {
-    if (!name) return 'UNKNOWN';
-    const n = name.toUpperCase();
-    if (n.includes('IDCW') || n.includes('DIVIDEND')) return 'IDCW';
-    if (n.includes('GROWTH')) return 'GROWTH';
-    return 'UNKNOWN';
-}
 
 /**
  * Strips plan/option suffix keywords from a scheme name to isolate the base fund name.
@@ -554,32 +546,73 @@ async function fetchCategoryPeers(categoryName, currentSchemeCode = null, target
  * Helper to fetch and parse AMFI CSV data from InertExpert2911 Github.
  * Extracts the latest Average_AUM_Cr.
  */
-async function fetchAUMFromGithub(schemeCode) {
-    if (!schemeCode) return null;
+window.aumCache = new Map();
+
+/**
+ * Helper to ensure AUM cache is populated from memory, IndexedDB, or Network.
+ */
+async function ensureAumCache() {
+    const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+
+    // 1. Memory Check
+    if (window.aumCache && window.aumCache.size > 0) return true;
+
     try {
+        // 2. IndexedDB Check
+        const cached = await MFDB.getMetadata('aum_csv_cache');
+        if (cached && (Date.now() - (cached.timestamp || 0)) < ONE_DAY_MS && cached.entries) {
+            console.log(`[Cache Hit] AUM Cache loaded from IndexedDB (${cached.entries.length} funds)`);
+            window.aumCache = new Map(cached.entries);
+            return true;
+        }
+
+        // 3. Network Fetch
+        console.log('[Cache Miss] Fetching AUM Data from GitHub...');
         const url = 'https://raw.githubusercontent.com/InertExpert2911/Mutual_Fund_Data/main/mutual_fund_data.csv';
         const res = await fetch(url);
-        if (!res.ok) return null;
+        if (!res.ok) return false;
         const csvText = await res.text();
 
-        // Simple manual CSV line search for the scheme code
         const lines = csvText.split('\n');
+        const newCache = new Map();
+
+        // Skipping header, parsing all lines
         for (let i = 1; i < lines.length; i++) {
-            const line = lines[i];
-            if (line.startsWith(`${schemeCode},`)) {
-                // Format: Scheme_Code,Scheme_Name,AMC,Scheme_Type,Scheme_Category,Scheme_NAV_Name,Scheme_Min_Amt,NAV,Latest_NAV_Date,Average_AUM_Cr,...
-                const cols = line.split(',');
-                if (cols.length >= 10) {
-                    const aum = parseFloat(cols[9]);
-                    return isNaN(aum) ? null : `${aum.toFixed(2)} Cr`;
+            const line = lines[i].trim();
+            if (!line) continue;
+            const cols = line.split(',');
+            if (cols.length >= 10) {
+                const code = cols[0].trim();
+                const aum = parseFloat(cols[9]);
+                if (!isNaN(aum)) {
+                    newCache.set(code, `${aum.toFixed(2)} Cr`);
                 }
             }
         }
-        return null;
+
+        window.aumCache = newCache;
+        console.log(`AUM Cache built: ${window.aumCache.size} funds`);
+
+        // 4. Update IndexedDB
+        await MFDB.setMetadata('aum_csv_cache', {
+            entries: Array.from(window.aumCache.entries())
+        });
+
+        return true;
     } catch (e) {
-        console.warn(`AUM Github fetch failed for ${schemeCode}:`, e);
-        return null;
+        console.warn('ensureAumCache failed:', e);
+        return false;
     }
+}
+
+/**
+ * Fetch AUM from the cached dataset.
+ */
+async function fetchAUMFromGithub(schemeCode) {
+    if (!schemeCode) return null;
+    const ok = await ensureAumCache();
+    if (!ok) return null;
+    return window.aumCache.get(String(schemeCode)) || null;
 }
 
 
