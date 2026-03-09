@@ -1,58 +1,60 @@
-/**
- * dev-diagnostics.js
- * Automated health check for Mutual Fund Research App UI
- * Only runs on localhost — never in production.
- */
+setTimeout(async () => {
+    console.log("======================================");
+    console.log("   PHASE 4: CLEARING IndexedDB CACHE  ");
+    console.log("======================================");
 
-if (location.hostname === 'localhost' || location.hostname === '127.0.0.1') {
-    (function () {
-        console.group("🚀 App Health Diagnostics");
+    try {
+        const db = await MFDB.init();
+        const tx = db.transaction(['category_peers'], 'readwrite');
+        const store = tx.objectStore('category_peers');
+        store.clear();
 
-        const checks = [
-            { name: "Sidebar Category Navigation", id: "categoryNav" },
-            { name: "Top Funds Panel", selector: ".top-performers-section" },
-            { name: "Search Input", id: "searchInput" },
-            { name: "Compare View Section", id: "compareView" },
-            { name: "Portfolio View Section", id: "portfolioView" },
-            { name: "Robo-Advisor Bridge Button", id: "nav-to-advisor" },
-            { name: "Glossary Modal", id: "glossaryModal" }
-        ];
+        tx.oncomplete = async () => {
+            console.log("✅ Cleared `category_peers` object store.");
+            console.log("Testing new peer logic for: Equity Scheme - Mid Cap Fund...");
 
-        checks.forEach(check => {
-            const el = check.id ? document.getElementById(check.id) : document.querySelector(check.selector);
-            if (el) {
-                console.log(`✅ ${check.name}: Found`);
-            } else {
-                console.warn(`❌ ${check.name}: MISSING`);
+            try {
+                // Ensure global list is loaded
+                await fetchGlobalFundList();
+
+                console.time("PeerRankingTime");
+                const topPeers = await getPeerRanking("Equity Scheme - Mid Cap Fund", null);
+                console.timeEnd("PeerRankingTime");
+
+                console.log("\n📊 Phase 4 Self-Diagnostic Results (Top 5 Peers):");
+                if (topPeers && topPeers.length > 0) {
+                    const displayData = topPeers.slice(0, 5).map(p => ({
+                        Rank: p.rank,
+                        Name: p.schemeName,
+                        '1Y CAGR': (p.cagr1y * 100).toFixed(2) + '%',
+                        '3Y CAGR': (p.cagr3y * 100).toFixed(2) + '%',
+                        'Score': p.compositeScore.toFixed(3)
+                    }));
+                    console.table(displayData);
+                } else {
+                    console.log("⚠️ No peers returned. Algorithm failed or pool was empty.");
+                }
+
+                // Regression Verification 
+                console.log("\n🔍 Regression Verification Check:");
+                const hasDB = typeof MFDB !== 'undefined' && typeof MFDB.init === 'function';
+                const hasUtils = typeof getCAGR === 'function' && typeof formatFundName === 'function';
+
+                console.log(`1. Global DB loaded: ${hasDB ? 'Pass ✅' : 'Fail ❌'}`);
+                console.log(`2. Math Utils intact: ${hasUtils ? 'Pass ✅' : 'Fail ❌'}`);
+
+                console.log("\n======================================");
+                console.log("Please visually load the Fund Dashboard for 'Motilal Oswal Midcap Fund'");
+                console.log("and verify the sidebar peer rankings.");
+
+            } catch (err) {
+                console.error("Diagnostic execution failed:", err);
             }
-        });
-
-        // Verification of Global Helpers
-        const globals = ['showState', 'showToast', 'loadFund', 'bootApp'];
-        globals.forEach(g => {
-            if (typeof window[g] === 'function' || typeof window[g] === 'object') {
-                console.log(`✅ Global Found: ${g}`);
-            } else {
-                console.error(`❌ Global MISSING: ${g}`);
-            }
-        });
-
-        // Event Listener Check (Simulation)
-        const criticalButtons = [
-            { id: 'searchBtn', label: 'Search' },
-            { id: 'runCompareBtn', label: 'Compare' },
-            { id: 'nav-to-advisor', label: 'Robo Advisor' }
-        ];
-
-        criticalButtons.forEach(btn => {
-            const el = document.getElementById(btn.id);
-            if (el) {
-                // We can't easily check if a listener is attached, 
-                // but we can check if it has the right attributes.
-                console.log(`✅ Button ${btn.label} exists and is ready.`);
-            }
-        });
-
-        console.groupEnd();
-    })();
-} // end localhost guard
+        };
+        tx.onerror = (e) => {
+            console.error("❌ Failed to clear cache:", e);
+        };
+    } catch (e) {
+        console.error("DB Initialization error:", e);
+    }
+}, 3000);

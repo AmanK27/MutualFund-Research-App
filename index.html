@@ -24,8 +24,17 @@
     <script src="js/api.js?v=2"></script>
     <script>
         window.onerror = function (msg, url, line, col, error) {
-            alert("JS Error: " + msg + " at " + line + ":" + col);
             console.error("Uncaught error:", msg, url, line, col, error);
+
+            // Non-blocking user notification
+            try {
+                if (window.showToast) {
+                    window.showToast('Something went wrong. Check console for details.', 'error');
+                }
+            } catch (toastErr) {
+                console.warn('showToast failed inside window.onerror', toastErr);
+            }
+
             // Don't overwrite the whole body, prepend to it so we see it
             const errDiv = document.createElement('div');
             errDiv.style = "background:red;color:white;padding:20px;position:fixed;top:0;left:0;z-index:99999;width:100%;font-family:monospace;";
@@ -265,25 +274,25 @@
             <!-- Fund Dashboard -->
             <section id="fundDashboard">
                 <div class="fund-header">
-                    <div>
-                        <h1 class="fund-name" id="fundName">—</h1>
-                        <div class="fund-meta-tags">
-                            <span class="meta-tag" id="fundHouse">—</span>
-                            <span class="meta-tag" id="fundCategory">—</span>
-                            <span class="meta-tag" id="fundType">—</span>
-                        </div>
-                    </div>
-                    <div class="fund-actions" style="display: flex; gap: 8px;">
-                        <button id="addWatchlistBtn" onclick="toggleWatchlist()">
-                            <span id="watchlistBtnIcon">＋</span>
-                            <span id="watchlistBtnText">Add to Watchlist</span>
-                        </button>
-                        <button id="addPortfolioBtn" onclick="openPortfolioModal()"
-                            style="display: none; background: rgba(99, 102, 241, 0.15); border: 1px solid rgba(99, 102, 241, 0.5); color: #818cf8;">
-                            <span>＋</span>
-                            <span>Add to Portfolio</span>
+                    <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 8px;">
+                        <h1 class="fund-name" id="fundName" style="margin: 0;">—</h1>
+                        <button onclick="if(window.currentCode) loadFund(window.currentCode)" class="refresh-btn"
+                            title="Refresh Dashboard"
+                            style="background: transparent; border: 1px solid var(--border); color: var(--text-secondary); border-radius: 6px; padding: 6px 10px; cursor: pointer; font-size: 16px; display: flex; align-items: center; justify-content: center; transition: all 0.2s ease;">
+                            &#x21bb;
                         </button>
                     </div>
+                    <div class="fund-meta-tags">
+                        <span class="meta-tag" id="fundHouse">—</span>
+                        <span class="meta-tag" id="fundCategory">—</span>
+                        <span class="meta-tag" id="fundType">—</span>
+                    </div>
+                </div>
+                <div class="fund-actions" style="display: flex; gap: 8px;">
+                    <button id="addWatchlistBtn" onclick="toggleWatchlist()">
+                        <span id="watchlistBtnIcon">＋</span>
+                        <span id="watchlistBtnText">Add to Watchlist</span>
+                    </button>
                 </div>
 
                 <div class="dashboard-grid">
@@ -329,7 +338,8 @@
                                         style="font-size: 15px; font-weight: 600; color: var(--text-primary); margin-bottom: 2px;">
                                         Analyzing...</div>
                                     <div id="healthScoreDesc"
-                                        style="font-size: 11px; color: var(--text-muted); line-height: 1.4;">Based on
+                                        style="font-size: 11px; color: var(--text-muted); line-height: 1.4;">
+                                        Based on
                                         returns, risk, and efficiency.</div>
                                 </div>
                             </div>
@@ -341,7 +351,8 @@
                                         style="font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px;">
                                         Category Rank</div>
                                     <div id="categoryRankValue"
-                                        style="font-size: 18px; font-weight: 700; color: var(--accent);">—</div>
+                                        style="font-size: 18px; font-weight: 700; color: var(--accent);">—
+                                    </div>
                                     <div style="font-size: 11px; color: var(--text-muted);">Within peer group</div>
                                 </div>
                             </div>
@@ -731,7 +742,7 @@
 
                         <!-- STCG Tile -->
                         <div class="stat-card compact">
-                            <div class="stat-label">Short-term Holdings (STCG)</div>
+                            <div class="stat-label">Short-term Gains (STCG)</div>
                             <div class="stat-value" id="pfStcgValue" style="color:#f59e0b;font-size:20px;margin:6px 0;">
                                 —</div>
                             <div class="stat-sub">Held &lt; 1 year</div>
@@ -739,7 +750,7 @@
 
                         <!-- LTCG Tile -->
                         <div class="stat-card compact">
-                            <div class="stat-label">Long-term Holdings (LTCG)</div>
+                            <div class="stat-label">Long-term Gains (LTCG)</div>
                             <div class="stat-value" id="pfLtcgValue" style="color:#10b981;font-size:20px;margin:6px 0;">
                                 —</div>
                             <div class="stat-sub">Held &ge; 1 year</div>
@@ -754,11 +765,11 @@
                                     Liability Insights</div>
                             </div>
                             <div style="display:flex; justify-content:space-between; margin-bottom:8px;">
-                                <span style="font-size:11px; color:var(--text-muted);">Est. STCG Tax (20%)</span>
+                                <span style="font-size:11px; color:var(--text-muted);">Est. Tax on STCG Gains (20%)</span>
                                 <span id="pfStcgTax" style="font-size:12px; font-weight:600; color:#ef4444;">₹0</span>
                             </div>
                             <div style="display:flex; justify-content:space-between; margin-bottom:12px;">
-                                <span style="font-size:11px; color:var(--text-muted);">Est. LTCG Tax (12.5%)*</span>
+                                <span style="font-size:11px; color:var(--text-muted);">Est. Tax on LTCG Gains (12.5%)*</span>
                                 <span id="pfLtcgTax" style="font-size:12px; font-weight:600; color:#ef4444;">₹0</span>
                             </div>
                             <div

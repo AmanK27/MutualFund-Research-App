@@ -148,7 +148,18 @@ const UI = {
             peers.sort((a, b) => (parseFloat(b.cagr1y) || 0) - (parseFloat(a.cagr1y) || 0));
 
             // Calculate current fund rank
-            const myRank = peers.findIndex(p => String(p.schemeCode) === currentCode);
+            let myRank = peers.findIndex(p => String(p.schemeCode) === currentCode);
+
+            // Fallback: If cache completely misses the current fund, approximate it using known app session data
+            if (myRank === -1 && typeof window.getCAGR === 'function' && window.fullNavData) {
+                const fundCagr = getCAGR(window.fullNavData, 1);
+                if (fundCagr !== null) {
+                    peers.push({ schemeCode: currentCode, cagr1y: fundCagr, schemeName: fund.meta?.cleanName || 'Current Fund' });
+                    peers.sort((a, b) => (parseFloat(b.cagr1y) || 0) - (parseFloat(a.cagr1y) || 0));
+                    myRank = peers.findIndex(p => String(p.schemeCode) === currentCode);
+                }
+            }
+
             if (rankValueEl) {
                 rankValueEl.textContent = (myRank !== -1) ? `#${myRank + 1} in Category` : 'Not Ranked';
             }
@@ -160,7 +171,10 @@ const UI = {
             top5.forEach((peer, idx) => {
                 const isCurrent = String(peer.schemeCode) === currentCode;
                 const highlightClass = isCurrent ? 'peer-highlight' : '';
-                const cagr = parseFloat(peer.cagr1y) || 0;
+
+                const rawCagr = parseFloat(peer.cagr1y) || 0;
+                // Scale fractional values up to percentage if they are decimals
+                const cagr = (rawCagr <= 5 && rawCagr >= -5) ? rawCagr * 100 : rawCagr;
 
                 html += `
                     <div class="peer-item ${highlightClass}" onclick="loadFund('${peer.schemeCode}')" title="Click to view details">
@@ -179,15 +193,18 @@ const UI = {
 
             // If current fund is not in top 5, append it at the bottom
             if (myRank >= 5) {
+                const rawCagr = parseFloat(peers[myRank].cagr1y) || 0;
+                const myCagr = (rawCagr <= 5 && rawCagr >= -5) ? rawCagr * 100 : rawCagr;
+
                 html += `
                     <div style="text-align:center;color:var(--text-muted);font-size:14px;margin:4px 0;">⋮</div>
                     <div class="peer-item peer-highlight" onclick="loadFund('${currentCode}')">
                         <div class="peer-info">
                             <span class="peer-rank">#${myRank + 1}</span>
-                            <span class="peer-name">${fund.meta?.cleanName || 'Current Fund'}</span>
+                            <span class="peer-name">${escapeHtml(fund.meta?.cleanName || 'Current Fund')}</span>
                         </div>
                         <div class="peer-metric">
-                            <span class="peer-metric-value">${(peers[myRank].cagr1y * 100).toFixed(2)}%</span>
+                            <span class="peer-metric-value ${myCagr >= 0 ? 'stat-positive' : 'stat-negative'}">${myCagr.toFixed(2)}%</span>
                         </div>
                     </div>
                 `;

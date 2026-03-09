@@ -313,6 +313,14 @@ function renderChart(data) {
    ═══════════════════════════════════════════════════════════════════ */
 
 function goHome() {
+    // Ensure any in-flight loading state is cleared when returning home
+    isLoading = false;
+    const searchBtn = document.getElementById('searchBtn');
+    if (searchBtn) {
+        searchBtn.disabled = false;
+        searchBtn.textContent = 'Search Fund';
+    }
+
     document.getElementById('searchInput').value = '';
     currentFund = null;
     currentCode = null;
@@ -411,17 +419,25 @@ function displayFundData() {
 
     // Header
     const elFName = document.getElementById('fundName');
-    if (elFName) elFName.textContent = formatFundName(meta.scheme_name) || 'Unknown Fund';
-    const elFHouse = document.getElementById('fundHouse');
-    if (elFHouse) elFHouse.textContent = meta.fund_house || '—';
-    const elFCat = document.getElementById('fundCategory');
-    if (elFCat) elFCat.textContent = (window.Normalizer)
-        ? Normalizer.formatSubCategory(currentFund?.meta?.subCategory || meta.scheme_category || '')
-        : (meta.scheme_category || '—');
+    if (elFName) elFName.textContent = formatFundName(meta.cleanName || meta.scheme_name) || 'Unknown Fund';
 
+    const elFHouse = document.getElementById('fundHouse');
+    if (elFHouse) elFHouse.textContent = meta.fundHouse || meta.fund_house || '—';
+
+    const elFCat = document.getElementById('fundCategory');
+    if (elFCat) {
+        let catText = meta.subCategory || meta.scheme_category || '';
+        if (window.Normalizer) catText = Normalizer.formatSubCategory(catText);
+        elFCat.textContent = catText || '—';
+    }
 
     const elFType = document.getElementById('fundType');
-    if (elFType) elFType.textContent = meta.scheme_type || '—';
+    if (elFType) {
+        const pType = meta.planType && meta.planType !== 'UNKNOWN' ? meta.planType : '';
+        const oType = meta.optionType && meta.optionType !== 'UNKNOWN' ? meta.optionType : '';
+        const combined = `${pType} ${oType}`.trim();
+        elFType.textContent = combined || meta.scheme_type || '—';
+    }
 
     // Stats
     const latest = fullNavData[fullNavData.length - 1];
@@ -433,13 +449,6 @@ function displayFundData() {
         statNavDateEl.textContent = latest.date.toLocaleDateString('en-IN', {
             day: 'numeric', month: 'short', year: 'numeric'
         });
-    }
-
-    // Ensure "Add to Portfolio" button is visible and active
-    const addBtn = document.getElementById('addPortfolioBtn');
-    if (addBtn) {
-        addBtn.style.display = 'flex'; // Use flex to match header alignment
-        addBtn.disabled = false;
     }
 
     const cagr1 = getCAGR(fullNavData, 1);
@@ -680,6 +689,20 @@ async function loadFund(code) {
     const searchBtn = document.getElementById('searchBtn');
     searchBtn.disabled = true;
     searchBtn.textContent = 'Loading…';
+
+    // Safety net: if something goes wrong before our try/finally completes,
+    // ensure we don't leave the app stuck in a loading state forever.
+    const LOAD_TIMEOUT_MS = 30000;
+    setTimeout(() => {
+        if (isLoading) {
+            console.warn('[loadFund] Timeout hit, resetting loading state.');
+            isLoading = false;
+            if (searchBtn) {
+                searchBtn.disabled = false;
+                searchBtn.textContent = 'Search Fund';
+            }
+        }
+    }, LOAD_TIMEOUT_MS);
 
     currentCode = code;
     document.getElementById('searchInput').value = code;
@@ -2265,6 +2288,7 @@ async function loadPortfolioView() {
 
         // 5b. Asset Allocation & Tax Bucketing analytics
         let weightedEquityRs = 0, weightedDebtRs = 0, weightedCashRs = 0;
+        // These track unrealised gains (current value - cost basis), floored at 0
         let stcgValue = 0, ltcgValue = 0;
 
         Object.values(holdings).forEach(h => {
@@ -2290,10 +2314,21 @@ async function loadPortfolioView() {
                 }
             }
 
-            // STCG / LTCG values based on current NAV
+            // STCG / LTCG unrealised gains based on current NAV and cost basis
             if (h.taxBuckets && nav > 0) {
-                stcgValue += h.taxBuckets.STCG.units * nav;
-                ltcgValue += h.taxBuckets.LTCG.units * nav;
+                const stUnits = h.taxBuckets.STCG?.units || 0;
+                const stCost  = h.taxBuckets.STCG?.cost  || 0;
+                const ltUnits = h.taxBuckets.LTCG?.units || 0;
+                const ltCost  = h.taxBuckets.LTCG?.cost  || 0;
+
+                const stCurrent = stUnits * nav;
+                const ltCurrent = ltUnits * nav;
+
+                const stGain = Math.max(0, stCurrent - stCost);
+                const ltGain = Math.max(0, ltCurrent - ltCost);
+
+                stcgValue += stGain;
+                ltcgValue += ltGain;
             }
         });
 
@@ -2415,8 +2450,8 @@ document.getElementById('runCompareBtn').addEventListener('click', async () => {
     const inputA = document.getElementById('compareInputA').value.trim();
     const inputB = document.getElementById('compareInputB').value.trim();
 
-    if (!codeA && /^\\d+$/.test(inputA)) codeA = inputA;
-    if (!codeB && /^\\d+$/.test(inputB)) codeB = inputB;
+    if (!codeA && /^\d+$/.test(inputA)) codeA = inputA;
+    if (!codeB && /^\d+$/.test(inputB)) codeB = inputB;
 
     if (!codeA || !codeB) {
         showToast("Please select two funds from the search dropdown.", "error");

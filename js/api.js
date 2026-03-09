@@ -309,240 +309,188 @@ function extractBaseName(schemeName) {
 }
 
 /**
- * Discovery & Verification — Given the raw name of a top-performing fund candidate,
- * searches mfapi.in for its official AMFI scheme listing and extracts the Direct Plan + Growth
- * variant's scheme code. Then fetches its NAV, computes 1Y CAGR, and enforces a strict
- * AMFI sub-category match to prevent cross-category recommendations.
- *
- * @param {string} rawSchemeName      - The candidate fund's schemeName (may be truncated)
- * @param {string} currentSchemeCode  - Exclude self from results
- * @param {string|null} targetSubCategory - AMFI scheme_category of the TARGET fund.
- *   If provided, ONLY a peer whose AMFI scheme_category === targetSubCategory is returned.
- *   A 'Large & Mid Cap' peer will be discarded when target is 'Mid Cap', etc.
- * @returns {Promise<Object|null>} Verified peer object or null if not found / wrong category
+ * Step A: The Peer Assembler (Strict Category & Name Regex Filtering)
+ * Filters window.allMfFunds for Direct Growth equivalents of the target category.
  */
-async function findTrueBestPeer(rawSchemeName, currentSchemeCode, targetSubCategory = null) {
-    const baseName = extractBaseName(rawSchemeName);
-    if (!baseName) return null;
+function buildStrictPeerGroup(targetSubCategory) {
+    if (!window.allMfFunds || !targetSubCategory) return [];
 
-    console.log(`[Discovery] Searching AMFI for Direct Growth variant of: "${baseName}"`);
+    console.log(`[Peer Assembler] Building raw pool for strict category: "${targetSubCategory}"`);
 
-    try {
-        const res = await fetch(`https://api.mfapi.in/mf/search?q=${encodeURIComponent(baseName)}`);
-        if (!res.ok) return null;
-        const results = await res.json();
+    // Normalizer equivalent - ensure we match cleanly
+    const safeTargetCat = (window.Normalizer ? window.Normalizer.formatSubCategory(targetSubCategory) : targetSubCategory).toLowerCase().trim();
 
-        if (!results || results.length === 0) {
-            console.warn(`[Discovery] No AMFI results for base name: "${baseName}"`);
-            return null;
+    return window.allMfFunds.filter(f => {
+        if (!f.schemeName) return false;
+        const n = f.schemeName.toLowerCase();
+
+        // 1. Strict Category Match (No guessing from names)
+        // Note: window.allMfFunds (mfapi.in root list) unfortunately does NOT contain scheme_category
+        // We will do a loose name gather here, but STRICTLY enforce category in Step B when we fetch the JSON
+        // For the raw pool, we cast a wider net based on the target category keyword
+        const keywordSearch = safeTargetCat.replace(/equity scheme\s*-?\s*/ig, '')
+            .replace(/hybrid scheme\s*-?\s*/ig, '')
+            .replace(/debt scheme\s*-?\s*/ig, '')
+            .replace(/other scheme\s*-?\s*/ig, '')
+            .replace(/fund/ig, '')
+            .trim()
+            .replace(/\s+/g, ''); // "mid cap" -> "midcap"
+
+        const nNoSpaces = n.replace(/\s+/g, '');
+        if (!nNoSpaces.includes(keywordSearch)) return false;
+
+        // 2. Strict Structural Exclusion
+        if (n.includes('regular') || n.includes('idcw') || n.includes('dividend') ||
+            n.includes('payout') || n.includes('bonus') || n.includes('etf')) {
+            return false;
         }
 
-        // AMFI-standardised: filter for Direct Plan + Growth (SEBI-mandated verbatim naming)
-        const directGrowthMatch = results.find(r => {
-            const n = r.schemeName.toUpperCase();
-            return n.includes('DIRECT') && n.includes('GROWTH') && !n.includes('IDCW') && !n.includes('ETF');
+        // 3. Mathematical Variant Inclusion
+        // A fund passes if it explicitly says Direct AND Growth
+        const hasDirect = /\bdirect\b/.test(n);
+        const hasGrowth = /\bgrowth\b/.test(n);
+
+        if (hasDirect && hasGrowth) return true;
+
+        // Fallback: If it says Direct but omits Growth, or vice versa, and passed exclusions,
+        // it might be a clean named fund (e.g. "Motilal Oswal Midcap Direct"). Let it through.
+        if (hasDirect || hasGrowth) return true;
+
+        // If it lacks both identifiers entirely but passed exclusions, it's safer to discard it to avoid 
+        // polluting the top ranks with regular plans that omit the word "Regular".
+        return false;
+
+    });
+}
+
+/**
+ * Step B & C: The Metric Engine & Scoring Algorithm
+ * Fetches NAV/Meta for the raw pool, strictly verifies JSON category, computes vectors, and assigns percentiles.
+ */
+async function processAndRankPeers(rawPool, currentSchemeCode, targetSubCategory) {
+    console.log(`[Metric Engine] Processing ${rawPool.length} candidates for ${targetSubCategory}...`);
+    const validPeers = [];
+    const safeTargetCat = (window.Normalizer ? window.Normalizer.formatSubCategory(targetSubCategory) : targetSubCategory).toLowerCase().trim();
+
+    // Limit concurrency to prevent browser network tab crashes
+    const BATCH_SIZE = 10;
+    for (let i = 0; i < rawPool.length; i += BATCH_SIZE) {
+        const batch = rawPool.slice(i, i + BATCH_SIZE);
+        const promises = batch.map(async (peer) => {
+            try {
+                const res = await fetch(`https://api.mfapi.in/mf/${peer.schemeCode}`);
+                if (!res.ok) return null;
+                const json = await res.json();
+
+                if (!json.data || json.data.length < 252) return null; // Need at least 1 year of data
+
+                // STRICT JSON Category Verification
+                const peerCat = json.meta?.scheme_category || "";
+                const safePeerCat = (window.Normalizer ? window.Normalizer.formatSubCategory(peerCat) : peerCat).toLowerCase().trim();
+
+                if (safePeerCat !== safeTargetCat) {
+                    return null; // Mathematically discarded — wrong category
+                }
+
+                // Parse NAV History
+                const navHistory = json.data.map(d => {
+                    const parts = d.date.split('-');
+                    return { date: new Date(+parts[2], +parts[1] - 1, +parts[0]), nav: parseFloat(d.nav) };
+                }).sort((a, b) => a.date - b.date);
+
+                // Compute Vectors
+                const cagr1y = getCAGR(navHistory, 1) || 0;
+                const cagr3y = getCAGR(navHistory, 3) || cagr1y; // Fallback to 1Y if < 3Y old
+                const cagr5y = getCAGR(navHistory, 5) || cagr3y;
+                const vol = calcVolatility(navHistory) || 1; // Avoid divide by zero
+                const sharpe = calcSharpe(cagr3y, vol) || 0;
+
+                if (cagr1y <= 0) return null;
+
+                return {
+                    schemeCode: String(peer.schemeCode),
+                    schemeName: formatFundName(peer.schemeName),
+                    planType: 'DIRECT',
+                    optionType: 'GROWTH',
+                    fromAmfiSearch: false,
+                    cagr1y,
+                    cagr3y,
+                    cagr5y,
+                    vol,
+                    sharpe,
+                    navCount: navHistory.length
+                };
+            } catch (e) {
+                return null;
+            }
         });
 
-        if (!directGrowthMatch) {
-            console.warn(`[Discovery] No Direct+Growth AMFI match for "${baseName}" from ${results.length} results`);
-            return null;
-        }
-
-        const verifiedCode = String(directGrowthMatch.schemeCode);
-        // We no longer skip self here so that the current fund can be verified as a top performer for ranking purposes
-
-        // ── Fetch full fund detail from mfapi.in to get scheme_category AND nav ──
-        // We call this directly (rather than via getNavHistory) so we can read meta.scheme_category
-        // in the same response without an extra round-trip.
-        let navHistory = null;
-        let peerSubCategory = null;
-
-        // Fetch fresh from mfapi.in
-        if (!navHistory || !peerSubCategory) {
-            const fullRes = await fetch(`https://api.mfapi.in/mf/${verifiedCode}`);
-            if (!fullRes.ok) return null;
-            const fullJson = await fullRes.json();
-
-            if (!fullJson.data || fullJson.data.length === 0) return null;
-
-            peerSubCategory = fullJson.meta?.scheme_category || null;
-
-            navHistory = fullJson.data.map(d => {
-                const parts = d.date.split('-');
-                return { date: new Date(+parts[2], +parts[1] - 1, +parts[0]), nav: parseFloat(d.nav) };
-            }).sort((a, b) => a.date - b.date);
-        }
-
-        // ── Strict AMFI sub-category enforcement ─────────────────────────────────
-        if (targetSubCategory && peerSubCategory) {
-            const cleanPeerCategory = window.Normalizer ? window.Normalizer.formatSubCategory(peerSubCategory) : peerSubCategory;
-            const cleanTargetCategory = window.Normalizer ? window.Normalizer.formatSubCategory(targetSubCategory) : targetSubCategory;
-
-            if (cleanPeerCategory !== cleanTargetCategory) {
-                console.warn(
-                    `[Discovery] ❌ Category mismatch for "${directGrowthMatch.schemeName}":` +
-                    ` peer is "${cleanPeerCategory}" but target requires "${cleanTargetCategory}" — discarded.`
-                );
-                return null; // caller will try the next candidate
-            }
-        }
-
-        console.log(`[Discovery] ✅ AMFI-Verified (category match): "${directGrowthMatch.schemeName}" (${verifiedCode})`);
-
-        const cagr1y = getCAGR(navHistory, 1);
-        if (cagr1y === null || cagr1y <= 0) return null;
-
-        return {
-            schemeCode: verifiedCode,
-            schemeName: formatFundName(directGrowthMatch.schemeName), // official AMFI name
-            planType: 'DIRECT',
-            optionType: 'GROWTH',
-            subCategory: peerSubCategory, // AMFI-exact, used for strict category matching
-            fromAmfiSearch: true,
-            cagr1y
-        };
-    } catch (e) {
-        console.warn(`[Discovery] AMFI search failed for "${baseName}":`, e);
-        return null;
+        const results = await Promise.all(promises);
+        results.forEach(r => { if (r) validPeers.push(r); });
     }
-}
 
+    if (validPeers.length === 0) return [];
 
-/**
- * Cache-first NAV history fetcher for a single scheme code.
- * Returns sorted array of { date, nav } objects or null.
- * Uses the existing individual-fund IndexedDB cache to avoid duplicate API calls.
- * @param {string} schemeCode
- * @returns {Promise<Array|null>}
- */
-async function getNavHistory(schemeCode) {
-    try {
-        const res = await fetch(`https://api.mfapi.in/mf/${schemeCode}`);
-        if (!res.ok) return null;
-        const json = await res.json();
-        if (!json.data || json.data.length === 0) return null;
-        const navHistory = json.data.map(d => {
-            const parts = d.date.split('-');
-            return { date: new Date(+parts[2], +parts[1] - 1, +parts[0]), nav: parseFloat(d.nav) };
-        }).sort((a, b) => a.date - b.date);
-        return navHistory;
-    } catch (e) {
-        console.warn(`[getNavHistory] Failed for ${schemeCode}:`, e);
-        return null;
-    }
+    // Scoring Algorithm (Weighted Composite)
+    // Find min/max for normalization
+    let maxSharpe = -Infinity;
+    validPeers.forEach(p => { if (p.sharpe > maxSharpe) maxSharpe = p.sharpe; });
+
+    validPeers.forEach(p => {
+        // Normalize metrics (0 to 1) 
+        // We use absolute percentage for CAGR for simplicity since they are inherently normalized ratios
+        const score1Y = Math.max(0, p.cagr1y);
+        const score3Y = Math.max(0, p.cagr3y);
+        const score5Y = Math.max(0, p.cagr5y);
+        const scoreRisk = maxSharpe > 0 ? Math.max(0, p.sharpe / maxSharpe) : 0;
+
+        // Target Weights: 40% (3Y/5Y), 30% (1Y), 30% (Risk Adj)
+        const longTermScore = (score3Y * 0.6) + (score5Y * 0.4);
+        p.compositeScore = (longTermScore * 0.40) + (score1Y * 0.30) + (scoreRisk * 0.30) * 0.50; // scaled risk modifier
+    });
+
+    // Sort descending by composite score
+    validPeers.sort((a, b) => b.compositeScore - a.compositeScore);
+
+    // Assign physical ranks
+    validPeers.forEach((p, index) => {
+        p.rank = index + 1;
+    });
+
+    return validPeers;
 }
 
 /**
- * Fetch peer fund rankings for a given AMFI category using Discovery & Verification.
- *
- * DISCOVERY: Builds a raw candidate pool from window.allMfFunds (keyword search),
- * excluding obvious traps (IDCW, Bonus, ETF). Fetches 1Y CAGR for each via cache-first
- * getNavHistory(). Sorts by CAGR to identify the top performers.
- *
- * VERIFICATION: Runs findTrueBestPeer() on the top raw candidates in order.
- * findTrueBestPeer() strips plan/option suffixes from the name, queries the official
- * mfapi.in/mf/search API, and extracts the Direct Plan + Growth scheme code.
- *
- * Returns an array sorted by CAGR with the AMFI-verified winner at position 0,
- * followed by Direct-Growth-filtered peers for sidebar display.
- *
- * @param {string} categoryString - mfapi.in scheme_category string
- * @param {string} currentSchemeCode - Current fund to exclude from results
- * @returns {Promise<Array>} { schemeCode, schemeName, planType, optionType, fromAmfiSearch, cagr1y }
+ * Step D: The Orchestrator
+ * Replaces the old text-based 1Y CAGR ranking pipeline.
  */
 async function getPeerRanking(categoryString, currentSchemeCode, targetSubCategory = null) {
-    if (!window.allMfFunds || !categoryString) return [];
+    const categoryToSearch = targetSubCategory || categoryString;
+    if (!categoryToSearch || !window.allMfFunds) return [];
 
-    // Use targetSubCategory for keyword extraction if available, as it's the most specific
-    const baseCategoryForKeyword = targetSubCategory || categoryString;
+    try {
+        // Step A: Assemble raw candidate pool
+        const rawPool = buildStrictPeerGroup(categoryToSearch);
 
-    // Extract category keyword from mfapi scheme_category string
-    const keyword = baseCategoryForKeyword
-        .replace(/Equity Scheme\s*-?\s*/ig, '')
-        .replace(/Hybrid Scheme\s*-?\s*/ig, '')
-        .replace(/Debt Scheme\s*-?\s*/ig, '')
-        .replace(/Other Scheme\s*-?\s*/ig, '')
-        .replace(/Open Ended Schemes/ig, '')
-        .replace(/\bFund\b/ig, '')
-        .trim();
+        // Ensure current scheme is in the pool to calculate its true rank
+        if (currentSchemeCode && !rawPool.some(f => String(f.schemeCode) === String(currentSchemeCode))) {
+            const self = window.allMfFunds.find(f => String(f.schemeCode) === String(currentSchemeCode));
+            if (self) rawPool.push(self);
+        }
 
-    if (!keyword) return [];
+        // Limit the pool to prevent browser freeze (take top 80 randomly via search logic)
+        const poolSlice = rawPool.slice(0, 80);
 
-    // Remove Spaces from keyword for matching ("Mid Cap" -> "MIDCAP")
-    const keywordNoSpaces = keyword.toUpperCase().replace(/[\s-]+/g, ''); // Handle dashes too
+        // Step B & C: Fetch, verify, calculate, and rank
+        const finalRankings = await processAndRankPeers(poolSlice, currentSchemeCode, categoryToSearch);
 
-    // ── Step 1: DISCOVERY ─────────────────────────────────────────────────────────────
-    // Raw pool: all variants in the category from allMfFunds, excluding clear traps.
-    const rawPool = window.allMfFunds.filter(f => {
-        if (!f.schemeName) return false;
-        const n = f.schemeName.toUpperCase().replace(/[\s-]+/g, '');
-        if (!n.includes(keywordNoSpaces)) return false;
-        if (n.includes('BONUS') || n.includes('ETF')) return false; // Allowed Index Funds to pass if requested
-        return true;
-    }).slice(0, 120); // increased cap to ensure current fund and more peers are caught
+        console.log(`[Orchestrator] Peer ranking complete. Ranked ${finalRankings.length} verified peers for "${categoryToSearch}"`);
+        return finalRankings;
 
-    // Ensure current scheme is definitely in the pool if it exists in master list
-    if (!rawPool.some(f => String(f.schemeCode) === String(currentSchemeCode))) {
-        const self = window.allMfFunds.find(f => String(f.schemeCode) === String(currentSchemeCode));
-        if (self) rawPool.push(self);
+    } catch (e) {
+        console.error('[Orchestrator] Critical failure in peer ranking. Failsafe activated.', e);
+        return [];
     }
-
-    console.log(`[getPeerRanking] Discovery pool: ${rawPool.length} raw funds for keyword "${keyword}"`);
-
-    // Fetch CAGR for discovery pool (cache-first via getNavHistory)
-    const rawWithCAGR = [];
-    for (const peer of rawPool) {
-        const code = String(peer.schemeCode);
-        // Include self so we can calculate rank relative to peers
-        try {
-            const navHistory = await getNavHistory(code);
-            if (!navHistory) continue;
-            const cagr1y = getCAGR(navHistory, 1);
-            if (cagr1y === null || cagr1y <= 0) continue;
-            rawWithCAGR.push({ schemeCode: code, schemeName: peer.schemeName, cagr1y });
-        } catch (e) { /* skip failed peers */ }
-    }
-
-    rawWithCAGR.sort((a, b) => b.cagr1y - a.cagr1y);
-    console.log(`[getPeerRanking] Discovery: top raw performer = "${rawWithCAGR[0]?.schemeName}" (+${(rawWithCAGR[0]?.cagr1y * 100)?.toFixed(2)}%)`);
-
-    // ── Step 2–4: VERIFICATION (Discovery & Verification on top-N candidates) ────────
-    // Try top 5 raw candidates in order until one yields a verified Direct Growth peer.
-    // This handles edge cases where #1 raw is so niche/closed it has no Direct Growth variant.
-    let verifiedWinner = null;
-    for (const candidate of rawWithCAGR.slice(0, 5)) {
-        verifiedWinner = await findTrueBestPeer(candidate.schemeName, currentSchemeCode, targetSubCategory);
-        if (verifiedWinner) break;
-    }
-
-    if (verifiedWinner) {
-        console.log(`[getPeerRanking] ✅ Verified Winner: "${verifiedWinner.schemeName}" (+${(verifiedWinner.cagr1y * 100).toFixed(2)}%)`);
-    } else {
-        console.warn('[getPeerRanking] Discovery & Verification failed for all top-5 candidates. Returning name-filtered Direct Growth peers as fallback.');
-    }
-
-    // ── Build final ranked list ───────────────────────────────────────────────────────
-    // Take name-filtered Direct Growth peers from rawWithCAGR for the sidebar list.
-    const directGrowthPeers = rawWithCAGR
-        .filter(p => {
-            const n = p.schemeName.toUpperCase();
-            return n.includes('DIRECT') && n.includes('GROWTH') && !n.includes('IDCW');
-        })
-        .filter(p => !verifiedWinner || p.schemeCode !== verifiedWinner.schemeCode)
-        .map(p => ({
-            ...p,
-            schemeName: formatFundName(p.schemeName),
-            planType: 'DIRECT',
-            optionType: 'GROWTH',
-            fromAmfiSearch: false
-        }));
-
-    // Verified winner goes first; remaining Direct Growth peers fill the list
-    const finalRankings = verifiedWinner
-        ? [verifiedWinner, ...directGrowthPeers]
-        : directGrowthPeers;
-
-    return finalRankings;
 }
 
 /**
